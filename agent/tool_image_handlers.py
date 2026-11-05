@@ -617,6 +617,12 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             "Do NOT claim a new image was produced."
         )
 
+    from text_placement_check import text_position_failure
+    if not removal and text_position_failure(ctx, new_path, region, instructions):
+        return (f"[TOOL ERROR] Image saved: {new_path}, but the lettering check failed: "
+                "the requested text is not on the requested surface. "
+                "Do not claim the placement is correct; try to correct it if possible.")
+
     # Through _set_current_image: set by hand here, the edit kept no BEFORE, and the
     # inspector asked «is the rest as it was?» answered MISSING about a clean recolour
     # («a single image, not a comparison») and the edit was run a second time.
@@ -651,11 +657,6 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             "picture: " + " | ".join(_probs) + "\nDo NOT say it is done or correct. Show "
             "it, tell the user plainly that the lettering came out wrong (say what is "
             "wrong) and offer to try again.")
-    from text_placement_check import text_position_failure
-    if not removal and text_position_failure(ctx, new_path, region, instructions):
-        return (f"Image edited ({verb}) and saved: {new_path}\n"
-                "[LETTERING CHECK FAILED] The requested text is not on the requested surface. "
-                "Do not claim the placement is correct; try to correct it if possible.")
     return (
         f"Image edited ({verb}) and saved: {new_path}"
     )

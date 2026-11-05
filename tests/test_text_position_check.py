@@ -35,9 +35,12 @@ def test_inpaint_result_reports_wrong_text_position():
     from test_tools_full import _ctx, _img, mock_env
     from tools import _handle_inpaint_image
 
-    ctx = _ctx(last_image_path=_img('position_source.png'), last_image_prompt='',
+    source = _img('position_source.png')
+    ctx = _ctx(last_image_path=source, last_image_prompt='',
                vision_model=lambda *args, **kwargs: 'NO')
     with mock_env(category='product_edit'):
         result = _handle_inpaint_image(ctx, {}, {'region': 'barrel',
                                                 'instructions': 'write "HELLO" on the barrel'})
-    assert '[LETTERING CHECK FAILED]' in result
+    assert result.startswith('[TOOL ERROR]')
+    assert 'lettering check failed' in result
+    assert ctx.last_image_path == source
