@@ -14,6 +14,7 @@ def test_placement_verifier_flags_text_on_the_wrong_surface(tmp_path):
     assert text_position_failure(ctx, str(image), 'barrel', 'write "Кал всем" on the barrel')
     assert calls[0]['image_path'] == str(image)
     assert text_position_failure(ctx, str(image), 'бочка', 'Напиши «Кал всем» на бочке')
+    assert text_position_failure(ctx, str(image), 'бочка', 'надпись должна быть на самой бочке')
 
 
 def test_placement_verifier_skips_unrelated_edits_and_unknown_results(tmp_path):
