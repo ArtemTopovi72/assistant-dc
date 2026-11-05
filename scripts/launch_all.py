@@ -229,7 +229,8 @@ def _spawn_comfy_source():
         # (user-side setting) or reserve per model.
         return subprocess.Popen(
             [COMFY_PY, main_py, "--base-directory", COMFY_BASE_DIR, "--port", COMFY_PORT,
-             "--use-ck-attention", "--reserve-vram", "1", "--disable-fast-disk",
+             "--use-ck-attention", "--reserve-vram", "1",
+             "--fast-disk" if os.getenv("COMFY_FAST_DISK") == "1" else "--disable-fast-disk",
              "--output-directory", str(OUTPUT_DIR_COMFY), "--input-directory", str(INPUT_DIR_COMFY)],
             cwd=COMFY_SRC, env=env,
             stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **kw)
