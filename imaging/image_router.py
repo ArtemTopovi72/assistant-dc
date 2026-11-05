@@ -384,10 +384,10 @@ _CAPS_TEXT_RE = re.compile(r"(?-i:([A-ZА-ЯЁ0-9][A-ZА-ЯЁ0-9!?&%.,\- ]*[A-Z�
 TEXT_ADD_TRIES = _cfg_env.env_int("TEXT_ADD_TRIES", 3)
 
 TEXT_ADD_FAILED_NOTE = (
-    "[TOOL ERROR] The lettering was drawn {n} times and read back each time, and "
-    "it never came out right (best reading: {best!r}, asked: {want!r}). No picture "
-    "was delivered. Tell the user plainly that the model keeps misspelling this "
-    "text; offer to try different wording or to draw a new picture with the text "
+    "[TOOL ERROR] The lettering was drawn {n} times and checked each time, and "
+    "its text or placement never passed the check (best reading: {best!r}, asked: {want!r}). No picture "
+    "was delivered. Tell the user plainly that the spelling or placement could not be verified; "
+    "offer to try different wording or to draw a new picture with the text "
     "composed from a layout. Do not claim the text was added.")
 
 
@@ -408,6 +408,7 @@ def add_text_verified(ctx, image_path: str, instruction: str,
     if not wanted:
         return None, "", ""
     from draw_text import _similarity, TEXT_MATCH_OK
+    from text_placement_check import text_position_failure
     import ocr_reader
     quoted = ", ".join(f'"{w}"' for w in wanted)
     instr = (f"{instruction.strip()}\n\nThe text must read exactly {quoted} -- every letter "
@@ -420,8 +421,10 @@ def add_text_verified(ctx, image_path: str, instruction: str,
         if not out:
             continue
         reads = dep(ctx, "ocr_read", ocr_reader.read)(out)
-        if reads is None:             # no OCR on this machine: cannot verify, deliver
-            return out, "", " / ".join(wanted)
+        if reads is None:             # no OCR: placement can still be checked
+            if not text_position_failure(ctx, out, "", instruction):
+                return out, "", " / ".join(wanted)
+            continue
         score, reading = 2.0, ""
         for w in wanted:
             s, r = max(((_similarity(w, c), c) for c in reads), default=(0.0, ""))
@@ -431,7 +434,9 @@ def add_text_verified(ctx, image_path: str, instruction: str,
         if score > best_score:
             best, best_score = reading, score
         if score >= TEXT_MATCH_OK:
-            return out, reading, " / ".join(wanted)
+            if not text_position_failure(ctx, out, "", instruction):
+                return out, reading, " / ".join(wanted)
+            logger.info("text_add try %d: lettering was placed on the wrong surface", k + 1)
     # FireRed could not spell it (a year prior: "2026" -> "2025" in 21/21
     # renders on the bench). Lay the exact words onto the ORIGINAL --
     # the misspelt render is not a base to fix, its letters are already wrong.
