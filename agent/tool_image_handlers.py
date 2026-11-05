@@ -2560,6 +2560,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 framing_unverified = not best_eyes[0][2] and best_eyes[0][3] > 0
             else:
                 speech_unverified = unverified
+            if static_hold and result.get("path") and os.path.exists(result["path"]):
+                scene_drift = video_mod.overlay_drift(result["path"])
+                framing_unverified = framing_unverified or (scene_drift is not None and
+                                                            scene_drift > video_mod.OVERLAY_DRIFT_MAX)
             if head and result.get("path") and os.path.exists(result["path"]):
                 result = {**result, "path": _pull_light(video_mod, images[0], result["path"], 1)}
         except Exception as exc:
@@ -2696,7 +2700,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         ("Speech recognition could not confirm the requested line cleanly; warn the user that "
          "words may be wrong or extra speech may be present, and do not claim exact speech.\n"
          if speech_unverified else "") +
-        ("The reference-face check detected possible visual drift in every take; warn the user "
+        ("The reference-frame check detected possible visual drift in the selected take; warn the user "
          "that the framing or appearance may have changed, and do not claim it matches exactly.\n"
          if framing_unverified else "") +
         ("A new bright region appeared in the static continuation; it may be an unintended flash. "

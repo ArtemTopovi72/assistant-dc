@@ -259,6 +259,12 @@ check("static: the continuation prompt keeps the user's words",
 check("static: does not override the requested speech language", "said once, clearly, in Russian" not in SEEN.get("description", ""), SEEN.get("description", ""))
 check("static: the new part uses the full clip for its speaker reference",
       bool(REVOICED) and REVOICED[0][1] == CLIP, REVOICED)
+_E["overlay_drift"] = lambda path: V.OVERLAY_DRIFT_MAX + 1
+_E["eye_drift"] = lambda *a, **k: 0.0
+_scene_reply = H._handle_generate_video(TCtx(), {}, {"description": 'he says "the line"'})
+check("static: changed background is disclosed even when the face check passes",
+      "framing or appearance may have changed" in _scene_reply, _scene_reply)
+_E.pop("overlay_drift"); _E.pop("eye_drift")
 _E['estimate_seconds'] = lambda text, **kw: 10.0 if text.startswith(V.STATIC_CONTINUE_PREFIX) else 6.0
 SEEN.clear()
 H._handle_generate_video(TCtx(), {}, {"description": 'he says "the line"'})
@@ -314,7 +320,7 @@ _E["eye_drift"] = lambda *a, **k: 5.0
 class VisualDriftCtx(TCtx):
     speech_ok = staticmethod(lambda ctx, clip, lines: True)
 _drift_reply = H._handle_generate_video(VisualDriftCtx(), {}, {"description": 'he says "the line"'})
-check("visual drift in every take is disclosed", "visual drift in every take" in _drift_reply, _drift_reply)
+check("visual drift is disclosed", "visual drift in the selected take" in _drift_reply, _drift_reply)
 _E.pop("eye_drift")
 _E["revoice"] = lambda ctx, clip, voice: None
 _failed_state = {}
