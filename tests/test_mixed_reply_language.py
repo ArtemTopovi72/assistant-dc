@@ -14,3 +14,13 @@ def test_mostly_english_reply_is_translated_but_russian_with_names_is_not(monkey
     russian = 'Нестор Махно — Nestor Makhno, подробности: https://example.com/makhno'
     assert language._match_reply_language(ctx, russian, 'Кто это?') == russian
     assert len(calls) == 1
+
+
+def test_entry_translation_rejects_story_generated_instead_of_request(monkeypatch):
+    import graph_compose
+    monkeypatch.setattr(language, '_read', lambda *a, **k: {'translate': False})
+    monkeypatch.setattr(language, '_protect_literals', lambda text, **kw: (text, {}))
+    monkeypatch.setattr(graph_compose, '_word_count_note', lambda *a, **k: '')
+    monkeypatch.setattr(language, 'text_model', lambda ctx: lambda *a, **k: 'The old man drives. ' * 40)
+    request = 'Напиши смешную историю про тракториста по-русски.'
+    assert language._translate_to_english(SimpleNamespace(), request) == request

@@ -368,6 +368,9 @@ def _translate_to_english(ctx, text: str, context: str = "") -> str:
                                max_tokens=max(200, len(t)), temperature=0.0,
                                prefill="<think></think>")
         out = (resp or "").strip()
+        if len(out) > max(240, len(protected) * 3):
+            logger.warning("Entry translation expanded into a response; keeping the original")
+            return t
         # Measure the gate on the PROTECTED text: the placeholders stand in for
         # literals we are about to put back in their own alphabet, so counting
         # the restored Cyrillic here would reject a perfectly good translation.
