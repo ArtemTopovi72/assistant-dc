@@ -16,8 +16,8 @@ against the drawn look.
 STYLE_PRESETS: dict[str, dict] = {
     "anime": {
         "label_ru": "🎌 Аниме", "label_en": "🎌 Anime", "target": "drawn",
-        "prompt": ("Turn picture 1 into a still frame from a Japanese 2D anime film. Every person "
-                   "gets an anime face: large expressive eyes with bright highlights, a tiny nose "
+        "prompt": ("Turn picture 1 into a still frame from a Japanese 2D anime film. If a person "
+                   "is already present, give them an anime face: large expressive eyes with bright highlights, a tiny nose "
                    "and mouth, smooth simplified skin, hair drawn as clean pointed clumps with "
                    "sharp highlights. Flat cel shading with two or three tones and hard-edged "
                    "shadow shapes and thin clean dark lineart around every form. Render the "

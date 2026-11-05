@@ -49,12 +49,11 @@ NEG_OTHER = "blurry, low quality, watermark, signature"
 # style (an oil painting came back a photo with smeared dirt), and these words kept
 # the framing of every preset on their own (bench/style_ab.py).
 _KEEP = (" Restyle the entire image including the background. Keep the same composition, "
-         "framing and crop, every person at the same size, the same position and the same "
-         "pose, {clothes}and the setting; do not crop, zoom or move anyone. Every person keeps "
-         "their facial hair exactly as it is -- its shape and how thick it is, light stubble stays light, "
-         "a bare chin stays bare, a woman's face stays clean with no stubble invented -- drawn in the "
-         "new style, and their hairstyle, hair colour and eye colour exactly as in the picture, and "
-         "their glasses and jewellery exactly as worn there, nothing added. Any signs, screens "
+         "framing and crop. Keep each original subject at the same size, same position and same pose, "
+         "{clothes}and the original setting, lighting and palette. Preserve any existing face and identity. "
+         "Do not crop or zoom; do not add or remove people, animals or objects. Preserve existing facial hair, "
+         "including its absence, and any hairstyles, eye colours, glasses and jewellery exactly "
+         "as they appear in the source. Any signs, screens "
          "or lettering become abstract marks -- no new legible words.")
 
 _EXPAND_SYS = (
@@ -67,7 +66,10 @@ _EXPAND_SYS = (
     "in armor fighting demons in lava» is other: a new scene, not a style of this one). "
     "style: ONE English paragraph starting with \"Turn picture 1 into\" that spells out what "
     "makes this exact style recognisable and different from its neighbours: the medium, the "
-    "line work, the shading, how faces and eyes are drawn, the palette and the texture. "
+    "line work, the shading, the palette and the texture. Do not assume the picture contains "
+    "people or faces, and do not ask the editor to add any subjects. Preserve the source "
+    "palette, lighting and background unless the request explicitly changes them; do not "
+    "invent bright colours, skies or gradients just because they are common in the style. "
     "Concrete visual traits only, no artist names you are unsure of, no composition changes.")
 
 # Clothing alone lost a character's scythes and boots and made her armour a cloth top:
