@@ -32,7 +32,7 @@ patched on `graph`, only read directly (e.g. `graph._intent_tools(...)`,
 `graph._DECK_PREFIX`) or not touched by the suites at all. graph.py
 re-exports it all by name so those direct reads keep resolving.
 """
-from seams import chat_model, choice, dep, run_tool, intent_read, yes_no, reply_read
+from seams import chat_model, choice, dep, run_tool, intent_read, yes_no, reply_read, text_model
 from reply_read import claims_result
 import json
 import logging
@@ -299,13 +299,27 @@ def _reverses_request(ctx, request: str, args: dict) -> bool:
     # Two reads must agree: the opposite-read alone blocked «empty wooden table surface, removing
     # the cup» for «убери чашку со стола», and an example for it moved the miss onto «his empty
     # hands, the book removed» (bench/reverses_request_live.py).
-    return bool(yes_no(ctx)(
+    opposite = bool(yes_no(ctx)(
         "{text}\n\nDoes the EDIT do the opposite of what the USER asked -- covers or adds what they asked "
         "to uncover or remove, removes what they asked to add, darkens what they asked to brighten? "
         "An edit that does what they asked in other words, or only part of it, is NOT the opposite.",
         pair)) and not yes_no(ctx)(
         "{text}\n\nDoes the EDIT, carried out, give what the USER asked for (in any words: describing "
         "the finished result counts, so does doing part of it)?", pair, True)
+    if opposite:
+        return True
+    try:
+        result = text_model(ctx)(ctx,
+            "Analyze spatial relationships literally. First describe positions and direction of USER "
+            "and EDIT separately. If an end is embedded in ground it is at the bottom, not pointing up. "
+            "An instruction keeping a different end out of the ground cannot override the described "
+            "orientation. If any stated relationship is opposite, write VERDICT: CONTRADICTION; "
+            "if uncertain or compatible write VERDICT: OK.", pair, temperature=0, max_tokens=500) or ""
+    except Exception:
+        # shortcut: unavailable spatial classifier allows edits; upgrade when a reliable fallback exists.
+        logger.warning("spatial edit guard unavailable", exc_info=True)
+        return False
+    return bool(re.search(r"(?im)^\s*VERDICT:\s*CONTRADICTION\s*$", result))
 
 
 def _offers_instead(ctx, request: str, reply: str) -> bool:

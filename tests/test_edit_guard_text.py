@@ -24,3 +24,17 @@ def test_explicitly_forbidden_word_does_not_bypass_guard():
     ctx = SimpleNamespace(yes_no=_misreading_model)
     assert _reverses_request(ctx, 'Напиши «А», но не пиши «Б»',
                              {'region': 'sign', 'instructions': 'write "Б"'})
+
+
+def test_spatial_contradiction_is_blocked_when_generic_guard_misses_it():
+    ctx = SimpleNamespace(yes_no=lambda *a, **k: False,
+                          text_model=lambda *a, **k: 'Ends compared.\nVERDICT: CONTRADICTION')
+    assert _reverses_request(ctx, 'Пики острым концом в землю, а не древком',
+                             {'instructions': 'pikes with their sharp tips pointing upwards'})
+
+
+def test_spatial_guard_does_not_block_uncertain_edits():
+    ctx = SimpleNamespace(yes_no=lambda *a, **k: False,
+                          text_model=lambda *a, **k: 'VERDICT: OK')
+    assert not _reverses_request(ctx, 'Положи книгу слева от чашки',
+                                 {'instructions': 'book left of cup'})
