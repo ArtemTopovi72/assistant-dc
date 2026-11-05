@@ -21,6 +21,7 @@ def text_position_failure(ctx, image_path: str, region: str, instructions: str) 
                        "Is the requested text on the requested surface? If no specific surface "
                        "is requested or the placement is unclear, answer UNKNOWN. "
                        "Answer only YES, NO, or UNKNOWN.")) or ""
+        # shortcut: uncertain results pass through; tighten when placement verification is reliable.
         return bool(re.match(r"^(?:NO|НЕТ)(?:\b|[\s,.!:])", answer.strip(), re.I))
     except Exception:
         logger.warning("Could not verify requested text placement", exc_info=True)
