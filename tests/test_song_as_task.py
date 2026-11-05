@@ -187,10 +187,18 @@ check("tagged lyrics keep every line", all(ln in S.tag_lyrics(_lyr) for ln in _l
 _MU.engine_available = lambda ctx=None, preset=None: (True, "")
 _MU.build_structured_caption = lambda ctx, topic, lang, **kw: {"lyrics": "WRITER", "style": "pop"}
 _got = {}
-_MU.generate_music = lambda ctx, lyrics, style, **kw: _got.update(lyrics=lyrics) or "/tmp/song.wav"
+_MU.generate_music = lambda ctx, lyrics, style, **kw: _got.update(lyrics=lyrics, prefs=kw.get("prefs")) or "/tmp/song.wav"
 bot = make_bot()
 bot._generate_song(5001, S.LYRICS_MARK + _lyr, "ru", 30, ctx=Ctx())
 check("the given lyrics reach the renderer, not the writer's", "Золотые листья" in _got.get("lyrics", "") and "WRITER" not in _got.get("lyrics", ""), _got)
+check("the renderer must preserve the given lyrics", _got.get("prefs", {}).get("preserve_lyrics") is True, _got)
+def _truncated_user_lyrics(*args, **kwargs):
+    raise M.UserLyricsTruncated("cut off")
+_MU.generate_music = _truncated_user_lyrics
+bot.sent.clear()
+bot._generate_song(5001, S.LYRICS_MARK + _lyr, "ru", 30, ctx=Ctx())
+check("truncated lyrics are explained to the user", T._t("song_user_lyrics_truncated", "ru") in bot.sent, bot.sent)
+_MU.generate_music = lambda ctx, lyrics, style, **kw: _got.update(lyrics=lyrics, prefs=kw.get("prefs")) or "/tmp/song.wav"
 # The words typed under the request itself: those are sung, the request line steers the sound.
 _seen = {}
 _MU.build_structured_caption = lambda ctx, topic, lang, **kw: _seen.update(topic=topic) or {"lyrics": "WRITER", "style": "pop"}

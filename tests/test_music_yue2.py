@@ -1,6 +1,7 @@
 """YuE2 is the default engine; its lyric and style inputs follow the model card."""
 import os, sys
 import types
+import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["F5_TEST_RUN"] = "1"
 import music as M
@@ -39,6 +40,30 @@ def test_cpp_render_uses_16_ode_steps():
                 _valid_audio_file=lambda p: True, _master=lambda *a, **k: None)
     M._generate_yue2(ctx, "[verse]\nраз", "pop", 5)
     assert jobs[0]["steps"] == 16
+
+
+def test_user_lyrics_are_not_silently_shortened_after_truncation():
+    jobs = []
+    ctx = _deps(yue2_cpp_available=lambda: True,
+                _render_yue2_once=lambda ctx, cpp, job, seed: jobs.append(dict(job)) or '(truncated)',
+                _valid_audio_file=lambda p: True, _master=lambda *a, **k: None)
+    with pytest.raises(M.UserLyricsTruncated):
+        M._generate_yue2(ctx, '[verse]\nпервая\n\n[chorus]\nпоследняя', 'pop', 5,
+                         prefs={'preserve_lyrics': True})
+    assert len(jobs) == 1 and 'последняя' in jobs[0]['lyrics']
+
+
+def test_user_intro_words_are_kept_as_sung_verse():
+    got = M.yue2_lyrics('[intro]\nэй-эй\n\n[verse]\nстрока', preserve_lyrics=True)
+    assert got == '[Intro]\n\n[Verse]\nэй-эй\n\n[Verse]\nстрока'
+    assert M.yue2_lyrics('[intro]\n\n[verse]\nстрока', preserve_lyrics=True) == '[Intro]\n\n[Verse]\nстрока'
+    seen = {}
+    ctx = _deps(yue2_cpp_available=lambda: True,
+                _render_yue2_once=lambda ctx, cpp, job, seed: seen.update(job) or '',
+                _valid_audio_file=lambda p: True, _master=lambda *a, **k: None)
+    M._generate_yue2(ctx, '[intro]\nэй-эй\n\n[verse]\nстрока', 'pop', 5,
+                     prefs={'preserve_lyrics': True})
+    assert seen['lyrics'] == got
 
 
 _SCENIC = "75 BPM, Lo-fi hip hop, male vocal, minor key, lonely, dimly lit apartment at dusk, study music"

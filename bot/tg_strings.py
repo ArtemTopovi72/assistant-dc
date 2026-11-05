@@ -970,6 +970,8 @@ _MSG: dict[str, dict[str, str]] = {
                                 "/cancel — отмена."},
     "song_generating": {"en": "🎵 Writing the lyrics and generating the song…",
                         "ru": "🎵 Пишу текст и генерирую песню…"},
+    "song_user_lyrics_truncated": {"en": "🎵 I couldn't sing all your lyrics: the song was cut off. Try a shorter text or split it into parts.",
+                                   "ru": "🎵 Не удалось спеть весь твой текст: песня оборвалась. Попробуй сократить текст или разделить его на части."},
     "song_unavailable": {"en": "🎵 Song generation isn't set up yet — sorry!",
                          "ru": "🎵 Генерация песен пока не настроена — извини!"},
     "song_error": {"en": "🎵 Something went wrong generating the song. Try again later.",

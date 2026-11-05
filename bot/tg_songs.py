@@ -392,6 +392,7 @@ class SongsMixin:
                     ctx, _steer.with_notes(topic, notes), song_lang(topic, lang, ctx=ctx), duration_s=duration, prefs=prefs)
             if given:                   # their own words stay; wishes steer the sound
                 caption = dict(caption, lyrics=structure_lyrics(ctx, given))
+                prefs = dict(prefs, preserve_lyrics=True)
                 if auto.get("duration"):    # all of their words are sung (see the Auto note below)
                     _n = sum(1 for ln in caption["lyrics"].splitlines() if ln.strip() and not ln.strip().startswith("["))
                     duration = max(duration, min(240, int(15 + 5.2 * _n)))
@@ -451,6 +452,12 @@ class SongsMixin:
                 if line:
                     self._send_text(chat_id, line, parse_mode="HTML")
             return bool(ok)
+        except _music_mod.UserLyricsTruncated:
+            if not cancelled():
+                try:
+                    self._send_text(chat_id, tg_bot._t("song_user_lyrics_truncated", lang))
+                except Exception:
+                    tg_bot.logger.warning("[songs] could not report truncated lyrics", exc_info=True)
         except _music_mod.SongwritingFailed:
             if cancelled():
                 return False        # Stop interrupted the writer; not a failure

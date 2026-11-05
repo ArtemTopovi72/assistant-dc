@@ -474,6 +474,10 @@ class MusicUnavailable(RuntimeError):
     """The engine cannot run at all (missing weights, ComfyUI unreachable)."""
 
 
+class UserLyricsTruncated(RuntimeError):
+    """The engine could not fit all of the user's lyrics in the song."""
+
+
 class SongwritingFailed(RuntimeError):
     """The LLM could not write usable lyrics/style — the ENGINE is fine.
 
@@ -1363,7 +1367,7 @@ _YUE2_TAG = {"intro": "Intro", "verse": "Verse", "pre-chorus": "Pre-Chorus",
 _TAG_LINE_RE = re.compile(r"^\[([a-z-]+)(?:\s+\d+)?\]$")
 
 
-def yue2_lyrics(lyrics: str) -> str:
+def yue2_lyrics(lyrics: str, preserve_lyrics: bool = False) -> str:
     """Our normalized lyric -> YuE2's section vocabulary."""
     out, intro = [], False
     for line in normalize_lyrics(lyrics).splitlines():
@@ -1373,6 +1377,10 @@ def yue2_lyrics(lyrics: str) -> str:
                 out.append("")
             out.append(f"[{_YUE2_TAG[m.group(1)]}]")
             intro = _YUE2_TAG[m.group(1)] == "Intro"
+        elif intro and preserve_lyrics and line.strip():
+            # YuE2 treats Intro as instrumental, so sing the user's words as a verse.
+            out.extend(["", "[Verse]", line])
+            intro = False
         elif not intro:
             # [Intro] stays empty: the model card's rule, words under it are
             # crammed into the instrumental opening
@@ -1651,7 +1659,7 @@ def _generate_yue2(ctx, lyrics: str, style: str, seed: int, prefs: Optional[dict
     ext = "mp3" if cpp else "flac"
     out = str(Path(dep(ctx, "OUTPUT_DIR", OUTPUT_DIR)) / f"song_yue2_{int(time.time() * 1000)}.{ext}")
     words = "" if (prefs or {}).get("instrumental") else lyrics
-    job = {"lyrics": yue2_lyrics(lyrics) if words else "[instrumental]",
+    job = {"lyrics": yue2_lyrics(lyrics, preserve_lyrics=bool((prefs or {}).get("preserve_lyrics"))) if words else "[instrumental]",
            "style": yue2_pin(yue2_language(dep(ctx, "yue2_tags", yue2_tags)(ctx, yue2_style(style)), words), prefs),
            "seed": int(seed), "out": out}
     tempo = re.fullmatch(r"\s*exactly\s+(\d+)\s+BPM\s*", str((prefs or {}).get("tempo") or ""), re.I)
@@ -1666,6 +1674,8 @@ def _generate_yue2(ctx, lyrics: str, style: str, seed: int, prefs: Optional[dict
         # same), so the retry sings one section less.
         if "(truncated)" not in tail and "TRUNCATED" not in tail:
             break
+        if (prefs or {}).get("preserve_lyrics"):
+            raise UserLyricsTruncated("YuE2 truncated the user's lyrics")
         shorter = _drop_last_section(job["lyrics"])
         if attempt == 2 or not shorter:
             logger.warning("YuE2: truncated, delivering as is")
