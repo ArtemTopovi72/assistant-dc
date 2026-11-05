@@ -2219,7 +2219,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
         # Only the script's own words: the continuation template names cuts itself, and judged
         # with it the same part read as asking for one.
         own = description
-        for pre in (CONTINUE_PREFIX, CONTINUE_CTX_PREFIX):
+        for pre in (CONTINUE_PREFIX, CONTINUE_CTX_PREFIX, STATIC_CONTINUE_PREFIX):
             own = own.removeprefix(pre)
         from seams import yes_no
         try:
@@ -2237,7 +2237,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             if again and all(f in again for f in need) and "non_diegetic_music" in again \
                     and not _lost_lines(speech_source, again) and not re.search(r"\[Shot [2-9]\]", again):
                 out = again
-    if "The shot continues with no cut" in description:
+    if "The shot continues with no cut" in description or description.startswith(STATIC_CONTINUE_PREFIX):
         # Told in words (rules 7-8), the writer still opened part 2 with «a medium shot frames
         # a traveler»; the join crossfaded a far figure into his face (live 2026-10-15).
         # Read back by the model, rewritten once when it breaks the continued shot -- before

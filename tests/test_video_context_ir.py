@@ -71,6 +71,12 @@ cont = V.to_context_ir(NS(text_model=lambda *a, **k: next(answers),
                        V.CONTINUE_CTX_PREFIX + "He drinks.", mode="t2va", seconds=5)
 check(asked and cont.startswith("integrated_multimodal_description: [Shot 1] Live-action, the traveler, framed"),
       "a continued part the model reads as a new framing is rewritten once")
+answers, asked = iter([reframed, fixed]), []
+cont = V.to_context_ir(NS(text_model=lambda *a, **k: next(answers),
+                          yes_no=lambda q, text, **k: asked.append(text) or "a medium shot frames" in text),
+                       V.STATIC_CONTINUE_PREFIX + "He drinks.", mode="t2va", seconds=5)
+check(asked and "framed as the clip ends" in cont,
+      "a static continuation also rejects a new shot size")
 asked.clear()
 first = V.to_context_ir(NS(text_model=lambda *a, **k: reframed,
                            yes_no=lambda q, text, **k: asked.append(text) or True),
