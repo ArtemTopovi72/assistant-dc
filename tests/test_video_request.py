@@ -271,7 +271,9 @@ def test_framing_lock_freezes_the_camera_not_the_scene():
     The camera stays locked; the scene inside the frame is told to live."""
     assert "Only the camera is locked" in video._FRAMING_LOCK_SUFFIX
     assert "the scene inside the frame LIVES" in video._FRAMING_LOCK_SUFFIX
-    assert "breathing" in video._FRAMING_LOCK_SUFFIX
+    assert "the described action" in video._FRAMING_LOCK_SUFFIX
+    assert "breathing" not in video._FRAMING_LOCK_SUFFIX
+    assert "hands and face" not in video._FRAMING_LOCK_SUFFIX
     assert "never to a frozen pose" in video._STYLE_LOCK_SUFFIX
 
 

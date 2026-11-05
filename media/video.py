@@ -1341,8 +1341,7 @@ _FRAMING_LOCK_SUFFIX = (
     # suppresses motion; over-constrained "keep the same" prompts freeze clips).
     # Only the CAMERA is locked; the scene inside the frame performs.
     " Only the camera is locked -- the scene inside the frame LIVES: the subject "
-    "carries out the described action with natural follow-through (breathing, "
-    "weight shifts, hands and face working), and the picture's own ambience "
+    "carries out the described action with natural follow-through, and the scene's ambience "
     "responds to it.")
 
 
