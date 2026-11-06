@@ -182,6 +182,13 @@ def test_shortlist_answer_shows_comparison_without_raw_review_slop():
     assert "Предварительный выбор" in answer
 
 
+def test_digest_discloses_when_review_texts_could_not_be_read():
+    choice = item('99', 'Рюкзак', 5000, reviews=19)
+    choice.update(url='https://ozon.ru/product/example-99/', review_texts=None)
+    answer = S.digest({'choice': choice, 'decision': {}, 'others': []})
+    assert 'Тексты отзывов не удалось прочитать' in answer
+
+
 def test_decision_uses_card_reviews_even_when_model_invents_claims(world):
     _, script = world
     script["decide_extra"] = {

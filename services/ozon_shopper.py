@@ -696,6 +696,8 @@ def digest(r: dict) -> str:
            _stats(c), f"[{_short(c.get('name'))}]({c.get('url')})"]
     if dec.get("why"):
         out.append(f"\n{dec['why']}")
+    if "review_texts" in c and c["review_texts"] is None:
+        out.append("Тексты отзывов не удалось прочитать, поэтому оценить долговечность по ним нельзя.")
     # Raw reviews often contain typos and are cut mid-sentence by the API.
     # Their count is already in _stats; don't paste them as a quality verdict.
     if dec.get("concerns"):
