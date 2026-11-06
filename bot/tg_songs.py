@@ -377,9 +377,9 @@ class SongsMixin:
             # The render length is an upper bound -- Music3 stops when the
             # words run out -- so the songwriter is told the same duration the
             # render will ask for, or it writes two verses for a 240s slot.
-            if _has_stage:
-                ctx.set_stage("Writing the lyrics")
             given = ""
+            wish = ""
+            _notes = ""
             if LYRICS_MARK in topic:
                 wish, _, given = topic.partition(LYRICS_MARK)
                 given = given.strip()
@@ -388,18 +388,29 @@ class SongsMixin:
                 _notes = author_notes(given)
                 if _notes:                  # the author's own sound directions
                     topic += ". The author's notes on the sound: " + _notes
+            if _has_stage:
+                ctx.set_stage("Choosing the sound" if given else "Writing the lyrics")
             import steer as _steer
             notes = _steer.take(ctx)
-            caption = music.build_structured_caption(
-                ctx, _steer.with_notes(topic, notes), song_lang(topic, lang, ctx=ctx), duration_s=duration, prefs=prefs)
+            direct_words = bool(given and getattr(music, 'MUSIC_ENGINE', _music_mod.MUSIC_ENGINE) == 'yue2')
+            if direct_words:
+                style = _steer.with_notes(' '.join(x for x in (wish.strip(), _notes) if x), notes)
+                caption = {'lyrics': '', 'style': _music_mod.enforce_pins(style or 'song', prefs)}
+            else:
+                caption = music.build_structured_caption(
+                    ctx, _steer.with_notes(topic, notes), song_lang(topic, lang, ctx=ctx), duration_s=duration, prefs=prefs)
             # Last call before the render: a wish that came in while the
             # lyrics were being written rewrites them, the render is minutes.
             late = _steer.take(ctx)
             if late and not cancelled():
                 notes += late
                 tg_bot.logger.info("[songs] rewriting for %d late wish(es): %r", len(late), late[0][:80])
-                caption = music.build_structured_caption(
-                    ctx, _steer.with_notes(topic, notes), song_lang(topic, lang, ctx=ctx), duration_s=duration, prefs=prefs)
+                if direct_words:
+                    style = _steer.with_notes(' '.join(x for x in (wish.strip(), _notes) if x), notes)
+                    caption['style'] = _music_mod.enforce_pins(style or 'song', prefs)
+                else:
+                    caption = music.build_structured_caption(
+                        ctx, _steer.with_notes(topic, notes), song_lang(topic, lang, ctx=ctx), duration_s=duration, prefs=prefs)
             if given:                   # their own words stay; wishes steer the sound
                 caption = dict(caption, lyrics=structure_lyrics(ctx, given))
                 prefs = dict(prefs, preserve_lyrics=True)

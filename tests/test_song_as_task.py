@@ -207,13 +207,13 @@ _MU.generate_music = _truncated_user_lyrics
 bot.sent.clear()
 bot._generate_song(5001, S.LYRICS_MARK + _lyr, "ru", 30, ctx=Ctx())
 check("truncated lyrics are explained to the user", T._t("song_user_lyrics_truncated", "ru") in bot.sent, bot.sent)
-_MU.generate_music = lambda ctx, lyrics, style, **kw: _got.update(lyrics=lyrics, prefs=kw.get("prefs")) or "/tmp/song.wav"
+_MU.generate_music = lambda ctx, lyrics, style, **kw: _got.update(lyrics=lyrics, style=style, prefs=kw.get("prefs")) or "/tmp/song.wav"
 # The words typed under the request itself: those are sung, the request line steers the sound.
 _seen = {}
 _MU.build_structured_caption = lambda ctx, topic, lang, **kw: _seen.update(topic=topic) or {"lyrics": "WRITER", "style": "pop"}
 bot._generate_song(5001, "сделай песню в стиле панк-рок на мои стихи:\n" + S.LYRICS_MARK + _lyr, "ru", 30, ctx=Ctx())
 check("inline lyrics are sung verbatim", "Золотые листья" in _got.get("lyrics", "") and "WRITER" not in _got.get("lyrics", ""), _got)
-check("and the request line reaches the style", "панк-рок" in _seen.get("topic", ""), _seen)
+check("and the request line reaches the style", "панк-рок" in _got.get("style", ""), _got)
 check("a style wish after a song is a redo", S.song_followup("а теперь то же самое в стиле рок", ctx=_R))
 check("and a longer one keeps its length", S.request_seconds("а можно версию подлиннее, на 2 минуты", ctx=_R) == 120)
 check("minutes in words", (S.request_seconds("минуты на две", ctx=_R), S.request_seconds("песню на полторы минуты", ctx=_R)) == (120, 90))

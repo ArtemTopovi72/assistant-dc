@@ -628,6 +628,25 @@ def test_sing_as_is_keeps_draft_if_queue_fails_then_allows_retry():
     assert bot._get_session(13).song_draft == ''
 
 
+def test_yue_sing_as_is_does_not_call_songwriter(monkeypatch):
+    import tg_songs
+    bot = _bot()
+    output = {}
+    def no_songwriter(*args, **kwargs):
+        raise AssertionError('given lyrics should not invoke the songwriter')
+    bot.music = types.SimpleNamespace(
+        MUSIC_ENGINE='yue2', engine_available=lambda *a: (True, ''),
+        choose_auto_params=lambda *a, **kw: {}, build_structured_caption=no_songwriter,
+        generate_music=lambda ctx, lyrics, style, **kw: output.update(
+            lyrics=lyrics, style=style, prefs=kw['prefs']) or '/tmp/song.wav')
+    bot._send_audio = lambda *args, **kwargs: True
+    monkeypatch.setattr(tg_songs, 'structure_lyrics', lambda ctx, words: words)
+    assert bot._generate_song(13, 'punk rock\n[lyrics]\n' + LAZY, 'ru', 20, ctx=_Ctx())
+    assert output['lyrics'] == LAZY
+    assert 'punk rock' in output['style'].lower()
+    assert output['prefs']['preserve_lyrics'] is True
+
+
 def test_the_ready_words_question_offers_keep_or_polish():
     import tg_strings
     assert tg_strings._MSG["song_polish_btn"]["ru"] == "✨ Доработать и спеть"
