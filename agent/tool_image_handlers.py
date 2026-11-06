@@ -2417,6 +2417,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # render time first, and may drop or condense parts (user, 2026-10-10).
         state["video_plan"] = [{"text": p, "sec": x} for p, x in zip(parts, secs)]
         state["video_plan_images"] = list(images)
+        state["video_plan_requested_seconds"] = want
         if continuing:      # nothing rendered: the clip and its new people wait for the ▶ rerun
             ctx.continue_tail, ctx.continue_src, ctx.continue_people = cont_tail, cont_src, people
         return ("[NOT MADE YET] The script needs several parts, and the user approves the "

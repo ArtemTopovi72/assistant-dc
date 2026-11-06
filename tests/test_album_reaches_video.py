@@ -260,10 +260,12 @@ def test_video_plan_persists_and_clears_its_continuation(tmp_path):
     bot.text_model = lambda *a, **kw: '{"lines": ["Next"]}'
     continuation = {'tail': 'tail.mp4', 'src': 'source.mp4', 'people': ['person.png']}
     bot._offer_video_plan(101, sess, 'ru', 'Продолжи ролик',
-                          [{'text': 'Next', 'sec': 5}], continuation=continuation)
+                          [{'text': 'Next', 'sec': 5}], continuation=continuation, requested_seconds=25)
     assert bot._store.get(101).video_plan_continuation == continuation
+    assert bot._store.get(101).video_plan_requested_seconds == 25
     bot._cb_video_plan(101, 'vp:x')
     assert bot._store.get(101).video_plan_continuation == {}
+    assert bot._store.get(101).video_plan_requested_seconds == 0
 
 
 def test_video_plan_stores_the_reference_used_by_the_tool(tmp_path):

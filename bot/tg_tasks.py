@@ -1213,6 +1213,7 @@ class TaskRunnerMixin:
             sess.video_plan, sess.video_plan_request, sess.video_plan_ok = [], "", []
             sess.video_plan_images = []
             sess.video_plan_continuation = {}
+            sess.video_plan_requested_seconds = 0
             self._store.put(sess)
         # ▶️ Continue video: the clip's tail (its motion + sound) rides this ONE request.
         ctx.continue_tail = ctx.continue_src = ""
@@ -2218,7 +2219,8 @@ class TaskRunnerMixin:
                 self._store.put(sess)
             try:
                 self._offer_video_plan(chat_id, sess, lang, task.user_text, final["video_plan"],
-                                       images=final.get("video_plan_images", video_images), continuation=continuation)
+                                       images=final.get("video_plan_images", video_images), continuation=continuation,
+                                       requested_seconds=final.get("video_plan_requested_seconds", 0))
             except Exception:
                 tg_bot.logger.exception("video plan offer failed chat=%s", chat_id)
 

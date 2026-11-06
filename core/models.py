@@ -628,6 +628,7 @@ class AgentState(TypedDict, total=False):
     ask_voices: int          # generate_video stopped to ask «свои голоса / стандартные» (speakers)
     video_plan: list         # generate_video stopped to show a multi-part plan [{text, sec}]
     video_plan_images: list  # exact references used when the plan was made
+    video_plan_requested_seconds: float
 
     # set by the tts node (graph.py): path to the synthesized reply audio
     tts_path: str

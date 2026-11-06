@@ -265,6 +265,7 @@ class _Session:
         self.video_plan_image: str = d.get("video_plan_image", "")
         self.video_plan_images: list = list(d.get("video_plan_images") or [])
         self.video_plan_continuation: dict = dict(d.get("video_plan_continuation") or {})
+        self.video_plan_requested_seconds: float = float(d.get("video_plan_requested_seconds") or 0)
         # 📚 the voice library (tg_voice_library) and the voice waiting for a name
         self.voices: list = list(d.get("voices") or [])
         self.voice_naming: str = d.get("voice_naming", "")
@@ -475,6 +476,7 @@ class _Session:
             self.video_plan_image = ""
             self.video_plan_images = []
             self.video_plan_continuation = {}
+            self.video_plan_requested_seconds = 0
             self.voice_naming = ""
             self.lyrics_state = ""
             self.song_draft = ""
@@ -606,6 +608,7 @@ class _Session:
                 "video_plan_image":    self.video_plan_image,
                 "video_plan_images":   self.video_plan_images,
                 "video_plan_continuation": self.video_plan_continuation,
+                "video_plan_requested_seconds": self.video_plan_requested_seconds,
                 "voices":              self.voices,
                 "voice_naming":        self.voice_naming,
                 "voice_choice":        self.voice_choice,

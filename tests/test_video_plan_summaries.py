@@ -53,3 +53,11 @@ def test_two_failures_fall_back_to_the_prompts():
     owner, asked = _owner("no json", "still none")
     assert P._summaries(PARTS, "ru", owner) == ["", ""]
     assert len(asked) == 2
+
+
+def test_plan_warns_when_it_cannot_reach_requested_duration():
+    sess = types.SimpleNamespace(video_plan=[{'text': 'first', 'sec': 10.1},
+                                             {'text': 'second', 'sec': 10.1}],
+                                 video_plan_requested_seconds=25)
+    text, _ = P.VideoPlanMixin()._video_plan_card(sess, 'ru')
+    assert '25' in text and ('меньше' in text or 'не хватает' in text)
