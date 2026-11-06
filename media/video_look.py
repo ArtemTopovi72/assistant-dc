@@ -53,6 +53,9 @@ _SHEET_SYSTEM = (
     "happens in it, and what is funny or striking when it is a moment. Name "
     "things for what they are, not by shape or colour. Do not invent emotions, force or intent "
     "from a movement or a still face. Do not invent sound or speech -- you only see the picture.\n"
+    "Do not infer a person's gender from appearance, clothing, hair, voice or anatomy. "
+    "If the person's gender is not explicitly established by reliable context, use a neutral "
+    "description such as performer or person.\n"
     "When a frame shows a document with small print -- a receipt, a bill, a menu, a price list, a "
     "screen, a letter -- add one last line «TEXT AT: 0:13, 0:14» with those timestamps; the "
     "document is then read from sharper frames, so never guess its figures yourself.")

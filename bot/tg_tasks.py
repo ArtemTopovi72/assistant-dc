@@ -284,6 +284,8 @@ def retell_system(lang: str, is_video: bool) -> str:
                 "rather than categorically calling the whole scene static or moving. "
                 "Do not invent an action that the observations do not support. Do not infer anger, force, intent or "
                 "other emotions merely from a movement or expression. "
+                "Do not infer a person's gender from appearance, clothing, hair, voice or anatomy. "
+                "Unless reliable context explicitly establishes it, use a neutral description such as performer. "
                 "A line «Подпись отправителя» / «Sender's caption» is how the sender framed the clip. "
                 "A caption that does not match the picture means a joke or a "
                 "meme: say so, say in one sentence what is actually shown, and if you do not "

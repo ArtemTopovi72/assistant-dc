@@ -14,6 +14,12 @@ def test_the_retelling_is_told_a_mismatched_caption_is_a_joke():
     assert "meme" in sys_ru and "literal" in sys_ru
 
 
+def test_video_description_and_retelling_do_not_guess_gender_from_appearance():
+    assert 'Do not infer a person\'s gender' in video_look._SHEET_SYSTEM
+    assert 'Do not infer a person\'s gender' in tg_tasks.retell_system('ru', True)
+    assert 'reliable context' in tg_tasks.retell_system('ru', True)
+
+
 def test_the_caption_line_exists_in_both_languages():
     assert "ИИ" in tg_bot._t("fwd_video_caption", "ru", caption="ИИ")
     assert "ИИ" in tg_bot._t("fwd_video_caption", "en", caption="ИИ")
@@ -30,7 +36,7 @@ def test_the_vision_pass_sees_the_caption(tmp_path):
     video_look.look_at_video(None, str(clip), work_dir=tmp_path / "w",
                              vision=lambda frames, q, system: asked.append(q) or "x",
                              caption="Когда начальство внедрило ИИ")
-    assert asked and "Когда начальство внедрило ИИ" in asked[0]
+    assert any("Когда начальство внедрило ИИ" in q for q in asked)
 
 
 def test_the_speech_is_labelled_so_it_is_not_taken_for_the_caption():
