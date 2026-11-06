@@ -27,6 +27,13 @@ def test_failed_screen_does_not_claim_item_is_missing(monkeypatch):
     assert 'COULD NOT VERIFY' in answer and 'NOT FOUND among' not in answer
 
 
+def test_invalid_screen_indexes_are_not_evidence_of_absence(monkeypatch):
+    monkeypatch.setattr(S, '_llm_json', lambda *args, **kwargs: {'finalists': [999]})
+    selected, _ = S.screen(_ctx(), {'need': 'Рюкзак', 'must': [], 'avoid': []},
+                           [item('1', 'Рюкзак', 1000)])
+    assert selected is None
+
+
 def item(sku, name, price, rating=4.7, reviews=100):
     return {"sku": sku, "name": name, "price": price, "rating": rating, "reviews": reviews,
             "delivery": "Завтра", "url": f"https://www.ozon.ru/product/x-{sku}/",

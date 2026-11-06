@@ -300,6 +300,8 @@ def screen(ctx, item: dict, cands: list, strategy: str = "balanced") -> tuple:
             continue
         if 1 <= n <= len(cands) and cands[n - 1] not in picks:
             picks.append(cands[n - 1])
+    if data['finalists'] and not picks:
+        return None, "could not assess search results"
     return picks[:FINALISTS], str(data.get("note") or "")
 
 
