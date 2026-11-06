@@ -24,3 +24,4 @@ def test_restart_uses_project_environment(monkeypatch, tmp_path):
     monkeypatch.setattr(mod.subprocess, 'Popen', lambda args, **kw: called.append((args, kw)))
     mod.main()
     assert called[0][0] == [str(python), str(root / 'scripts' / 'launch_all.py')]
+    assert called[0][1]['env']['STARTUP_DIALOG_TIMEOUT_S'] == '1'

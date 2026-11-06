@@ -33,7 +33,9 @@ def main():
     launcher = os.path.join(root, "scripts", "launch_all.py")
     venv_python = os.path.join(root, "venv", "Scripts", "pythonw.exe") if os.name == "nt" else os.path.join(root, "venv", "bin", "python")
     python = venv_python if os.path.isfile(venv_python) else sys.executable
+    env = dict(os.environ, STARTUP_DIALOG_TIMEOUT_S="1")
     subprocess.Popen([python, launcher], cwd=root,
+                     env=env,
                      creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL)
