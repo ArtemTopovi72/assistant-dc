@@ -227,6 +227,16 @@ def test_every_continuation_part_keeps_the_voice_and_the_first_picture(tmp_path)
     assert [k["seconds"] for k in seen] == [8.0, 9.0]
 
 
+def test_failed_later_video_part_is_marked_incomplete(tmp_path):
+    clip = tmp_path / 'first.mp4'; clip.write_bytes(b'x')
+    eng = Over(V, generate_video=lambda *a, **k: {}, motion_context_on=lambda: False)
+    tools = types.SimpleNamespace(seed_frame=lambda a, b: True, cut_tail=lambda a, b: True)
+    ctx = types.SimpleNamespace(video_engine=eng, clip_tools=tools, set_stage=lambda s: None,
+                                is_cancelled=lambda: False)
+    assert H._render_remaining_parts(ctx, str(clip), ['first', 'second'], {}) == str(clip)
+    assert ctx.video_parts_incomplete is True
+
+
 def test_a_part_that_skipped_its_opening_lines_is_made_again(tmp_path, monkeypatch):
     """The continuation path had no check that a part said its lines: H3 began mid-speech and
     the clip went out that way (live 2026-10-19)."""

@@ -17,3 +17,9 @@ def test_approved_video_reply_does_not_claim_removed_scenes_or_duration():
     assert '25' not in result and 'чашка' not in result
     assert 'реч' in result.lower()
     assert _approved_video_reply(SimpleNamespace(), 'Готово', 'Продолжи') == 'Готово'
+
+
+def test_approved_video_reply_reports_incomplete_result():
+    ctx = SimpleNamespace(video_plan_approved_result=True, video_plan_warnings=['incomplete'])
+    result = _approved_video_reply(ctx, 'Всё готово!', 'Продолжи видео')
+    assert 'только часть' in result and 'не создались' in result

@@ -1624,6 +1624,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
     voice_sim = getattr(ctx, "voice_sim", None) or _voice_sim
     work = tempfile.mkdtemp(prefix="vidparts_")
     joins = []                     # (last frame of the clip so far, first frame of the new part)
+    completed = 1
     for i, part in enumerate(parts[1:], start=2):
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
@@ -1741,7 +1742,9 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
             logger.warning("video parts: joining part %d failed", i)
             break
         path = video_mod._adopt_output(joined, video_mod.OUTPUT_DIR)
+        completed = i
         logger.info("video parts: %d/%d joined -> %s", i, len(parts), os.path.basename(path))
+    ctx.video_parts_incomplete = completed < len(parts)
     ctx.video_join_note = _check_joins(ctx, joins)
     return path
 
@@ -1918,6 +1921,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     ctx.video_speech_unverified = False
     ctx.video_plan_approved_result = False
     ctx.video_plan_warnings = []
+    ctx.video_parts_incomplete = False
     ctx.video_text_required = ctx.video_text_source = False
     ctx.video_untrusted_ocr = ()
 
@@ -2708,12 +2712,15 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     ctx.video_plan_approved_result = bool(approved)
     ctx.video_plan_warnings = [name for name, present in (
         ("speech", speech_unverified), ("framing", framing_unverified),
-        ("flash", possible_flash), ("join", getattr(ctx, "video_join_note", ""))) if present]
+        ("flash", possible_flash), ("join", getattr(ctx, "video_join_note", "")),
+        ("incomplete", ctx.video_parts_incomplete)) if present]
     return (
         f"Video generated and saved: {path}\n"
         f"Mode: {video_mod.MODE_LABELS.get(display_mode, display_mode)}; "
         f"{result.get('seconds')}s at {result.get('width')}x{result.get('height')}, "
         f"with generated audio.{used}\n"
+        + ("Only part of the planned video was rendered; tell the user it is incomplete.\n"
+           if ctx.video_parts_incomplete else "")
         # The reply told of a grandma's scream from a part the user had dropped
         # from the plan (live 2026-10-12): the approved parts are what was made.
         + ("What the clip shows is ONLY these approved plan parts (anything else in the "

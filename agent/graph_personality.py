@@ -990,6 +990,9 @@ def _approved_video_reply(ctx, answer: str, user_input: str) -> str:
     ru = bool(re.search(r'[А-Яа-яЁё]', user_input or ''))
     result = 'Видео готово, отправляю.' if ru else 'The video is ready.'
     warnings = set(getattr(ctx, 'video_plan_warnings', ()) or ())
+    if 'incomplete' in warnings:
+        result = ('Удалось сделать только часть видео; остальные части не создались.' if ru else
+                  'Only part of the video was created; the remaining parts failed.')
     labels = ({'speech': 'речи', 'framing': 'кадре', 'flash': 'вспышке', 'join': 'стыке'} if ru else
               {'speech': 'speech', 'framing': 'framing', 'flash': 'flash', 'join': 'transition'})
     details = [labels[k] for k in ('speech', 'framing', 'flash', 'join') if k in warnings]
