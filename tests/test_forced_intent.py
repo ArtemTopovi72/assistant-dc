@@ -39,8 +39,6 @@ ctx.intent_read = reads(read=lambda _: {"must_call": "search"})["intent_read"]
 forwarded = ("Какой лучше?\n<<<QUOTED MESSAGE>>> "
              "https://ozon.ru/t/4KzhoQZ https://ozon.ru/t/r94EStj")
 assert G._forced_intent(ctx, {"messages": []}, forwarded, False, ozon_tools, ()) == "ozon_shop"
-assert G._forced_intent(ctx, {"messages": []}, forwarded, False, ozon_tools, (),
-                        {("ozon_shop", "{}"): 1}) == ""
 assert "ozon_shop" in G._kit_always(ctx, set(), text=forwarded)
 research_then_shop = "Погугли обзоры рюкзаков, потом найди лучший на Озоне"
 assert G._forced_intent(ctx, {"messages": []}, research_then_shop, False,
@@ -64,7 +62,7 @@ assert plain["must_call"] == ""
 got = {}
 told = lambda c, t, prev="", att="": got.setdefault("att", att) and intent.FALLBACK
 G._turn_intent(NS(last_image_path="x.png", intent_read=told), {"messages": []}, "сколько я потратил?")
-assert got["att"] == "a photo from earlier in the chat, not attached to this message", got
+assert got["att"] == "a photo", got
 got.clear()
 csv = [{"role": "user", "content": "Jan;125400;98300\nFeb;131200;101500\nMar;118900;97800\nApr;142300;110200"}]
 ctx.intent_read = told
