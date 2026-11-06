@@ -308,7 +308,7 @@ def test_fewer_critical_defects_win_when_both_scores_are_capped():
             return json.dumps({'score': 9, 'problems': next(issues)})
         return better if role == 'revise' else ''
     _F['lyrics_llm'] = llm
-    result = L.polish(_C(), GOOD, rounds=1)
+    result = L.polish(_C(), GOOD, rounds=1, topic='исходное условие истории')
     assert result['text'] == better
 
 
@@ -716,6 +716,26 @@ def test_creative_calls_ask_for_min_p(monkeypatch):
     got.clear()
     L._call(_C(), "critic", "s", "u", temperature=0.0, max_tokens=10)
     assert "sampling" not in got
+
+
+def test_critic_respects_gemma_thinking_setting_without_json_grammar(monkeypatch):
+    monkeypatch.delenv('F5_TEST_RUN', raising=False)
+    got = {}
+    _F['text_model'] = lambda *a, **kw: got.update(kw) or '{}'
+    ctx = _C()
+    ctx.model_name, ctx.no_think = 'gemma4-26b-a4b', True
+    L._call(ctx, 'critic', 's', 'u', temperature=0, max_tokens=10, schema={'type': 'object'})
+    assert 'json_schema' not in got
+    got.clear()
+    ctx.no_think = False
+    L._call(ctx, 'critic', 's', 'u', temperature=0, max_tokens=10, schema={'type': 'object'})
+    assert 'json_schema' in got
+
+
+def test_unchanged_original_cannot_be_accused_of_changing_its_own_plot():
+    _F['lyrics_llm'] = lambda *a: '{"score": 7, "problems": [{"kind": "source", "lines": [2], "problem": "Changed the ending"}]}'
+    result = L._review(_C(), GOOD, GOOD)
+    assert result['valid'] and result['source'] == 0 and result['critical'] == 0
 
 
 def test_a_two_syllable_rhyme_counts_more():

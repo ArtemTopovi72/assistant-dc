@@ -497,6 +497,10 @@ def _call(ctx, role: str, system: str, user: str, *, temperature: float, max_tok
         return own(role, system, user)
     if os.getenv("F5_TEST_RUN"):
         return ""                      # suites that do not stub it: no model call
+    if role == 'critic' and schema and getattr(ctx, 'no_think', False):
+        import llm, config
+        if llm._is_gemma4(getattr(ctx, 'model_name', '') or config.MODEL_NAME):
+            schema = None
     kw = {"json_schema": schema} if schema else {}
     if role in _CREATIVE and MIN_P:
         # min-p keeps high temperature coherent and off the cliché tokens
@@ -620,6 +624,8 @@ def _review(ctx, text: str, topic: str = "") -> dict:
                         or not all(isinstance(n, int) and 1 <= n <= len(text.splitlines()) for n in issue["lines"])
                         or not isinstance(issue.get("problem"), str) or not issue["problem"].strip()):
                     raise ValueError("lyric critic returned an unclassified problem")
+            if topic and text.strip() == topic.strip():
+                issues = [p for p in issues if p['kind'] != 'source']
             issues.sort(key=lambda p: (p["kind"] == "style", p["kind"] == "meaning"))
             critical = sum(p["kind"] != "style" for p in issues)
             line_label = "Строки" if _lang_name(text) == "Russian" else "Lines"
