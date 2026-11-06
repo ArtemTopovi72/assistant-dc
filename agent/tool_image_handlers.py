@@ -2261,7 +2261,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             logger.info("generate_video: script as action from the first frame: %s", acted[:300])
             description = description.replace(raw, acted, 1) if raw in description else acted
             raw = acted
-    if not args.get("seconds") and not continuing:
+    if not args.get("seconds") and (not continuing or re.search(
+            r"\d+\s*(?:сек|с\b|мин|s\b|sec|minute)", _said, re.I)):
         # «сделай видео на 30 секунд» came with no seconds from the agent and was planned
         # as three 5.2 s parts, ≈16 s (2026-10-17): the length is read from the words.
         try:

@@ -207,6 +207,16 @@ def test_continue_on_a_chain_clip_goes_on_from_its_latent(tmp_path):
     assert rig.stitched == [("h3_continuous/chY", 3)] and rig.kept[-1][1:] == ("h3_continuous/chY", 3)
 
 
+def test_continuation_reads_requested_duration_when_tool_omits_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(H, 'intent_read', lambda ctx: lambda *a: {'song_seconds': 25})
+    rig, ctx, _ = _continued(tmp_path, video_plan_ask=True)
+    state = {'user_input_original': 'Продолжи на 25 секунд'}
+    result = H._handle_generate_video(ctx, state, {'description': 'He waves.'})
+    assert '[NOT MADE YET]' in result
+    assert state['video_plan_requested_seconds'] == 25
+    assert not rig.renders()
+
+
 def test_the_joins_of_a_chain_are_looked_at_once_after_the_card_is_free(tmp_path):
     # The joins check lived only on the old join path; the live chain path never ran it.
     rig = _Rig(tmp_path)
