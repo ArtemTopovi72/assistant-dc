@@ -1922,6 +1922,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     ctx.video_plan_approved_result = False
     ctx.video_plan_warnings = []
     ctx.video_parts_incomplete = False
+    ctx.video_duration_short = False
     ctx.video_text_required = ctx.video_text_source = False
     ctx.video_untrusted_ocr = ()
 
@@ -2706,6 +2707,16 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     state["video_path"] = path
     state["video_status"] = "success"
     state["video_seconds"] = result.get("seconds")
+    target_seconds = (sum(float(s or 0) for s in approved_seconds)
+                      if approved and len(approved_seconds) == len(parts) else (want if not approved else 0))
+    if target_seconds:
+        try:
+            actual = float(video_mod.probe(path).get('seconds') or 0)
+            original = float(video_mod.probe(cont_src).get('seconds') or 0) if continuing and cont_src else 0
+            if actual and (not continuing or original):
+                ctx.video_duration_short = actual - original < target_seconds - max(1.0, target_seconds * 0.05)
+        except Exception:
+            logger.warning('Could not verify video duration', exc_info=True)
     ctx.last_video_path = path
     ctx.video_made = path           # last_video_path is each PART's clip while the parts render
     ctx.last_video_prompt = ctx.video_request or description
@@ -2715,11 +2726,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if tags:
         used = f" References used: {', '.join(tags)}."
     speech_unverified = speech_unverified or getattr(ctx, "video_speech_unverified", False)
-    ctx.video_plan_approved_result = bool(approved)
+    ctx.video_plan_approved_result = bool(approved or ctx.video_duration_short)
     ctx.video_plan_warnings = [name for name, present in (
         ("speech", speech_unverified), ("framing", framing_unverified),
         ("flash", possible_flash), ("join", getattr(ctx, "video_join_note", "")),
-        ("incomplete", ctx.video_parts_incomplete)) if present]
+        ("incomplete", ctx.video_parts_incomplete), ("short", ctx.video_duration_short)) if present]
     return (
         f"Video generated and saved: {path}\n"
         f"Mode: {video_mod.MODE_LABELS.get(display_mode, display_mode)}; "

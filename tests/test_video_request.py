@@ -24,6 +24,17 @@ def test_approved_part_keeps_the_duration_shown_in_the_plan(tmp_path):
     assert rig.renders()[0][1]['seconds'] == 8.0
 
 
+def test_short_output_is_marked_for_honest_reply(tmp_path):
+    rig = _Rig(tmp_path, herrgott_on=lambda: False, probe=lambda p: {'seconds': 6})
+    ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    handlers._handle_generate_video(ctx, {'user_input_original': REQUEST},
+                                    {'description': 'The balloon sways.', 'seconds': 12})
+    assert ctx.video_duration_short
+    assert 'short' in ctx.video_plan_warnings
+    assert ctx.video_plan_approved_result
+
+
 def test_long_request_adds_visible_continuations_to_its_plan(tmp_path):
     rig = _Rig(tmp_path, herrgott_on=lambda: False)
     ctx = rig.ctx(video_plan_ask=True, video_plan_parts=[], text_model=lambda *a, **kw: '',

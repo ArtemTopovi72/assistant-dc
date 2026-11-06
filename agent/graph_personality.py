@@ -993,6 +993,9 @@ def _approved_video_reply(ctx, answer: str, user_input: str) -> str:
     if 'incomplete' in warnings:
         result = ('Удалось сделать только часть видео; остальные части не создались.' if ru else
                   'Only part of the video was created; the remaining parts failed.')
+    elif 'short' in warnings:
+        result = ('Видео получилось короче запрошенного, отправляю результат.' if ru else
+                  'The video is shorter than requested; sending the result.')
     labels = ({'speech': 'речи', 'framing': 'кадре', 'flash': 'вспышке', 'join': 'стыке'} if ru else
               {'speech': 'speech', 'framing': 'framing', 'flash': 'flash', 'join': 'transition'})
     details = [labels[k] for k in ('speech', 'framing', 'flash', 'join') if k in warnings]
