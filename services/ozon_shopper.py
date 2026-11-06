@@ -462,7 +462,9 @@ def _review_evidence(reviews) -> str:
     excerpts = []
     for review in picked:
         words = re.sub(r"\s+", " ", str(review.get("comment") or review.get("cons") or
-                                     review.get("pros") or "")).strip()[:180]
+                                     review.get("pros") or "")).strip()
+        if len(words) > 180:
+            words = words[:180].rsplit(" ", 1)[0].rstrip() + "…" if " " in words[:180] else words[:179] + "…"
         if words:
             excerpts.append("«" + words.replace("*", "").replace("`", "") + "»")
     return "В отзывах карточки: " + "; ".join(excerpts) if excerpts else "Тексты отзывов пустые."

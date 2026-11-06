@@ -197,6 +197,15 @@ def test_shopper_does_not_publish_family_speed_or_invent_review_opinions():
         "В отзывах карточки: «Хороший товар»"
 
 
+def test_long_review_excerpt_marks_omission_without_cutting_word():
+    text = "хороший рюкзак " * 30
+    evidence = S._review_evidence([{"score": 5, "comment": text}])
+    excerpt = evidence.split("«", 1)[1].split("»", 1)[0]
+    assert excerpt.endswith("…")
+    assert text.startswith(excerpt[:-1])
+    assert text[len(excerpt[:-1])] == " "
+
+
 def test_shortlist_answer_shows_comparison_without_raw_review_slop():
     choice = item("chosen", "TRIBE GATE Black", 5039)
     choice.update(url="https://ozon.ru/t/chosen", rating=5.0, reviews=1072)
