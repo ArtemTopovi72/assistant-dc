@@ -412,8 +412,8 @@ def _turn_inputs(ctx, state, text: str) -> tuple:
 
 def _unverified_research_answer(state, sources=()) -> str:
     rows = state.get('research_shop_candidates') or []
-    original = str(state.get('user_input_original') or state.get('user_input') or '')
-    verified_only = bool(re.search(r'(?<!не )только\s+(?:на\s+)?проверенн|only\s+verified', original, re.I))
+    from tool_ozon_handlers import _verified_links_only
+    verified_only = _verified_links_only(state)
     answer = 'Не удалось проверить карточки на Озоне: цены, наличие и продавцы неизвестны. '
     answer += ('Непроверенные ссылки не привожу. В веб-поиске упомянуты модели:' if verified_only else
                'В результатах веб-поиска упомянуты модели; ссылки ниже — только возможные совпадения из поискового индекса, '

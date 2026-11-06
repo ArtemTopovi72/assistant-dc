@@ -115,6 +115,11 @@ _NAMED_MODEL = _re.compile(r"\b[A-Z][A-Za-z]{1,}\s+[A-Z][A-Za-z0-9-]{2,}"
 _GENERIC_MODELS = {"laptop", "backpack", "premium", "urban", "travel", "waterproof", "best"}
 
 
+def _verified_links_only(state):
+    original = str(state.get('user_input_original') or state.get('user_input') or '')
+    return bool(_re.search(r'(?<!не )только\s+(?:на\s+)?проверенн|only\s+verified', original, _re.I))
+
+
 def _research_shop_index_fallback(ctx, state, shopper):
     """Find unverified Ozon leads for several models actually named by web research."""
     evidence = str(state.get('research_shop_evidence') or '')
@@ -171,7 +176,7 @@ def _research_shop_index_fallback(ctx, state, shopper):
         seen.add(key)
         url = ''
         try:
-            hits = raw_search_results(ctx, 'site:ozon.ru/product/ ' + model, 6)
+            hits = [] if _verified_links_only(state) else raw_search_results(ctx, 'site:ozon.ru/product/ ' + model, 6)
             for hit in hits:
                 candidate = str(hit.get('href') or '')
                 parts = urlsplit(candidate)

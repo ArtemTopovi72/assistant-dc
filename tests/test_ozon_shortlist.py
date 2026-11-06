@@ -162,6 +162,19 @@ def test_fallback_researches_more_when_only_one_model_is_known(monkeypatch):
     assert [row['model'] for row in state['research_shop_candidates']] == ['Thule Subterra 2', 'Bellroy Transit']
 
 
+def test_verified_only_fallback_does_not_search_unverified_index(monkeypatch):
+    import search
+    monkeypatch.setattr(ozon_shopper, '_llm_json', lambda *a, **kw: {
+        'models': ['Thule Subterra 2', 'Bellroy Transit']})
+    calls = []
+    monkeypatch.setattr(search, 'raw_search_results', lambda *a: calls.append(a) or [])
+    state = {'user_input_original': 'Дай ссылки только на проверенные модели',
+             'research_shop_evidence': 'Thule Subterra 2 and Bellroy Transit'}
+    handler._research_shop_index_fallback(SimpleNamespace(), state, ozon_shopper)
+    assert calls == []
+    assert [row['model'] for row in state['research_shop_candidates']] == ['Thule Subterra 2', 'Bellroy Transit']
+
+
 def test_index_fallback_rejects_wrong_product_and_foreign_domain(monkeypatch):
     import search
     monkeypatch.setattr(ozon_shopper, '_llm_json', lambda *a, **kw: {
