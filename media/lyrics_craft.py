@@ -289,6 +289,19 @@ def _clauses_rhyme(ca: str, cb: str) -> bool:
     return diff <= 1 and len(ca) >= 3
 
 
+def _infinitive(word: str) -> bool:
+    if not re.search(r'(ть|ться|ти)$', word):
+        return False
+    try:
+        import pymorphy3
+        morph = getattr(_infinitive, '_morph', None) or pymorphy3.MorphAnalyzer()
+        _infinitive._morph = morph
+        return morph.parse(word)[0].tag.POS == 'INFN'
+    except (ImportError, OSError, IndexError):
+        # shortcut: skip verb warnings without a dictionary; install pymorphy3 to restore them.
+        return False
+
+
 def _banned(a: str, b: str):
     """Why a rhyme pair is lazy, or ''."""
     x, y = a.lower().replace("ё", "е"), b.lower().replace("ё", "е")
@@ -300,7 +313,7 @@ def _banned(a: str, b: str):
         g = {w.replace("ё", "е") for w in group}
         if x in g and y in g:
             return "worn"
-    if re.search(r"(ть|ться|ти)$", x) and re.search(r"(ть|ться|ти)$", y):
+    if _infinitive(x) and _infinitive(y):
         return "verbs"
     return ""
 

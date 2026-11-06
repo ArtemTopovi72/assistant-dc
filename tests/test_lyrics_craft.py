@@ -18,6 +18,11 @@ import types  # noqa: E402
 
 import pytest  # noqa: E402
 
+
+def test_nouns_are_not_mistaken_for_infinitive_rhymes():
+    assert L._banned('утонуть', 'путь') != 'verbs'
+    assert L._banned('дойти', 'найти') == 'verbs'
+
 # What a test hands the lyric code: `lyrics_llm(role, system, user)`, `accent(line)`,
 # `DRAFTS`, `text_model`, `run_web_search` -- on the context of every call (_C).
 _F = {}
