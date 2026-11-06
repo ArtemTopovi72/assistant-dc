@@ -27,6 +27,21 @@ def test_static_camera_instructions_do_not_inflate_duration():
     assert _est(V.STATIC_CONTINUE_PREFIX + request) == _est(request)
 
 
+def test_failed_sentence_read_is_not_retried_until_short_backoff_expires(monkeypatch):
+    monkeypatch.setattr(V, '_SCRIPT_READS', {})
+    monkeypatch.setattr(V, '_SCRIPT_READ_FAILURES', {})
+    now = [1000.0]
+    monkeypatch.setattr(V.time, 'monotonic', lambda: now[0])
+    calls = []
+    monkeypatch.setattr(V, '_script_model', lambda lines: calls.append(lines) or None)
+    assert V.read_sentences(['A unique failed action.'])[0]['beats'] == 1
+    V.read_sentences(['A unique failed action.'])
+    assert len(calls) == 1
+    now[0] += 301
+    V.read_sentences(['A unique failed action.'])
+    assert len(calls) == 2
+
+
 class _Ctx:
     deps = types.SimpleNamespace(script_read=_fakes.script_model)
     reference_images = []

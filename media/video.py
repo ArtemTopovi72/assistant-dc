@@ -172,6 +172,7 @@ _BEAT_SYS = (
     '"camera": "", "rest": ""}, ...]}, one per line, in order.')
 _PLAIN_READ = {"kind": "action", "beats": 1, "hold": False, "camera": "", "rest": ""}
 _SCRIPT_READS: dict = {}
+_SCRIPT_READ_FAILURES: dict = {}
 
 
 def _ask_json(system: str, sentences: list, keys: tuple, per: int):
@@ -211,17 +212,24 @@ def read_sentences(sentences: list, model=None) -> list:
         if not isinstance(rows, list) or len(rows) != len(sentences):
             return [_PLAIN_READ] * len(sentences)
         return [_clean_read(r) for r in rows]
-    todo = list(dict.fromkeys(s for s in sentences if s not in _SCRIPT_READS))
+    now = time.monotonic()
+    if len(_SCRIPT_READ_FAILURES) > 2000:
+        _SCRIPT_READ_FAILURES.clear()
+    # shortcut: reuse the existing one-beat fallback for five minutes after a failed read.
+    todo = list(dict.fromkeys(s for s in sentences if s not in _SCRIPT_READS
+                              and now - _SCRIPT_READ_FAILURES.get(s, -300) >= 300))
     for i in range(0, len(todo), 20):
         batch = todo[i:i + 20]
         got = _script_model(batch)
         rows = got.get("sentences") if isinstance(got, dict) else None
         if not isinstance(rows, list) or len(rows) != len(batch):
+            _SCRIPT_READ_FAILURES.update({s: time.monotonic() for s in batch})
             continue
         if len(_SCRIPT_READS) > 2000:
             _SCRIPT_READS.clear()
         for s, r in zip(batch, rows):
             _SCRIPT_READS[s] = _clean_read(r)
+            _SCRIPT_READ_FAILURES.pop(s, None)
     return [_SCRIPT_READS.get(s, _PLAIN_READ) for s in sentences]
 
 
