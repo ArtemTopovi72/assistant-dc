@@ -332,7 +332,8 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
     """
     user_input = state.get("user_input", "")
     vision_summary = state.get("vision_summary", "").strip()
-    album_item = "[album_restyle_item]" in (state.get("user_input_original") or user_input)
+    video_link = "[video_link_context]" in (state.get("user_input_original") or user_input)
+    album_item = "[album_restyle_item]" in (state.get("user_input_original") or user_input) or video_link
     memory_text = "" if album_item else (state.get("session_memory_text", "") or ctx.memory_text()).strip()
 
     # Build user message
@@ -342,10 +343,10 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
                                state.get("messages"), ctx=ctx)
             or translate_previous_note(state.get("user_input_original") or user_input,
                                        (state.get("messages") or [])[:-1], ctx=ctx))
-    facts_text = ctx.facts_text(state.get("user_input_original") or user_input)
+    facts_text = "" if video_link else ctx.facts_text(state.get("user_input_original") or user_input)
     if facts_text:
         parts.extend(facts_parts(facts_text, ctx=ctx))
-    elif getattr(ctx, "facts_forgotten", False):
+    elif not video_link and getattr(ctx, "facts_forgotten", False):
         parts.append(FORGOTTEN_NOTE)
     if memory_text:
         # Neutral label: "Session memory:" was read back as a feature to announce
@@ -357,7 +358,10 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
     # when an image was sent THIS turn; for a merely-previous image, leave room
     # for a brand-new generation (otherwise "draw a dog" after an earlier image
     # would wrongly redraw the old one).
-    if state.get("picture_question"):
+    if video_link:
+        parts.append("[Answer only from the video observations and the supplied picture. "
+                     "Compare them if asked; do not resume earlier tasks or edit the image.]")
+    elif state.get("picture_question"):
         parts.append(
             "[The user asks a QUESTION about the picture. Answer it in words from the "
             "image description above — describe what is there, small details included. "

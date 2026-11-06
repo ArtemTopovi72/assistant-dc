@@ -1052,7 +1052,8 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     # ── FAST PATH ─────────────────────────────────────────
     if _fast_path_allowed(ctx, state, user_input, original_input):
         _fast_messages = (_scope_album_outbound(messages, user_msg)
-                          if "[album_restyle_item]" in (original_input or user_input) else messages)
+                          if any(mark in (original_input or user_input) for mark in
+                                 ("[album_restyle_item]", "[video_link_context]")) else messages)
         fast_msg = _fast_path_reply(ctx, _fast_messages, gen, user_input,
                                     effective_input, original_input,
                                     vision_summary=(state.get("vision_summary") or ""
@@ -1445,7 +1446,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                     _outbound = [dict(messages[0], content=_scoped)] + messages[1:]
         except Exception:
             logger.debug("prompt scoping failed", exc_info=True)
-        if "[album_restyle_item]" in (original_input or user_input):
+        if any(mark in (original_input or user_input) for mark in ("[album_restyle_item]", "[video_link_context]")):
             _outbound = _scope_album_outbound(_outbound, user_msg)
         _outbound = _stub_written_files(_outbound)
         # A forced call first goes out as "auto" with only that schema: "required"

@@ -24,3 +24,15 @@ def test_album_item_keeps_current_image_summary_but_not_sibling_memory():
     text, _, _ = _compose_user_message(ctx, state)
     assert 'A cat in a cup' in text
     assert 'Previous photo had two girls' not in text
+
+
+def test_video_and_picture_keep_current_evidence_without_old_chat_memory():
+    ctx = Context(models=None, transcription_cache={}, cache_file=Path('tests/_album_scope.json'),
+                  asr_lock=threading.Lock(), tts_lock=threading.Lock(), no_think=True)
+    ctx.remember('assistant', 'Old backpack recommendation')
+    state = {'user_input': '[video_link_context] Compare these. Video: a cat jumps.',
+             'vision_summary': 'A cat on a sofa', 'image_data': True, 'messages': []}
+    text, _, _ = _compose_user_message(ctx, state)
+    assert 'A cat on a sofa' in text and 'a cat jumps' in text
+    assert 'Old backpack recommendation' not in text
+    assert 'do not resume earlier tasks or edit the image' in text

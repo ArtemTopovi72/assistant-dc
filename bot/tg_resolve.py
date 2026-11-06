@@ -1225,6 +1225,7 @@ class ResolveMixin:
                     else:
                         _req = (('Кратко перескажи видео по ссылке: ' if lang == 'ru' else
                                  'Summarize the video at this link: ') + lone_video)
+                    _req = '[video_link_context] ' + _req
                 if not texts or texts[-1] != _req:
                     texts.append(_req)
                 # A link is a page to read (tg_links). Off under tests: no
@@ -1429,10 +1430,11 @@ class ResolveMixin:
                 cap = (item.get("caption") or "").strip()
                 if cap:
                     video_link = _tg_links.video_url(cap)
-                    texts.append(('Проанализируй видео вместе с этой картинкой и объясни их связь, если она видна: '
+                    request = (('Проанализируй видео вместе с этой картинкой и объясни их связь, если она видна: '
                                   + cap) if video_link and cap == video_link and lang == 'ru' else
                                  ('Analyze the video with this picture and explain any visible connection: '
                                   + cap) if video_link and cap == video_link else cap)
+                    texts.append(('[video_link_context] ' if video_link else '') + request)
                     if video_link and not sess.reg_state and not os.getenv('F5_TEST_RUN'):
                         if self._read_links(ctx, sess, chat_id, user, cap, scaffold):
                             return
