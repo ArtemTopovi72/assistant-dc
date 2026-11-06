@@ -319,6 +319,8 @@ def inspect(x: dict, ctx=None) -> dict:
     try:
         r = _oz.call(ctx, "reviews", x["sku"], REVIEWS_READ)
         d["review_texts"] = r.get("reviews") or []
+        if not d["review_texts"] and (r.get("total_reviews") or d.get("reviews")):
+            d["review_texts"] = None  # An empty page does not cancel the card's review count.
     except _oz.OzonBlocked:
         raise
     except Exception as exc:

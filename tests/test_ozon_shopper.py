@@ -26,7 +26,7 @@ def item(sku, name, price, rating=4.7, reviews=100):
 
 CATALOG = {
     "скатерть": [item("1", "Скатерть для пикника 150x150", 700), item("2", "Скатерть непромокаемая", 900)],
-    "тарелки": [item("3", "Тарелки одноразовые 50 шт", 200), item("4", "Держатель для тарелок", 50)],
+    "тарелки": [item("3", "Тарелки одноразовые 50 шт", 200, reviews=0), item("4", "Держатель для тарелок", 50)],
 }
 
 
@@ -187,6 +187,12 @@ def test_digest_discloses_when_review_texts_could_not_be_read():
     choice.update(url='https://ozon.ru/product/example-99/', review_texts=None)
     answer = S.digest({'choice': choice, 'decision': {}, 'others': []})
     assert 'Тексты отзывов не удалось прочитать' in answer
+
+
+def test_empty_review_page_does_not_erase_known_review_count(world):
+    choice = S.inspect(item('3', 'Тарелки', 200, reviews=100), _ctx())
+    assert choice['review_texts'] is None
+    assert 'Тексты отзывов не удалось прочитать' in S.digest({'choice': choice})
 
 
 def test_decision_uses_card_reviews_even_when_model_invents_claims(world):
