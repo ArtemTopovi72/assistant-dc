@@ -24,7 +24,7 @@ def test_approved_part_keeps_the_duration_shown_in_the_plan(tmp_path):
     assert rig.renders()[0][1]['seconds'] == 8.0
 
 
-def test_short_single_part_is_shown_for_approval_before_render(tmp_path):
+def test_long_request_adds_visible_continuations_to_its_plan(tmp_path):
     rig = _Rig(tmp_path, herrgott_on=lambda: False)
     ctx = rig.ctx(video_plan_ask=True, video_plan_parts=[], text_model=lambda *a, **kw: '',
                   vision_model=lambda *a, **kw: 'NONE', deps=SimpleNamespace(asks_for_video=lambda *a: True))
@@ -33,7 +33,9 @@ def test_short_single_part_is_shown_for_approval_before_render(tmp_path):
                                              {'description': 'The balloon sways.', 'seconds': 25})
     assert '[NOT MADE YET]' in result
     assert state['video_plan_requested_seconds'] == 25
-    assert sum(p['sec'] for p in state['video_plan']) < 25
+    assert len(state['video_plan']) == 3
+    assert sum(p['sec'] for p in state['video_plan']) == pytest.approx(25, abs=0.1)
+    assert all('no new speech' in p['text'] for p in state['video_plan'][1:])
     assert not rig.renders()
 
 

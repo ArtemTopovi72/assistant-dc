@@ -2388,6 +2388,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # step dropped them is not the point -- the user's words are all said, as written.
         logger.warning("generate_video: the parts lost the user's words %s; re-cut from the script as written", gone)
         parts = video_mod.fit_speech(video_mod.split_script(raw, reads=dep(ctx, "script_read", None)))
+    if want > 15 and getattr(ctx, "video_plan_ask", False) and not getattr(ctx, "video_plan_parts", None):
+        cap = video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO)
+        # shortcut: at most 12 generated parts; longer requests remain visibly short in the plan.
+        needed = min(12, math.ceil(want / cap))
+        parts += ["The same scene continues naturally; no new speech or repeated actions."] * max(0, needed - len(parts))
     if len(parts) > 1 and raw in description:
         description = description.replace(raw, parts[0], 1)
         logger.info("generate_video: the script needs %d parts: %s", len(parts),
