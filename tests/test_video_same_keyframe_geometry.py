@@ -51,6 +51,25 @@ def test_continuation_uses_source_video_geometry(tmp_path):
     assert (seen['width'], seen['height']) == (1280, 576)
 
 
+@pytest.mark.parametrize('size', [(1280, 576), (3840, 2160)])
+def test_regular_continuation_fits_source_instead_of_reference_image(tmp_path, size):
+    from tests.fakes import Over
+    image = tmp_path / 'frame.png'
+    image.write_bytes(b'image')
+    seen = {}
+    def build(*args, **kwargs):
+        seen.update(kwargs)
+        raise video.VideoUnavailable('stop after checking geometry')
+    engine = Over(video, engine_available=lambda ctx: (True, ''),
+                  _image_size=lambda _: (426, 480),
+                  probe=lambda _: {'width': size[0], 'height': size[1]},
+                  build_workflow=build)
+    ctx = SimpleNamespace(video_engine=engine)
+    video.generate_video(ctx, 'continue', images=[str(image)], size_from='original.mp4',
+                         prepared=True, seconds=5, seed=1)
+    assert (seen['width'], seen['height']) == video.fit_canvas(*size)
+
+
 def test_experimental_static_guides_use_same_frame(monkeypatch):
     monkeypatch.setattr(video, '_upload', lambda path, kind='image': path)
     monkeypatch.setattr(video, '_server_has_node', lambda node: node == 'MiniMaxH3AddGuide')

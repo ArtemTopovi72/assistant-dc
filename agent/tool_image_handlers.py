@@ -1912,6 +1912,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # delivered clip is that second call's -- it must still get the voice.
     ctx.video_speech = ""
     ctx.video_speech_unverified = False
+    ctx.video_plan_approved_result = False
+    ctx.video_plan_warnings = []
     ctx.video_text_required = ctx.video_text_source = False
     ctx.video_untrusted_ocr = ()
 
@@ -2414,6 +2416,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # Several minutes per part: the chat sees the parts, the clip length and the
         # render time first, and may drop or condense parts (user, 2026-10-10).
         state["video_plan"] = [{"text": p, "sec": x} for p, x in zip(parts, secs)]
+        state["video_plan_images"] = list(images)
         if continuing:      # nothing rendered: the clip and its new people wait for the ▶ rerun
             ctx.continue_tail, ctx.continue_src, ctx.continue_people = cont_tail, cont_src, people
         return ("[NOT MADE YET] The script needs several parts, and the user approves the "
@@ -2527,7 +2530,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     seed=args.get("seed") if attempt == 1 else None,
                     context_video=pinned_tail,
                     chain=(chain_id, chain_idx) if chain_id else (),
-                    size_from=cont_src if chain_id and continuing else "",
+                    size_from=cont_src if continuing else "",
                     keyframe=head,
                 )
                 if result.get("status") == "cancelled" or (getattr(ctx, "is_cancelled", None) and ctx.is_cancelled()):
@@ -2691,6 +2694,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if tags:
         used = f" References used: {', '.join(tags)}."
     speech_unverified = speech_unverified or getattr(ctx, "video_speech_unverified", False)
+    ctx.video_plan_approved_result = bool(approved)
+    ctx.video_plan_warnings = [name for name, present in (
+        ("speech", speech_unverified), ("framing", framing_unverified),
+        ("flash", possible_flash), ("join", getattr(ctx, "video_join_note", ""))) if present]
     return (
         f"Video generated and saved: {path}\n"
         f"Mode: {video_mod.MODE_LABELS.get(display_mode, display_mode)}; "

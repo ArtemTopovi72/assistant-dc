@@ -209,7 +209,8 @@ def test_pending_video_offer_persists_its_own_images_and_enqueues_its_primary(tm
 
 
 @pytest.mark.parametrize('voice_choice', ['', 'own'])
-def test_approved_video_plan_restores_its_own_original_clip(tmp_path, voice_choice):
+@pytest.mark.parametrize('has_seed', [False, True])
+def test_approved_video_plan_restores_its_own_original_clip(tmp_path, voice_choice, has_seed):
     import uuid
     from test_tg_incoming_durability import make_bot
     bot = make_bot(tmp_path)
@@ -217,12 +218,14 @@ def test_approved_video_plan_restores_its_own_original_clip(tmp_path, voice_choi
     class Graph:
         def __init__(self, ctx): self.ctx = ctx
         def invoke(self, base):
-            seen.append((self.ctx.continue_tail, self.ctx.continue_src, self.ctx.voice_choice))
+            seen.append((self.ctx.continue_tail, self.ctx.continue_src, self.ctx.voice_choice,
+                         self.ctx.last_image_path))
             return {'final_answer': 'ok', 'messages': base.get('messages', [])}
     bot._get_ctx = lambda: FakeCtx()
     bot._get_graph = lambda: object()
     bot._get_base_state = lambda: {'messages': []}
     bot.graph_builder = lambda ctx: Graph(ctx)
+    bot.text_model = lambda *a, **kw: '{"lines": ["Next"]}'
     bot._backend = T.InMemoryBackend()
     bot._send_get_id = lambda *a, **k: 1
     bot._edit_text = bot._delete = lambda *a, **k: None
@@ -230,19 +233,24 @@ def test_approved_video_plan_restores_its_own_original_clip(tmp_path, voice_choi
     threading.Thread(target=bot._consumer_loop, daemon=True).start()
     tail, source = tmp_path / 'tail.mp4', tmp_path / 'original.mp4'
     tail.write_bytes(b'tail'); source.write_bytes(b'original')
+    seed, stale = tmp_path / 'seed.png', tmp_path / 'stale.png'
+    Image.new('RGB', (64, 64), 'red').save(seed)
+    Image.new('RGB', (64, 64), 'blue').save(stale)
     sess = bot._get_session(101)
     sess.video_plan_request = 'Продолжи этот ролик'
     sess.video_plan_ok = ['говорит одну фразу']
     sess.video_plan_continuation = {'tail': str(tail), 'src': str(source), 'people': []}
+    sess.video_plan_images = [str(seed)] if has_seed else []
+    sess.target_image = T._log_image(sess, str(stale), src='user')
     sess.voice_choice = voice_choice
     bot._store.put(sess)
     task = T._Task(task_id=str(uuid.uuid4()), chat_id=101, user_text=sess.video_plan_request,
-                   enqueue_ts=time.time())
+                   image_id=sess.target_image, image_path=str(stale), enqueue_ts=time.time())
     with bot._task_lock: bot._pending_journal[task.task_id] = task
     bot._backend.push(task)
     end = time.monotonic() + 15
     while time.monotonic() < end and not seen: time.sleep(0.1)
-    assert seen == [(str(tail), str(source), voice_choice or 'default')]
+    assert seen == [(str(tail), str(source), voice_choice or 'default', str(seed) if has_seed else None)]
 
 
 def test_video_plan_persists_and_clears_its_continuation(tmp_path):
@@ -258,7 +266,41 @@ def test_video_plan_persists_and_clears_its_continuation(tmp_path):
     assert bot._store.get(101).video_plan_continuation == {}
 
 
-def test_plan_with_missing_source_does_not_generate_from_another_file(tmp_path):
+def test_video_plan_stores_the_reference_used_by_the_tool(tmp_path):
+    import uuid
+    from test_tg_incoming_durability import make_bot
+    bot = make_bot(tmp_path)
+    bot.text_model = lambda *a, **kw: '{"lines": ["Next"]}'
+    source, tail, seed = (tmp_path / name for name in ('source.mp4', 'tail.mp4', 'seed.png'))
+    source.write_bytes(b'source'); tail.write_bytes(b'tail')
+    Image.new('RGB', (64, 64), 'red').save(seed)
+    class Graph:
+        def __init__(self, ctx): self.ctx = ctx
+        def invoke(self, base):
+            self.ctx.continue_tail, self.ctx.continue_src = str(tail), str(source)
+            return {'final_answer': 'План ниже', 'messages': base.get('messages', []),
+                    'video_plan': [{'text': 'Next', 'sec': 5}], 'video_plan_images': [str(seed)]}
+    bot._get_ctx = lambda: FakeCtx()
+    bot._get_graph = lambda: object()
+    bot._get_base_state = lambda: {'messages': []}
+    bot.graph_builder = lambda ctx: Graph(ctx)
+    bot._backend = T.InMemoryBackend()
+    bot._send_get_id = lambda *a, **k: 1
+    bot._edit_text = bot._delete = lambda *a, **k: None
+    bot._running = True
+    threading.Thread(target=bot._consumer_loop, daemon=True).start()
+    task = T._Task(task_id=str(uuid.uuid4()), chat_id=101, user_text='Продолжи ролик', enqueue_ts=time.time())
+    with bot._task_lock: bot._pending_journal[task.task_id] = task
+    bot._backend.push(task)
+    end = time.monotonic() + 15
+    while time.monotonic() < end and not bot._get_session(101).video_plan: time.sleep(0.1)
+    sess = bot._get_session(101)
+    assert sess.video_plan_images == [str(seed)]
+    assert sess.video_plan_continuation['src'] == str(source)
+
+
+@pytest.mark.parametrize('missing', ['source', 'seed'])
+def test_plan_with_missing_source_does_not_generate_from_another_file(tmp_path, missing):
     import uuid
     from test_tg_incoming_durability import make_bot
     bot = make_bot(tmp_path)
@@ -275,17 +317,20 @@ def test_plan_with_missing_source_does_not_generate_from_another_file(tmp_path):
     threading.Thread(target=bot._consumer_loop, daemon=True).start()
     tail = tmp_path / 'tail.mp4'
     tail.write_bytes(b'tail')
+    source = tmp_path / 'source.mp4'
+    if missing != 'source': source.write_bytes(b'source')
     sess = bot._get_session(101)
     sess.video_plan_request = 'Продолжи ролик'
     sess.video_plan_ok = ['Продолжение']
-    sess.video_plan_continuation = {'tail': str(tail), 'src': str(tmp_path / 'missing.mp4')}
+    sess.video_plan_continuation = {'tail': str(tail), 'src': str(source)}
+    sess.video_plan_images = [str(tmp_path / 'missing.png')] if missing == 'seed' else []
     bot._store.put(sess)
     task = T._Task(task_id=str(uuid.uuid4()), chat_id=101, user_text=sess.video_plan_request,
                    enqueue_ts=time.time())
     with bot._task_lock: bot._pending_journal[task.task_id] = task
     bot._backend.push(task)
     end = time.monotonic() + 15
-    while time.monotonic() < end and not any('больше недоступно' in text for text in sent):
+    while time.monotonic() < end and not any('больше недоступ' in text for text in sent):
         time.sleep(0.1)
-    assert any('больше недоступно' in text for text in sent)
+    assert any('больше недоступ' in text for text in sent)
     assert not seen

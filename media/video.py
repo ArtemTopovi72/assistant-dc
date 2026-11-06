@@ -2721,7 +2721,7 @@ def generate_video(ctx, description: str, *,
     if context_video or size_from:      # a continuation keeps the clip's own shape
         p = eng.probe(size_from or context_video)
         clip_size = (p["width"], p["height"]) if p.get("width") else None
-    width, height = resolve_size(aspect, clip_size or src_size, exact=bool(size_from))
+    width, height = resolve_size(aspect, clip_size or src_size, exact=bool(size_from and chain))
     if seed is None or int(seed) < 1:
         seed = random.randint(1, 2**31 - 1)
 

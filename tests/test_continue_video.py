@@ -173,6 +173,7 @@ class TCtx:
     def set_stage(self, *a): pass
 out = H._handle_generate_video(TCtx(), {}, {"description": "they leave the room laughing"})
 check("generate_video gets the tail as its reference video", SEEN.get("videos") == [tail], SEEN.get("videos"))
+check("continuation canvas comes from the original clip", SEEN.get("size_from") == CLIP, SEEN.get("size_from"))
 check("...and the picture, no separate voices", SEEN.get("images") == [frame] and not SEEN.get("audios"), SEEN)
 check("...with a continue-without-a-cut prompt carrying the user's words",
       SEEN["description"].startswith("Continue the shot of <Video 1>") and "laughing" in SEEN["description"])
@@ -403,7 +404,7 @@ import inspect as _insp
 check("the continuation prefix routes to generate_video",
       '("continue this video:", "generate_video")' in _insp.getsource(GP))
 check("the continuation tail attaches for the new prefix (and the legacy one)",
-      '("animate this photo", "continue this video")):' in _insp.getsource(TK))
+      '("animate this photo", "continue this video")' in _insp.getsource(TK))
 check("the user's own words are recovered from the new prefix",
       '"continue this video: "' in _insp.getsource(TK))
 

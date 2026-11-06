@@ -1179,7 +1179,10 @@ class TaskRunnerMixin:
             return
         replay_images = list(sess.voice_pending_images if voice_replay else
                              sess.video_plan_images if plan_replay else [])
-        if (voice_replay or plan_replay) and not replay_images:
+        if plan_continuation and any(not os.path.isfile(p) for p in replay_images):
+            self._send_text(chat_id, 'Кадр, сохранённый в плане, больше недоступен. Пришли видео заново.')
+            return
+        if (voice_replay or plan_replay) and not replay_images and not plan_continuation:
             # Legacy cards kept only album extras. Recover their known primary only
             # for the exact pending request, never for another message with a voice choice.
             primary = tg_bot._image_by_id(sess, sess.video_plan_image if plan_replay else sess.turn_image)
@@ -1722,13 +1725,17 @@ class TaskRunnerMixin:
         _first = getattr(task, "image_path", "") or ctx.last_image_path
         _album = [p for p in (getattr(task, "album_paths", None) or []) if p and os.path.exists(p)]
         _rerun_album = False
+        if plan_continuation and not replay_images:
+            _target, _first, ctx.last_image_path, _album = None, "", None, []
+            ctx.reference_images = []
         # The voice question and the plan card re-run the request as bare text: the album it came
         # with rides on, including its primary picture, independently of the live target slot.
-        if (not _album and not task.image_path and not getattr(task, "image_is_photo", False)
+        if (not _album and (plan_continuation or not task.image_path) and not getattr(task, "image_is_photo", False)
                 and not task.user_text.startswith("[animate]") and replay_images):
-            if (not _target or _target.get('path') in replay_images
+            if (plan_continuation or not _target or _target.get('path') in replay_images
                     or task.image_selection == 'context'):
-                _first = (_target['path'] if _target and task.image_selection != 'context' else replay_images[0])
+                _first = (_target['path'] if not plan_continuation and _target
+                          and task.image_selection != 'context' else replay_images[0])
                 _target = tg_bot._image_by_path(sess, _first)
                 ctx.last_image_path = _first
                 _album = [p for p in replay_images if p != _first]
@@ -2211,7 +2218,7 @@ class TaskRunnerMixin:
                 self._store.put(sess)
             try:
                 self._offer_video_plan(chat_id, sess, lang, task.user_text, final["video_plan"],
-                                       images=video_images, continuation=continuation)
+                                       images=final.get("video_plan_images", video_images), continuation=continuation)
             except Exception:
                 tg_bot.logger.exception("video plan offer failed chat=%s", chat_id)
 

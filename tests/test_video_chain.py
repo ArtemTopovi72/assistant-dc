@@ -116,11 +116,11 @@ class _Rig:
         def gen(ctx, description, **kw):
             out = tmp_path / f"part{len(self.calls) + 1}.mp4"
             out.write_bytes(b"v")
-            self.calls.append((description, dict(kw, card=comfy_client.card_in_use())))
+            self.calls.append((description, dict(kw, card=comfy_client.card_in_use(grace=0))))
             return {"path": str(out), "status": "success", "seconds": 6.0}
 
         def prep(ctx, d, **kw):
-            self.calls.append(("PREP", {"card": comfy_client.card_in_use()}))
+            self.calls.append(("PREP", {"card": comfy_client.card_in_use(grace=0)}))
             return d, 6.0
 
         self.engine = Over(V, **{

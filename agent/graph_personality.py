@@ -984,6 +984,20 @@ def _video_review_notice(answer: str, note: str, user_input: str) -> str:
     return (answer or '').rstrip() + '\n\n' + message
 
 
+def _approved_video_reply(ctx, answer: str, user_input: str) -> str:
+    if not getattr(ctx, 'video_plan_approved_result', False):
+        return answer
+    ru = bool(re.search(r'[А-Яа-яЁё]', user_input or ''))
+    result = 'Видео готово, отправляю.' if ru else 'The video is ready.'
+    warnings = set(getattr(ctx, 'video_plan_warnings', ()) or ())
+    labels = ({'speech': 'речи', 'framing': 'кадре', 'flash': 'вспышке', 'join': 'стыке'} if ru else
+              {'speech': 'speech', 'framing': 'framing', 'flash': 'flash', 'join': 'transition'})
+    details = [labels[k] for k in ('speech', 'framing', 'flash', 'join') if k in warnings]
+    if details:
+        result += (' Возможные проблемы в: ' if ru else ' Possible issues: ') + ', '.join(details) + '.'
+    return result
+
+
 def personality_node(ctx: Context, state: AgentState) -> AgentState:
     import graph as _g
     user_input = state.get("user_input", "")
@@ -2431,6 +2445,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     if not (final_answer or "").strip():
         audit_reasons.append("empty_answer")
     if state.get('video_status') == 'success':
+        final_answer = _approved_video_reply(ctx, final_answer, original_input or user_input)
         final_answer = _video_review_notice(final_answer, getattr(ctx, 'video_action_note', ''),
                                             original_input or user_input)
     final_answer = _caption_result_reply(state, final_answer, original_input or user_input)
