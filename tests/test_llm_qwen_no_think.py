@@ -1,5 +1,4 @@
-"""Qwen fine-tunes that ignore /no_think get their closed think block as a prefill
-(Qwen3.6-35B-A3B HauhauCS spent the intent read's 300 tokens thinking)."""
+"""Native reasoning controls and grammar-safe requests for Qwen and Gemma."""
 import os
 import sys
 import threading
@@ -15,7 +14,7 @@ import llm  # noqa: E402
 
 class Ctx:
     def __init__(self, model, stream=None):
-        self.model_name, self.no_think = model, True
+        self.model_name, self.no_think = model, False
         self.api_lock, self.last_api_call_time, self.api_min_interval = threading.Lock(), 0.0, 0.0
         self.deps = types.SimpleNamespace(_stream_chat=stream, _wait_for_free_card=lambda ctx: None)
 
@@ -30,15 +29,43 @@ def _payload(model, **kw):
     return seen
 
 
-def test_qwen_gets_its_closed_think_block():
+def test_qwen_native_reasoning_is_enabled():
     p = _payload("qwen3.6-35b-a3b-uncensored-hauhaucs-aggressive")
-    assert p["messages"][-1] == {"role": "assistant", "content": llm.QWEN_NO_THINK_PREFILL}
+    assert p["messages"][-1]["role"] == "user"
+    assert p.get('chat_template_kwargs', {}).get('enable_thinking') is True
+    assert p.get('reasoning') != 'off'
 
 
 def test_qwen_alias_uses_reported_architecture(monkeypatch):
     monkeypatch.setattr(llm, '_model_architecture', lambda name: 'qwen35', raising=False)
     p = _payload('hauhaucs-aggressive@?')
-    assert p['messages'][-1] == {'role': 'assistant', 'content': llm.QWEN_NO_THINK_PREFILL}
+    assert p['messages'][-1]['role'] == 'user'
+    assert p.get('chat_template_kwargs', {}).get('enable_thinking') is True
+
+
+def test_reasoning_prefill_is_never_combined_with_grammar():
+    schema = {'type': 'object', 'properties': {'answer': {'type': 'integer'}}}
+    p = _payload('qwen3.8', prefill='<think></think>', json_schema=schema)
+    assert p['messages'][-1]['role'] == 'user'
+    assert p['response_format']['type'] == 'json_schema'
+
+
+def test_native_reasoning_has_room_and_is_not_returned_as_answer():
+    p = _payload('qwen3.8', max_tokens=80)
+    assert p['max_tokens'] >= 1104
+    ctx = Ctx('qwen3.8', lambda ctx, payload: {
+        'role': 'assistant', 'content': '', 'reasoning_content': 'private deliberation'})
+    result = llm.send_to_lm_studio(ctx, [{'role': 'user', 'content': 'test'}])
+    assert result['content'] == ''
+    assert result['reasoning_only'] is True
+
+
+def test_thought_followed_by_tool_call_is_not_marked_incomplete():
+    ctx = Ctx('qwen3.8', lambda ctx, payload: {
+        'role': 'assistant', 'content': '<think>' + 'x' * 250 + '</think>',
+        'tool_calls': [{'function': {'name': 'calculate', 'arguments': '{}'}}]})
+    result = llm.send_to_lm_studio(ctx, [{'role': 'user', 'content': 'test'}])
+    assert result['tool_calls'] and not result.get('reasoning_only')
 
 
 def test_architecture_lookup_uses_loaded_alias_and_caches(monkeypatch):
@@ -66,9 +93,10 @@ def test_forced_tool_call_on_qwen_has_no_prefill():
     assert p["messages"][-1]["role"] == "user"
 
 
-def test_gemma_keeps_its_own_prefill():
+def test_gemma_native_reasoning_has_no_prefill():
     p = _payload("gemma4-26b-a4b-uncensored-hauhaucs-balanced")
-    assert p["messages"][-1]["content"] == llm.GEMMA_NO_THINK_PREFILL
+    assert p["messages"][-1]["role"] == "user"
+    assert 'reasoning' not in p and 'chat_template_kwargs' not in p
 
 
 def test_qwen_gets_no_system_turn_after_the_first():

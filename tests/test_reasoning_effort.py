@@ -94,16 +94,14 @@ def _run_with_message(model_name, msg, prefill=None, reasoning_effort=None):
 def test_gpt_oss_never_dumps_reasoning_as_content():
     """If gpt-oss burns its budget on the analysis channel and returns empty content,
     reasoning_content (raw chain of thought) must not be dumped as the answer. For
-    gpt-oss, empty content must STAY empty; only non-oss (Qwen finetunes that inline
-    the answer into reasoning_content) may recover it."""
+    gpt-oss and native Qwen reasoning, empty content must stay empty."""
     leaked = {"role": "assistant", "content": "",
               "reasoning_content": "Thus we should produce four blocks... (raw CoT)"}
     out_oss, _ = _run_with_message("openai/gpt-oss-120b", leaked)
     _check(out_oss["content"] == "", f"gpt-oss leaked CoT as content: {out_oss['content']!r}")
     out_qwen, _ = _run_with_message("HauhauCS/Qwen9B-NO-THINK", leaked)
-    _check(out_qwen["content"].startswith("Thus we should"),
-           "Qwen empty-content recovery from reasoning_content regressed")
-    print("PASS: gpt-oss never emits reasoning_content as the answer (Qwen recovery intact)")
+    _check(out_qwen["content"] == "", "Qwen leaked native reasoning")
+    print("PASS: native reasoning is not emitted as the answer")
     return True
 
 
@@ -117,20 +115,18 @@ def test_gpt_oss_skips_think_prefill_and_honors_effort_override():
     _check(payload["messages"][-1]["content"] != "<think></think>",
            "gpt-oss got a literal <think></think> assistant prefill")
     _check(payload.get("reasoning_effort") == "low", "per-call effort override not honored")
-    # Qwen still gets the prefill turn.
+    # Qwen uses native reasoning without a closed thought prefill.
     _, payload_q = _run_with_message("HauhauCS/Qwen9B-NO-THINK", msg, prefill="<think></think>")
-    _check(payload_q["messages"][-1]["content"] == "<think></think>",
-           "Qwen lost its <think></think> prefill lever")
-    print("PASS: gpt-oss skips <think> prefill + honors per-call effort; Qwen prefill intact")
+    _check(payload_q["messages"][-1]["role"] == "user", "Qwen got a closed thinking prefill")
+    print("PASS: gpt-oss honors per-call effort; Qwen uses native reasoning")
     return True
 
 
 def test_non_gpt_oss_payload_unchanged():
     p = _capture_payload("HauhauCS/Qwen9B-NO-THINK", no_think=True, effort="high")
-    _check(p.get("reasoning") == "off", "Qwen no longer gets reasoning:'off'")
     _check(p.get("chat_template_kwargs") == {"enable_thinking": False}, "Qwen lost enable_thinking")
     _check("reasoning_effort" not in p, "reasoning_effort leaked to a non-gpt-oss model")
-    print("PASS: non-gpt-oss payload still uses reasoning:'off' + enable_thinking, no effort leak")
+    print("PASS: Qwen uses its native thinking switch without an effort override")
     return True
 
 

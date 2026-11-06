@@ -9,7 +9,7 @@ LM Studio: the context hands in `_stream_chat` (for the retry loop) and `request
   * cancellation sentinel mid-stream -> returns None immediately
   * cancellation flag between attempts -> stops retrying, returns None
   * empty content recovered from reasoning_content (Qwen) but NOT for gpt-oss
-  * <think></think> prefill appended as an assistant turn (Qwen only)
+  * native Qwen reasoning without a closed assistant prefill
   * gpt-oss path sets reasoning_effort and skips prefill/no_think
   * HTTP non-200 -> None
   * [DONE] terminates; tool_calls accumulate across delta chunks by index
@@ -120,7 +120,7 @@ def test_empty_content_recovered_from_reasoning_qwen():
     _no_sleep()
     _D._stream_chat = lambda c, p: {"role": "assistant", "content": "",
                                    "reasoning_content": "the answer is 42"}
-    out = L.send_to_lm_studio(Ctx(model_name="qwen3.5-9b"), [{"role": "user", "content": "x"}])
+    out = L.send_to_lm_studio(Ctx(model_name="qwen3.5-9b", no_think=True), [{"role": "user", "content": "x"}])
     assert out and out["content"] == "the answer is 42", f"reasoning recovery failed: {out!r}"
     print("PASS empty content recovered from reasoning_content (Qwen)")
 
@@ -180,29 +180,28 @@ def test_prefill_appended_for_qwen_not_oss():
     _D._stream_chat = cap
     L.send_to_lm_studio(Ctx(model_name="qwen3.5-9b"), [{"role": "user", "content": "x"}],
                         prefill="<think></think>")
-    assert seen["msgs"][-1] == {"role": "assistant", "content": "<think></think>"}, \
-        "prefill not appended for Qwen"
-    assert seen["payload"].get("reasoning") == "off"
+    assert seen["msgs"][-1]["role"] == "user"
+    assert seen["payload"]["chat_template_kwargs"]["enable_thinking"] is True
     # gpt-oss must ignore prefill and set reasoning_effort
     seen.clear()
     L.send_to_lm_studio(Ctx(model_name="gpt-oss-20b"), [{"role": "user", "content": "x"}],
                         prefill="<think></think>", reasoning_effort="low")
     assert seen["msgs"][-1]["role"] == "user", "gpt-oss must not append <think> prefill"
     assert seen["payload"]["reasoning_effort"] == "low"
-    print("PASS prefill appended for Qwen, ignored for gpt-oss; reasoning_effort set")
+    print("PASS no closed Qwen prefill; gpt-oss reasoning_effort set")
 
 
 def test_no_think_marker_applied():
     _no_sleep()
     seen = {}
-    _D._stream_chat = lambda c, p: (seen.setdefault("msgs", p["messages"]),
+    _D._stream_chat = lambda c, p: (seen.update(payload=p, msgs=p["messages"]),
                                    {"role": "assistant", "content": "ok"})[1]
     L.send_to_lm_studio(Ctx(model_name="qwen3.5-9b", no_think=True),
                         [{"role": "system", "content": "You are X."},
                          {"role": "user", "content": "hi"}])
     sysmsg = seen["msgs"][0]["content"]
-    assert "/no_think" in sysmsg, f"no_think marker not applied: {sysmsg!r}"
-    print("PASS /no_think marker injected into system turn")
+    assert "/no_think" not in sysmsg
+    assert seen["payload"]["chat_template_kwargs"]["enable_thinking"] is False
 
 
 # ---------------------------------------------------------------- SSE assembler
@@ -321,13 +320,11 @@ def test_payload_tools_and_force_think():
     L.send_to_lm_studio(Ctx(model_name="qwen3.5-9b"), [{"role": "user", "content": "x"}],
                         tools=tools, tool_choice="required")
     assert seen["p"]["tools"] == tools and seen["p"]["tool_choice"] == "required"
-    # reasoning is off centrally: force_think does not turn it back on
+    # A caller can request reasoning even when the switch is off.
     seen.clear()
     L.send_to_lm_studio(Ctx(model_name="qwen3.5-9b", no_think=True),
                         [{"role": "user", "content": "x"}], force_think=True)
-    assert seen["p"].get("reasoning") == "off", seen["p"]
-    assert seen["p"].get("chat_template_kwargs") != {"enable_thinking": True}
-    print("PASS tools/tool_choice attached; force_think cannot re-enable reasoning")
+    assert seen["p"]["chat_template_kwargs"] == {"enable_thinking": True}
 
 
 def test_stream_wall_clock_cap_keeps_partial(monkeypatch=None):

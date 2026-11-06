@@ -571,64 +571,29 @@ def send_to_lm_studio(
     """
     dep(ctx, "_wait_for_free_card", _wait_for_free_card)(ctx)
     model_name = getattr(ctx, "model_name", "") or MODEL_NAME
-    # Reasoning is OFF for every call, here, in the one function every model
-    # call goes through -- not per caller, not by the thinking switch, not by
-    # force_think. With the switch on, a 7-second кружок
-    # spent 2813 tokens and 26.7 s on six storyboard lines and each zoomed tile
-    # 300-750 tokens against a 350 budget; a per-call opt-out had let it through.
     no_think = True
     is_oss = _is_gpt_oss(model_name)
     is_gemma = _is_gemma4(model_name)
     is_glimmer = _is_glimmer(model_name)
+    is_qwen = _is_qwen(model_name)
+    native_off = bool(getattr(ctx, 'no_think', False)) and not force_think
 
-    if is_gemma:
-        # None of the other families' switches mean anything here, and the
-        # <think></think> prefill is a Qwen lever — on Gemma it is literal junk
-        # prepended to an assistant turn, inside a template that emits its own
-        # `<|channel>thought` block regardless. Drop them all rather than send
-        # noise, and give the model room to finish thinking AND answer.
-        # The ONE exception is Gemma's own empty thought block: see
-        # GEMMA_NO_THINK_PREFILL. With it there is no thinking to budget for.
-        # Thinking OFF everywhere (see the top of this function). The coding
-        # gap that once justified an exception (13/13 vs 11/13) was the
-        # harness, not the reasoning: no-think delivered 6/6 on the bench.
+    if is_gemma or is_qwen:
+        # Let the model produce its own reasoning; a closed think block conflicts
+        # with constrained tool/JSON grammars and suppresses reasoning elsewhere.
         no_think = False
-        # A forced tool call (tool_choice="required") is grammar-constrained,
-        # and the grammar rejects the empty thought block as its first piece:
-        # the video button failed 6/6 with "Failed to
-        # initialize samplers: Unexpected empty grammar stack after accepting
-        # piece: <|channel>" and the user got "Я задумался и не выдал ответ".
-        # Such a call is a tool call and nothing else, so there is no
-        # thinking to suppress: send it without the prefill.
-        if tools and tool_choice == "required":
-            # ANY prefill: the caller's Qwen "<think></think>" dies the same
-            # way ("...after accepting piece: think"). That one had broken every
-            # forced calculate/deck turn on the tool bench since long before
-            # 2026-09-23 -- 10 of Gemma's 30 lost points.
+        if prefill and ('<think' in prefill.lower() or prefill == GEMMA_NO_THINK_PREFILL):
             prefill = None
-        else:
-            # 2026-09-23, user: "так было всегда и везде". Every call answers
-            # at once in the model card's thinking-disabled shape; a plain JSON
-            # step had been burning 2000+ reasoning tokens before its answer.
+        if tools or json_schema:
+            prefill = None
+        elif is_gemma and native_off:
             prefill = GEMMA_NO_THINK_PREFILL
-            # The grammar rejects that block as its first piece just like a
-            # forced tool call does ("Unexpected empty grammar stack after
-            # accepting piece: <|channel>", 51 times in the live log by
-            # 2026-10-02: every json_schema call failed all 3 attempts). The
-            # answer still comes without thinking; callers parse it with
-            # utils.safe_json_from_llm.
-            json_schema = None
-
-    if _is_qwen(model_name) and no_think and prefill is None and not (
-            tools and tool_choice == "required"):
-        # See QWEN_NO_THINK_PREFILL. A forced tool call is a grammar and needs
-        # no prefill (it dies on it, as on Gemma); a json_schema grammar too.
-        prefill = QWEN_NO_THINK_PREFILL
-        json_schema = None
+        if not native_off:
+            max_tokens += 1024
 
     # Strip Gemma 4 <channel|> artifacts that may have been saved to history.
     messages = _strip_model_artifacts(messages)
-    if _is_qwen(model_name):
+    if is_qwen:
         messages = _system_first(messages)
     # gpt-oss ignores the Qwen `/no_think` marker — don't pollute its messages with it.
     outbound = messages if is_oss else (_apply_no_think(messages) if no_think else messages)
@@ -693,6 +658,8 @@ def send_to_lm_studio(
         payload["reasoning_effort"] = (
             "low"   # gpt-oss cannot switch reasoning off; the lowest it has
         )
+    elif is_qwen:
+        payload['chat_template_kwargs'] = {'enable_thinking': not native_off}
     else:
         payload["reasoning"] = "off"
         if no_think:
@@ -779,7 +746,7 @@ def send_to_lm_studio(
                 content = str(message.get("content", "") or "").strip()
 
                 from_reasoning = False
-                if not content and not is_oss:
+                if not content and not is_oss and not ((is_qwen or is_gemma) and not native_off):
                     # Some Qwen finetunes inline the whole answer into reasoning_content
                     # with empty content; recover it there. NEVER for gpt-oss — its
                     # reasoning_content is the raw harmony ANALYSIS channel (chain of
@@ -790,10 +757,14 @@ def send_to_lm_studio(
 
                 _pre_strip_len = len(content or "")
                 content = strip_think_tags(content)
+                if (not content and not message.get("tool_calls") and
+                        (is_qwen or is_gemma) and not native_off and message.get("reasoning_content")):
+                    message["reasoning_only"] = True
+                    message["reasoning_chars"] = len(message["reasoning_content"])
                 # The model spent the whole reply thinking and never wrote an
                 # answer. Silently returning "" made this look like a dead
                 # backend; callers that can retry need to be able to SEE it.
-                if _pre_strip_len > 200 and not content.strip():
+                if _pre_strip_len > 200 and not content.strip() and not message.get("tool_calls"):
                     # Name the CALLER. Without it these warnings are unattributable
                     # — a 55-minute research run produced three of them and there
                     # was no way to tell which stage (briefing? verification?

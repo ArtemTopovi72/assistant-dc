@@ -77,18 +77,18 @@ check("the Qwen <think></think> prefill is not prepended to a Gemma turn",
       all("<think>" not in (m.get("content") or "") for m in p["messages"]),
       p["messages"])
 
-print("\nOTHER MODELS ARE UNTOUCHED")
+print("\nOTHER MODELS")
 p = capture("qwen3.5-9b-uncensored")
-check("Qwen still gets reasoning:'off'", p.get("reasoning") == "off")
+check("Qwen respects its thinking switch", p.get("chat_template_kwargs") == {"enable_thinking": False})
 check("Qwen gets no top_k — that profile is Gemma's", "top_k" not in p)
 p = capture("openai/gpt-oss-120b")
 check("gpt-oss gets the lowest effort level (it cannot switch reasoning off)", p.get("reasoning_effort") == "low")
 check("gpt-oss keeps its own sampling", "top_p" not in p)
 p = capture("qwen3.5-9b-uncensored", prefill="<think></think>")
-check("the Qwen prefill still works for Qwen",
-      any("<think>" in (m.get("content") or "") for m in p["messages"]))
+check("Qwen does not receive a closed thinking prefill",
+      all("<think>" not in (m.get("content") or "") for m in p["messages"]))
 
-print("\nNO THINKING BY DEFAULT")
+print("\nTHINKING SWITCH")
 p = capture("google/gemma-4-12b-qat", max_tokens=700)
 check("every Gemma call is prefilled with the empty thought block",
       (p["messages"][-1].get("role") == "assistant"
@@ -101,12 +101,12 @@ def _tool(name):
 
 
 p = capture("google/gemma-4-12b-qat", max_tokens=700, tools=[_tool("edit_file"), _tool("web_search")])
-check("code-editing turns do NOT think by default either",
-      p["messages"][-1].get("content") == L.GEMMA_NO_THINK_PREFILL, p["messages"][-1])
+check("tool grammar receives no prefill",
+      p["messages"][-1].get("role") == "user", p["messages"][-1])
 p = capture("google/gemma-4-12b-qat", max_tokens=700, no_think=False)
-check("the thinking switch ON does not bring reasoning back",
-      p["messages"][-1].get("content") == L.GEMMA_NO_THINK_PREFILL
-      and p["max_tokens"] == 700, (p["messages"][-1], p["max_tokens"]))
+check("the thinking switch enables native reasoning with headroom",
+      p["messages"][-1].get("role") == "user"
+      and p["max_tokens"] == 1724, (p["messages"][-1], p["max_tokens"]))
 
 p = capture("google/gemma-4-12b-qat", max_tokens=700, tools=[_tool("generate_video")],
             tool_choice="required")
@@ -122,10 +122,10 @@ p = capture("google/gemma-4-12b-qat", max_tokens=700, tools=[_tool("calculate")]
 check("nor the Qwen prefill (400 'after accepting piece: think', tool bench)",
       all("<think>" not in str(m.get("content")) for m in p["messages"]), p["messages"][-1])
 
-print("\nNOTHING TURNS REASONING BACK ON")
+print("\nFORCED REASONING")
 p = capture("google/gemma-4-12b-qat", max_tokens=700, force_think=True)
-check("force_think does not think either",
-      p["messages"][-1].get("content") == L.GEMMA_NO_THINK_PREFILL and p["max_tokens"] == 700,
+check("force_think enables reasoning",
+      p["messages"][-1].get("role") == "user" and p["max_tokens"] == 1724,
       (p["messages"][-1], p["max_tokens"]))
 check("there is no environment switch for it", not hasattr(L, "GEMMA_NO_THINK_DEFAULT"))
 p = capture("qwen3.5-9b-uncensored", max_tokens=700)
