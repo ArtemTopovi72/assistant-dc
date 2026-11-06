@@ -206,3 +206,53 @@ def test_pending_video_offer_persists_its_own_images_and_enqueues_its_primary(tm
     assert queued[0]['image_id'] == first
     sess.clear_context()
     assert sess.voice_pending_images == sess.video_plan_images == []
+
+
+@pytest.mark.parametrize('voice_choice', ['', 'own'])
+def test_approved_video_plan_restores_its_own_original_clip(tmp_path, voice_choice):
+    import uuid
+    from test_tg_incoming_durability import make_bot
+    bot = make_bot(tmp_path)
+    seen = []
+    class Graph:
+        def __init__(self, ctx): self.ctx = ctx
+        def invoke(self, base):
+            seen.append((self.ctx.continue_tail, self.ctx.continue_src, self.ctx.voice_choice))
+            return {'final_answer': 'ok', 'messages': base.get('messages', [])}
+    bot._get_ctx = lambda: FakeCtx()
+    bot._get_graph = lambda: object()
+    bot._get_base_state = lambda: {'messages': []}
+    bot.graph_builder = lambda ctx: Graph(ctx)
+    bot._backend = T.InMemoryBackend()
+    bot._send_get_id = lambda *a, **k: 1
+    bot._edit_text = bot._delete = lambda *a, **k: None
+    bot._running = True
+    threading.Thread(target=bot._consumer_loop, daemon=True).start()
+    tail, source = tmp_path / 'tail.mp4', tmp_path / 'original.mp4'
+    tail.write_bytes(b'tail'); source.write_bytes(b'original')
+    sess = bot._get_session(101)
+    sess.video_plan_request = 'Продолжи этот ролик'
+    sess.video_plan_ok = ['говорит одну фразу']
+    sess.video_plan_continuation = {'tail': str(tail), 'src': str(source), 'people': []}
+    sess.voice_choice = voice_choice
+    bot._store.put(sess)
+    task = T._Task(task_id=str(uuid.uuid4()), chat_id=101, user_text=sess.video_plan_request,
+                   enqueue_ts=time.time())
+    with bot._task_lock: bot._pending_journal[task.task_id] = task
+    bot._backend.push(task)
+    end = time.monotonic() + 15
+    while time.monotonic() < end and not seen: time.sleep(0.1)
+    assert seen == [(str(tail), str(source), voice_choice or 'default')]
+
+
+def test_video_plan_persists_and_clears_its_continuation(tmp_path):
+    from test_tg_incoming_durability import make_bot
+    bot = make_bot(tmp_path)
+    sess = bot._get_session(101)
+    bot.text_model = lambda *a, **kw: '{"lines": ["Next"]}'
+    continuation = {'tail': 'tail.mp4', 'src': 'source.mp4', 'people': ['person.png']}
+    bot._offer_video_plan(101, sess, 'ru', 'Продолжи ролик',
+                          [{'text': 'Next', 'sec': 5}], continuation=continuation)
+    assert bot._store.get(101).video_plan_continuation == continuation
+    bot._cb_video_plan(101, 'vp:x')
+    assert bot._store.get(101).video_plan_continuation == {}

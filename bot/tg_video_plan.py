@@ -120,11 +120,12 @@ class VideoPlanMixin:
         text, kb = self._video_plan_card(sess, lang)
         self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
 
-    def _offer_video_plan(self, chat_id: int, sess, lang: str, request: str, plan: list, images=None) -> None:
+    def _offer_video_plan(self, chat_id: int, sess, lang: str, request: str, plan: list, images=None, continuation=None) -> None:
         sess.video_plan = _with_summaries(
             [{"text": str(p.get("text", "")), "sec": float(p.get("sec") or 0)} for p in plan], lang, self)
         sess.video_plan_request, sess.video_plan_ok = request, []
         sess.video_plan_images = list(images or [])
+        sess.video_plan_continuation = dict(continuation or {})
         primary = tg_bot._image_by_path(sess, images[0]) if images else None
         sess.video_plan_image = primary['id'] if primary else getattr(sess, "turn_image", "") or ""
         self._store.put(sess)
@@ -204,6 +205,7 @@ class VideoPlanMixin:
             return
         if data == "vp:x":
             sess.video_plan, sess.video_plan_request, sess.video_plan_ok = [], "", []
+            sess.video_plan_continuation = {}
             sess.voice_choice, sess.anim_voices = "", []
             self._store.put(sess)
             self._send_text(chat_id, tg_bot._t("vp_cancelled", lang),

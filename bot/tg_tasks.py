@@ -1172,6 +1172,11 @@ class TaskRunnerMixin:
                             request == _tg_links.without_link_notes(sess.voice_pending))
         plan_replay = bool(sess.video_plan_ok and
                            request == _tg_links.without_link_notes(sess.video_plan_request))
+        plan_continuation = dict(getattr(sess, 'video_plan_continuation', {}) or {}) if plan_replay else {}
+        if plan_continuation and (not os.path.isfile(plan_continuation.get('tail', ''))
+                                  or not os.path.isfile(plan_continuation.get('src', ''))):
+            self._send_text(chat_id, 'Исходное видео для этого плана больше недоступно. Пришли его заново.')
+            return
         replay_images = list(sess.voice_pending_images if voice_replay else
                              sess.video_plan_images if plan_replay else [])
         if (voice_replay or plan_replay) and not replay_images:
@@ -1204,22 +1209,25 @@ class TaskRunnerMixin:
             ctx.video_plan_parts = list(sess.video_plan_ok)
             sess.video_plan, sess.video_plan_request, sess.video_plan_ok = [], "", []
             sess.video_plan_images = []
+            sess.video_plan_continuation = {}
             self._store.put(sess)
         # ▶️ Continue video: the clip's tail (its motion + sound) rides this ONE request.
         ctx.continue_tail = ctx.continue_src = ""
         ctx.continue_people = []
         ctx.continue_voice_sample = ""      # the static continuation sets it; one task only
         ctx.continue_voice_error = False
-        _ct = getattr(sess, "continue_tail", "")
+        _ct = plan_continuation.get('tail') or getattr(sess, "continue_tail", "")
         # "continue this video" (the ▶️ flow's own prefix since 2026-11-02) and the
         # legacy "animate this photo" texts keep their tail attached either way.
-        if _ct and os.path.exists(_ct) and task.user_text.startswith(
-                ("animate this photo", "continue this video")):
-            ctx.continue_tail, ctx.continue_src = _ct, getattr(sess, "continue_src", "")
-            ctx.voice_choice = "default"     # no «свои голоса» question: the tail brings the voices
-            ctx.continue_people = [p for p in (getattr(sess, "continue_people", None) or []) if os.path.exists(p)]
-            sess.continue_tail = sess.continue_src = ""
-            sess.continue_people = []
+        if _ct and os.path.exists(_ct) and (plan_continuation or task.user_text.startswith(
+                ("animate this photo", "continue this video"))):
+            ctx.continue_tail, ctx.continue_src = _ct, plan_continuation.get('src') or getattr(sess, "continue_src", "")
+            ctx.voice_choice = ctx.voice_choice or "default"  # the tail brings the original voice
+            ctx.continue_people = [p for p in ((plan_continuation.get('people') or []) if plan_continuation else
+                                   (getattr(sess, "continue_people", None) or [])) if os.path.exists(p)]
+            if not plan_continuation:
+                sess.continue_tail = sess.continue_src = ""
+                sess.continue_people = []
             self._store.put(sess)
 
         # No model, no turn. The desktop app can be started with the LLM
@@ -2194,16 +2202,16 @@ class TaskRunnerMixin:
             # The ▶ rerun is the render: the continued clip and its new people go back to
             # the session for it. Taken by this plan-only turn, the rerun would have 1 image and
             # 0 videos and draw a made-up cat and dog.
-            if getattr(ctx, "continue_tail", ""):
-                sess.continue_tail, sess.continue_src = ctx.continue_tail, ctx.continue_src
-                sess.continue_people = list(getattr(ctx, "continue_people", None) or [])
-                self._store.put(sess)
+            continuation = ({'tail': ctx.continue_tail, 'src': ctx.continue_src,
+                             'people': list(getattr(ctx, 'continue_people', None) or [])}
+                            if getattr(ctx, 'continue_tail', '') else {})
             choice, voices = getattr(ctx, "plan_voice", ("", []))
             if choice:
                 sess.voice_choice, sess.anim_voices = choice, voices
                 self._store.put(sess)
             try:
-                self._offer_video_plan(chat_id, sess, lang, task.user_text, final["video_plan"], images=video_images)
+                self._offer_video_plan(chat_id, sess, lang, task.user_text, final["video_plan"],
+                                       images=video_images, continuation=continuation)
             except Exception:
                 tg_bot.logger.exception("video plan offer failed chat=%s", chat_id)
 

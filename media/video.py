@@ -141,7 +141,7 @@ def snap_frames(length: int) -> int:
     return min(n, cap)
 
 
-_QUOTED = re.compile(r'«([^»]*)»|"([^"]*)"|“([^”]*)”')
+_QUOTED = re.compile(r'''«([^»]*)»|"([^"]*)"|“([^”]*)”|(?<!\w)'([^'\n]+)'(?!\w)''')
 
 # What each sentence of a shot script is, read by the model (bench/script_read_eval.py).
 # Word lists read this before: «camera» or «visible» anywhere made an action a look line

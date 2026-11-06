@@ -42,6 +42,11 @@ def test_failed_sentence_read_is_not_retried_until_short_backoff_expires(monkeyp
     assert len(calls) == 2
 
 
+def test_single_quoted_speech_is_recognized_without_treating_apostrophes_as_quotes():
+    assert V.quoted_lines("He says 'Вот теперь отлично!'.") == ['Вот теперь отлично!']
+    assert V.quoted_lines("He's here and it's fine.") == []
+
+
 class _Ctx:
     deps = types.SimpleNamespace(script_read=_fakes.script_model)
     reference_images = []
