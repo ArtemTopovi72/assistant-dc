@@ -24,7 +24,10 @@ def _payload(model, **kw):
 
     def fake(ctx, payload):
         seen.update(payload)
-        return {"role": "assistant", "content": "ok"}
+        result = {"role": "assistant", "content": "ok"}
+        if payload.get('tool_choice') == 'required':
+            result['tool_calls'] = [{'function': {'name': 'calculate', 'arguments': '{}'}}]
+        return result
     llm.send_to_lm_studio(Ctx(model, fake), [{"role": "user", "content": "привет"}], **kw)
     return seen
 
@@ -66,6 +69,14 @@ def test_thought_followed_by_tool_call_is_not_marked_incomplete():
         'tool_calls': [{'function': {'name': 'calculate', 'arguments': '{}'}}]})
     result = llm.send_to_lm_studio(ctx, [{'role': 'user', 'content': 'test'}])
     assert result['tool_calls'] and not result.get('reasoning_only')
+
+
+def test_required_tool_never_returns_unexecuted_reasoning_as_answer():
+    ctx = Ctx('qwen3.8', lambda ctx, payload: {
+        'role': 'assistant', 'content': 'Repeated thought</think>not a tool', 'finish_reason': 'length'})
+    tools = [{'type': 'function', 'function': {'name': 'calculate', 'parameters': {'type': 'object'}}}]
+    result = llm.send_to_lm_studio(ctx, [{'role': 'user', 'content': 'test'}], tools=tools, tool_choice='required')
+    assert result is None
 
 
 def test_architecture_lookup_uses_loaded_alias_and_caches(monkeypatch):

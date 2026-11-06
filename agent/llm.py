@@ -824,6 +824,16 @@ def send_to_lm_studio(
                         message["tool_calls"] = tc_list
                         content = remaining
 
+                if ((is_qwen or is_gemma) and not native_off and tools and
+                        tool_choice == "required" and not message.get("tool_calls")):
+                    logger.warning("Required tool call missing; suppressing incomplete model output")
+                    if ctx is not None:
+                        try:
+                            ctx.last_llm_error = "missing_tool_call"
+                        except Exception:
+                            pass
+                    return None
+
                 message["content"] = content
                 return message
 
