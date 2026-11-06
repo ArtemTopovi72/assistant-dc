@@ -93,10 +93,11 @@ SYSTEM = (
     "presents_photo: the message only introduces or captions an attached "
     "photo (\"вот мой кот\", a name) and asks nothing.\n"
     "is_question: the message asks something.\n"
-    "about_picture: a photo or video is attached and the message asks or "
+    "about_picture: an available photo or video is what the message asks or "
     "talks about what is in it (what is written, who is that, your opinion "
     "of it, the most expensive item on it) -- false for an order to change "
-    "or redraw it, and false when nothing is attached.\n"
+    "or redraw it, and false when the message has an unrelated subject. An earlier "
+    "picture is not a new attachment; consider it only if the message refers to it.\n"
     "names_picture: when the message points at one of several pictures BY "
     "POSITION, which one: 1 the first, 2 the second, 3 the third, -1 the "
     "last/newest, -2 the previous one; 0 when it names none (\"this one\", "
@@ -486,7 +487,7 @@ def _read(ctx, text: str, previous: str, attached: str, cache: dict) -> dict:
     if previous:
         user += "Previous assistant line: «%s»\n\n" % previous[:PREVIOUS_CHARS]
     if attached:
-        user += "Attached to the message: %s\n\n" % attached
+        user += "Available context: %s\n\n" % attached
     user += ("Message to route (do NOT answer it):\n«%s»\n\n"
              "Reply with the JSON object only." % text[:2000])
     try:

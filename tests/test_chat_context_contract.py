@@ -3,10 +3,19 @@ from collections import deque
 from pathlib import Path
 
 import graph_fastpath as F
+import graph_personality as P
 import tg_bot as T
 from fakes import reads
 from test_tg_incoming_durability import make_bot, hold_worker
 from tg_resolve import _batch_reply_id
+
+
+def test_intent_context_distinguishes_old_picture_from_new_attachment():
+    ctx = SimpleNamespace(last_image_path='old-photo.jpg')
+    _, _, old = P._turn_inputs(ctx, {'messages': [], 'image_data': None}, 'Что думаешь?')
+    _, _, new = P._turn_inputs(ctx, {'messages': [], 'image_data': b'photo'}, 'Что думаешь?')
+    assert 'earlier' in old and 'not attached' in old
+    assert new == 'a photo attached to this message'
 
 
 def test_a_photo_question_is_never_intake_even_when_the_classifier_also_says_presentation():

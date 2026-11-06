@@ -402,6 +402,11 @@ def _turn_inputs(ctx, state, text: str) -> tuple:
     from graph import is_video_sheet
     if not state.get("image_data") and is_video_sheet(getattr(ctx, "last_image_path", None) or ""):
         att = att.replace("a photo", "a video")
+    if has_image:
+        att = att.replace("a photo", "a photo attached to this message" if state.get("image_data")
+                          else "a photo from earlier in the chat, not attached to this message")
+        if not state.get("image_data"):
+            att = att.replace("a video", "a video from earlier in the chat, not attached to this message")
     from prompt_guard import quoted_gist
     gist = quoted_gist(text or "")
     if gist:
