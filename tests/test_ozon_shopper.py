@@ -18,6 +18,15 @@ def test_failed_ozon_search_is_not_reported_as_empty_catalog(monkeypatch):
         S.gather({"queries": ["рюкзак"]})
 
 
+def test_failed_screen_does_not_claim_item_is_missing(monkeypatch):
+    monkeypatch.setattr(S, 'gather', lambda item, ctx: [item_for_test])
+    monkeypatch.setattr(S, '_llm_json', lambda *args, **kwargs: None)
+    item_for_test = item('1', 'Рюкзак', 1000)
+    result = S.shop_item(_ctx(), {'need': 'Рюкзак', 'must': [], 'avoid': []})
+    answer = S.report([result], 'one')
+    assert 'COULD NOT VERIFY' in answer and 'NOT FOUND among' not in answer
+
+
 def item(sku, name, price, rating=4.7, reviews=100):
     return {"sku": sku, "name": name, "price": price, "rating": rating, "reviews": reviews,
             "delivery": "Завтра", "url": f"https://www.ozon.ru/product/x-{sku}/",

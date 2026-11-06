@@ -289,7 +289,9 @@ def screen(ctx, item: dict, cands: list, strategy: str = "balanced") -> tuple:
             + (f"MAX PRICE: {item['max_price']} ₽\n" if item.get("max_price") else "")
             + "\nLISTINGS (sorted by price):\n" + listing)
     data = _llm_json(ctx, _SCREEN_SYS + _prio(strategy), user, ["finalists"],
-                     max_tokens=1500) or {}
+                     max_tokens=1500)
+    if not isinstance(data, dict) or not isinstance(data.get("finalists"), list):
+        return None, "could not assess search results"
     picks = []
     for n in data.get("finalists") or []:
         try:
@@ -598,7 +600,8 @@ def shop_item(ctx, item: dict, label: str = "", strategy: str = "balanced", pinn
     _stage(ctx, f"Ozon: choosing among {len(cands)} for {item['need']}")
     finalists, note = screen(ctx, item, cands, strategy)
     res = {"item": item, "candidates": len(cands), "note": note, "choice": None,
-           "others": [], "decision": None, "photo": None}
+           "others": [], "decision": None, "photo": None, "screen_failed": finalists is None}
+    finalists = finalists or []
     finalists = finalists + [{"sku": u, "url": u, "link": u, "pinned": n}
                              for n, u in enumerate(list(pinned)[:MAX_PINNED], 1)]
     if not finalists:
@@ -753,6 +756,10 @@ def report(results: list, mode: str, location: str = "", basket: str = "") -> st
         it, c, dec = r["item"], r["choice"], r["decision"] or {}
         head = f"\n{n}. NEED: {it['need']}" + (f" × {it['qty']}" if it.get("qty", 1) > 1 else "")
         if not c:
+            if r.get("screen_failed"):
+                out.append(head + f" -- COULD NOT VERIFY {r['candidates']} listings: "
+                           "selection failed. Do not claim the product is unavailable.")
+                continue
             out.append(head + f" -- NOT FOUND among {r['candidates']} listings"
                        + (f" ({r['note']})" if r.get("note") else "") + ". Say so honestly.")
             continue
