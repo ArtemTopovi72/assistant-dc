@@ -505,6 +505,8 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
     else:
         req = _with_user_words(state, (args.get("request") or "").strip())
     original = str((state or {}).get("user_input_original") or "")
+    show_reviews = bool(_re.search(r'отзыв|reviews?', original, _re.I)) and not _re.search(
+        r'(?:без|не\s+(?:нуж\w*|показыва\w*|ищ\w*))\s+отзыв', original, _re.I)
     if _re.search(r"погугл[а-яё]*.*(?:озон|ozon)", original, _re.I | _re.S):
         if not (state or {}).get("research_shop_evidence"):
             return ("[TOOL ERROR] The requested web research found no usable evidence. "
@@ -543,6 +545,8 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
             logger.warning("ozon_shop by photo failed: %s", exc)
             return _fail(exc)
         _remember(ctx, [r["choice"] for r in results if r.get("choice")])
+        for r in results:
+            r["show_review_evidence"] = show_reviews
         return S.report(results, p["mode"], _oz.LAST_LOCATION.get("text") or "")
     if not args.get("clarified") and not shortlist and not _re.search(
             r"погугл|обзор|reviews?|research", req, _re.I):
@@ -614,6 +618,8 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
                     "a generic substitute or claim the model is absent from Ozon.")
         state["research_shop_verified"] = True
     _remember(ctx, chosen)
+    for r in results:
+        r["show_review_evidence"] = show_reviews
     basket = ""
     if args.get("add_to_cart") and chosen:
         items = _cart_load(ctx)

@@ -415,9 +415,13 @@ def _turn_inputs(ctx, state, text: str) -> tuple:
     return t, _previous_reply(state), att
 
 
-def _forced_ozon_reviews(read, called, failures, tools):
-    if (read.get('ok') and 'ozon_reviews' in read.get('wants', [])
-            and 'ozon_product' in called and 'ozon_reviews' not in called
+def _forced_ozon_reviews(read, called, failures, tools, user_text='', products=()):
+    requested = (bool(re.search(r'отзыв|reviews?', user_text, re.I))
+                 and not re.search(r'(?:без|не\s+(?:нуж\w*|показыва\w*|ищ\w*))\s+отзыв', user_text, re.I))
+    after_search = 'ozon_search' in called and products and requested
+    after_product = read.get('ok') and 'ozon_reviews' in read.get('wants', []) and 'ozon_product' in called
+    if ((after_search or after_product) and 'ozon_reviews' not in called
+            and 'ozon_shop' not in called
             and not any(name == 'ozon_reviews' and count for (name, _), count in failures.items())
             and any(t.get('function', {}).get('name') == 'ozon_reviews' for t in tools)):
         return 'ozon_reviews'
@@ -1317,6 +1321,11 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             pass
         _always = set(_always) | _button
         _read = _turn_intent(ctx, state, original_input or user_input)
+        _review_text = _own_texts[-1] or _own_texts[0]
+        _review_products = getattr(ctx, 'turn_products', None) or []
+        if _forced_ozon_reviews(_read, tools_called_this_turn, failed_call_counts,
+                                turn_tools, _review_text, _review_products):
+            _always.add('ozon_reviews')
         # must_call rides along: «прочитай буфер и нарисуй» read wants=[generate_image],
         # must_call=read_clipboard, and the forced tool was never sent (2026-10-24)
         turn_tools = _retrieval.select_tools(
@@ -1348,7 +1357,8 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             _edit_mode_now = True
             edit_mode_rounds -= 1
         _force = (force_next_tool
-                  or _forced_ozon_reviews(_read, tools_called_this_turn, failed_call_counts, turn_tools)
+                  or _forced_ozon_reviews(_read, tools_called_this_turn, failed_call_counts, turn_tools,
+                                          _review_text, _review_products)
                   or _forced_subtitles(_turn_text, turn_tools, tools_called_this_turn)
                   or _forced_button(_own(original_input or user_input), turn_tools,
                                     tools_called_this_turn)

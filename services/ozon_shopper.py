@@ -714,6 +714,11 @@ def digest(r: dict) -> str:
         out.append(f"\n{dec['why']}")
     if "review_texts" in c and c["review_texts"] is None:
         out.append("Тексты отзывов не удалось прочитать, поэтому оценить долговечность по ним нельзя.")
+    elif r.get("show_review_evidence") and "review_texts" in c:
+        evidence = dec.get("reviews") or _review_evidence(c["review_texts"])
+        if evidence.startswith("В отзывах карточки: "):
+            evidence = "Примеры из прочитанных отзывов: " + evidence.removeprefix("В отзывах карточки: ")
+        out.append("💬 " + evidence)
     # Raw reviews often contain typos and are cut mid-sentence by the API.
     # Their count is already in _stats; don't paste them as a quality verdict.
     if dec.get("concerns"):

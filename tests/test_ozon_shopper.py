@@ -221,6 +221,16 @@ def test_shortlist_answer_shows_comparison_without_raw_review_slop():
     assert "Предварительный выбор" in answer
 
 
+def test_requested_review_evidence_is_visible_in_shopper_answer():
+    choice = item('99', 'Рюкзак', 5000, reviews=19)
+    choice['review_texts'] = [{'score': 4, 'comment': 'Удобный, но тяжёлый.'}]
+    result = {'choice': choice, 'decision': {'reviews': S._review_evidence(choice['review_texts'])},
+              'show_review_evidence': True}
+    answer = S.digest(result)
+    assert 'Удобный, но тяжёлый.' in answer
+    assert 'пример' in answer.lower()
+
+
 def test_digest_discloses_when_review_texts_could_not_be_read():
     choice = item('99', 'Рюкзак', 5000, reviews=19)
     choice.update(url='https://ozon.ru/product/example-99/', review_texts=None)

@@ -44,6 +44,18 @@ def test_requested_reviews_are_checked_after_the_product_without_retry_loop():
     assert not force({'ok': True, 'wants': ['ozon_product']}, {'ozon_product'}, {}, tools)
 
 
+def test_requested_reviews_after_search_even_if_intent_missed_them():
+    read = {'ok': True, 'wants': ['ozon_search']}
+    tools = [{'function': {'name': 'ozon_reviews'}}]
+    products = [{'sku': '123', 'url': 'https://www.ozon.ru/product/item-123/'}]
+    force = personality._forced_ozon_reviews
+    assert force(read, {'ozon_search'}, {}, tools, 'Найди товар и покажи отзывы', products) == 'ozon_reviews'
+    assert not force(read, {'ozon_search'}, {}, tools, 'Найди товар и покажи отзывы', [])
+    assert not force(read, {'ozon_search'}, {}, tools, 'Найди товар без отзывов', products)
+    assert not force(read, {'ozon_search', 'ozon_reviews'}, {}, tools, 'Покажи отзывы', products)
+    assert not force(read, {'ozon_search'}, {('ozon_reviews', 'x'): 1}, tools, 'Покажи отзывы', products)
+
+
 def test_intent_routes_many_links_to_shop_before_same_seller():
     out = {"must_call": "ozon_same", "wants": ["ozon_same", "ozon_shop"]}
     intent._same_or_analogue(SimpleNamespace(),
