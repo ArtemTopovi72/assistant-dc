@@ -287,6 +287,12 @@ class ResolveMixin:
         input_context = batch[0].get('_input_context')
         input_prefix = input_context['prefix'] if input_context else sess.pending_prefix
         input_menu = input_context['menu'] if input_context else sess.menu
+        lone_text = (batch[0].get('text') or '').strip() if len(batch) == 1 and batch[0].get('type') == 'text' else ''
+        lone_video = _tg_links.video_url(lone_text)
+        standalone_video = bool(lone_video and lone_text == lone_video and
+                                input_prefix in ('', 'generate an image of: '))
+        if standalone_video and input_prefix == 'generate an image of: ':
+            input_prefix = ''
 
         def owns_input(name):
             return (not input_context or input_context['revisions'].get(name, 0)
@@ -1201,6 +1207,9 @@ class ResolveMixin:
                 # newlines — the model would answer "outpaint the current image…"
                 # twice in one message. Collapsing a repeat cannot lose meaning.
                 _req = self._as_request(item, raw)
+                if standalone_video:
+                    _req = (('Кратко перескажи видео по ссылке: ' if lang == 'ru' else
+                             'Summarize the video at this link: ') + lone_video)
                 if not texts or texts[-1] != _req:
                     texts.append(_req)
                 # A link is a page to read (tg_links). Off under tests: no
@@ -1836,10 +1845,10 @@ class ResolveMixin:
         # it resolved to one above, or the picture is simply the current one.
         # A DOCUMENT in the same message is the thing the instruction is about
         # («убери дубликаты» + DCIM.zip must not get «Какую картинку?»).
-        if not any('_target_captured' in it for it in batch):
+        if not standalone_video and not any('_target_captured' in it for it in batch):
             pressed_image_id = pressed_image_id or sess.target_image
         _queued_song = bool(_tg_songs.parse_song_payload(merged)[0])
-        if (not _queued_song and not img_bytes and not file_in_folder
+        if (not standalone_video and not _queued_song and not img_bytes and not file_in_folder
                 and not pressed_image_id
                 and merged not in tg_bot._MACHINE_PAYLOADS):
             _named = tg_bot._ordinal_target(own_words, tg_bot._live_images(sess), ctx=self.reads)
@@ -1852,7 +1861,7 @@ class ResolveMixin:
         # Quoted material (✍️ after a forward, a reply to a message) is what the words are
         # about: «Что думаешь?» under it got «Какую картинку?» (2026-10-22).
         from prompt_guard import has_quote
-        if (not _queued_song and not img_bytes and not file_in_folder
+        if (not standalone_video and not _queued_song and not img_bytes and not file_in_folder
                 and not pressed_image_id
                 and merged not in tg_bot._MACHINE_PAYLOADS
                 and not has_quote(merged)
