@@ -242,6 +242,9 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
     """
     if not answer or not original_input or ctx.is_cancelled():
         return answer
+    # Product names and URLs are literals, not evidence of the prose language.
+    prose = re.sub(r'\[[^\]]*\]\(https?://[^\s)]+\)|https?://[^\s)]+', '', answer)
+    links = set(re.findall(r'https?://[^\s)]+', answer))
     # An explicit request for English ("и то же самое по-английски") is the
     # one Cyrillic turn whose English answer is RIGHT. The guard must not
     # translate it back -- the model has obeyed the user and the pipeline
@@ -266,7 +269,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
         except Exception as exc:
             logger.warning("Pinned-English translation failed (%s)", exc)
             return answer
-        return out if out and _foreign_ratio(out) < 0.1 else answer
+        return out if out and links.issubset(set(re.findall(r'https?://[^\s)]+', out))) and _foreign_ratio(out) < 0.1 else answer
     # The user typed in a non-Latin script but the answer came back all-Latin,
     # or the reverse: «Wie spät ist es in Berlin?» in a Russian session was
     # answered in Russian -- the model only saw the English
@@ -277,12 +280,12 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
     # A Russian chat with a Latin input is a button payload ("remove all the lettering
     # from the image"): typed English flips reply_lang in tg_tasks. Its English reply
     # went out as is.
-    mixed_english = (_foreign_ratio(answer) < 0.3 and _english_words(answer) >= 6
+    mixed_english = (_foreign_ratio(prose) < 0.3 and _english_words(prose) >= 6
                      and "```" not in answer and "<pre" not in answer)
     _ru_payload = getattr(ctx, "reply_lang", "") == "ru" and _foreign_ratio(original_input) < 0.3
     if _ru_payload:
         _latin_q = False
-        if _foreign_ratio(answer) > 0.1 and not mixed_english:
+        if _foreign_ratio(prose) > 0.1 and not mixed_english:
             return answer
     elif _latin_q:
         # «¿Cuántos habitantes tiene Madrid?» -> "Madrid has approximately…":
@@ -290,7 +293,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
         if _foreign_ratio(answer) < 0.3 and not (_english_words(answer) >= 1
                                                  and _english_words(original_input) == 0):
             return answer
-    elif _foreign_ratio(original_input) < 0.3 or (_foreign_ratio(answer) > 0.1 and not mixed_english):
+    elif _foreign_ratio(original_input) < 0.3 or (_foreign_ratio(prose) > 0.1 and not mixed_english):
         return answer
     if len(answer.strip()) < 20:
         words = re.findall(r"[A-Za-z]+", answer)
@@ -311,7 +314,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
         out = (out or "").strip()
         # Only accept a result that is actually in the user's script — a model
         # that echoes the English back must not be trusted over the original.
-        if out and (_foreign_ratio(out) < 0.1 if _latin_q else _foreign_ratio(out) > 0.3):
+        if out and links.issubset(set(re.findall(r'https?://[^\s)]+', out))) and (_foreign_ratio(out) < 0.1 if _latin_q else _foreign_ratio(out) > 0.3):
             logger.info("Final answer was English on a %s turn — translated back",
                         "non-Latin" if original_input else "?")
             return out

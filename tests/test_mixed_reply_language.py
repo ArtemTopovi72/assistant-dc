@@ -40,3 +40,21 @@ def test_entry_translation_rejects_story_generated_instead_of_request(monkeypatc
     monkeypatch.setattr(language, 'text_model', lambda ctx: lambda *a, **k: 'The old man drives. ' * 40)
     request = 'Напиши смешную историю про тракториста по-русски.'
     assert language._translate_to_english(SimpleNamespace(), request) == request
+
+
+def test_russian_product_list_with_long_urls_is_not_translated(monkeypatch):
+    monkeypatch.setattr(language, '_read', lambda *a, **k: {'reply_language': '', 'translate': False, 'language_mode': ''})
+    monkeypatch.setattr(language, 'text_model', lambda ctx: lambda *a, **k: 'Обрезанный ответ')
+    ctx = SimpleNamespace(is_cancelled=lambda: False, reply_lang='ru')
+    answer = 'Нашёл:\n' + '\n'.join(
+        f'• [Peak Design The Everyday {n}](https://www.ozon.ru/product/backpack-peak-design-the-everyday-{n}-3417731870/) — 20 000 ₽.'
+        for n in range(5))
+    assert language._match_reply_language(ctx, answer, 'Найди рюкзак на Озоне') == answer
+
+
+def test_translation_does_not_drop_original_links(monkeypatch):
+    monkeypatch.setattr(language, '_read', lambda *a, **k: {'reply_language': '', 'translate': False, 'language_mode': ''})
+    monkeypatch.setattr(language, 'text_model', lambda ctx: lambda *a, **k: 'Вот начало перевода.')
+    ctx = SimpleNamespace(is_cancelled=lambda: False, reply_lang='ru')
+    answer = 'Here is the product and the details: https://example.com/product-123'
+    assert language._match_reply_language(ctx, answer, 'Где купить?') == answer

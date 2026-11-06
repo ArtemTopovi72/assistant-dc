@@ -26,6 +26,9 @@ def test_failed_review_lookup_cannot_be_reported_as_no_reviews():
     assert personality._guard_failed_ozon_reviews('Отзывы есть.', ['ozon_reviews!', 'ozon_reviews'], ctx) == 'Отзывы есть.'
     skipped = personality._guard_failed_ozon_reviews('Отзывов нет.', ['ozon_product'], ctx, 'Проверь отзывы')
     assert 'не удалось' in skipped.lower() and 'Отзывов нет.' not in skipped
+    searched = personality._guard_failed_ozon_reviews('Покупатели довольны.', ['ozon_search'], ctx, 'Найди и проверь отзывы')
+    assert 'не удалось' in searched.lower() and 'Покупатели довольны' not in searched
+    assert 'https://www.ozon.ru/product/item-123/' in searched
 
 
 def test_requested_reviews_are_checked_after_the_product_without_retry_loop():

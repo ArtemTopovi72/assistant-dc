@@ -426,24 +426,24 @@ def _forced_ozon_reviews(read, called, failures, tools):
 
 def _guard_failed_ozon_reviews(answer, calls, ctx, user_text=''):
     asked = bool(re.search(r'отзыв|reviews?', user_text, re.I))
-    if 'ozon_reviews' in calls or not ('ozon_reviews!' in calls or (asked and 'ozon_product' in calls)):
+    if 'ozon_reviews' in calls or not ('ozon_reviews!' in calls or (asked and {'ozon_product', 'ozon_search'} & set(calls))):
         return answer
     ru = not user_text or bool(re.search(r'[А-Яа-яЁё]', user_text))
     warning = ('Не удалось проверить тексты отзывов на Озоне. Нельзя сделать вывод, что их нет.' if ru else
                'Ozon reviews could not be checked. This does not mean there are no reviews.')
     products = getattr(ctx, 'turn_products', None) or []
-    if len(products) != 1:
-        return warning
-    product = products[0]
-    name = re.sub(r'[\[\]()*`\r\n]', '', str(product.get('name') or 'Товар'))
-    url = str(product.get('url') or '')
-    if not re.fullmatch(r'https://(?:www\.)?ozon\.ru/product/[A-Za-z0-9%._~/\-]+', url):
-        return warning
-    result = f"{'Карточка товара' if ru else 'Product'}: [{name}]({url})"
-    price = product.get('price')
-    if isinstance(price, (int, float)) and not isinstance(price, bool) and price > 0:
-        result += f"\n{'Цена по карточке' if ru else 'Price on the listing'}: {price:,.0f} ₽".replace(',', ' ')
-    return result + '\n' + warning
+    rows = []
+    for product in products[:5]:
+        name = re.sub(r'[\[\]()*`\r\n]', '', str(product.get('name') or 'Товар'))
+        url = str(product.get('url') or '')
+        if not re.fullmatch(r'https://(?:www\.)?ozon\.ru/product/[A-Za-z0-9%._~/\-]+', url):
+            continue
+        row = f"• [{name}]({url})"
+        price = product.get('price')
+        if isinstance(price, (int, float)) and not isinstance(price, bool) and price > 0:
+            row += f" — {price:,.0f} ₽".replace(',', ' ')
+        rows.append(row)
+    return ('\n'.join(rows) + '\n' if rows else '') + warning
 
 
 def _unverified_research_answer(state, sources=()) -> str:
