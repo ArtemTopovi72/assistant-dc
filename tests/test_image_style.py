@@ -22,7 +22,32 @@ def test_preserving_existing_lettering_does_not_invent_transcription():
     explicit = 'Сохрани надпись «Утренний Кот»'
     assert H._preserve_existing_lettering("Preserve text 'Утренний Кот'", explicit).endswith("'Утренний Кот'")
     assert H._preserve_existing_lettering("Write text 'HELLO'", 'Напиши HELLO') == "Write text 'HELLO'"
+
+
+def test_structured_prompt_keeps_only_scene_fields_and_user_edit():
+    import fibo, json
+    from types import SimpleNamespace
+    ctx = SimpleNamespace(vision_model=lambda **kw: '{"short_description":"striped cat with sign «invented»", "style_medium":"anime", "text_render":[{"text":"invented"}]}')
+    result = json.loads(fibo.structured_edit_prompt(ctx, 'cat.png', 'Make it anime'))
+    assert result['short_description'] == 'striped cat with sign' and 'invented' not in json.dumps(result)
+    assert result['edit_instruction'] == 'Make it anime' and 'text_render' not in result
+    ctx.vision_model = lambda **kw: 'invalid JSON'
+    assert fibo.structured_edit_prompt(ctx, 'cat.png', 'Make it anime') == 'Make it anime'
+    ctx.vision_model = lambda **kw: '{"short_description":"«invented»", "style_medium":"anime"}'
+    assert fibo.structured_edit_prompt(ctx, 'cat.png', 'Make it anime') == 'Make it anime'
 from fakes import Over, deps_ctx
+
+
+def test_preservation_restyle_passes_source_and_does_not_force_seed(monkeypatch, tmp_path):
+    source = tmp_path / 'photo.png'
+    source.write_bytes(b'test image')
+    seen = {}
+    monkeypatch.setattr(IS, 'build', lambda *a: ('Turn picture 1 into anime', 'drawn', 0.0))
+    monkeypatch.setattr(IS.fibo, 'structured_edit_prompt', lambda ctx, path, text: seen.update(source=path) or text)
+    ctx = deps_ctx(fibo_edit=lambda ctx, images, instr, **kw: seen.update(kwargs=kw, instruction=instr) or 'out.png')
+    assert IS.restyle(ctx, str(source), 'Make anime and preserve background and colors', seed=42) == 'out.png'
+    assert seen['source'] == str(source) and seen['kwargs']['seed'] == 42
+    assert '<image_1>' in seen['instruction']
 
 
 def _run(monkeypatch, instructions, *, expand=None, who="a man with a black mustache"):
