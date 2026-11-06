@@ -501,7 +501,7 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
     else:
         req = _with_user_words(state, (args.get("request") or "").strip())
     original = str((state or {}).get("user_input_original") or "")
-    if _re.search(r"погугл[а-яё]*.*озон", original, _re.I | _re.S):
+    if _re.search(r"погугл[а-яё]*.*(?:озон|ozon)", original, _re.I | _re.S):
         if not (state or {}).get("research_shop_evidence"):
             return ("[TOOL ERROR] The requested web research found no usable evidence. "
                     "Try a shorter web search before shopping; do not choose from a generic Ozon listing.")
@@ -566,7 +566,7 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
         if (state or {}).get('research_shop_evidence') and not state.get('research_shop_index_attempted'):
             state['research_shop_index_attempted'] = True
             _research_shop_index_fallback(ctx, state, S)
-        leads = '' if (state or {}).get('research_shop_candidates') else _indexed_ozon_links(ctx, req)
+        leads = '' if (state or {}).get('research_shop_evidence') else _indexed_ozon_links(ctx, req)
         if leads and (state or {}).get("research_shop_evidence"):
             state["research_shop_leads"] = leads
         return _fail(exc) + leads
@@ -592,7 +592,7 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
             logger.warning("ozon_shop same-seller check failed: %s", exc)
             results[0]["same_offer_unchecked"] = True
     chosen = [r["choice"] for r in results if r.get("choice")]
-    if _re.search(r"погугл[а-яё]*.*озон", original, _re.I | _re.S):
+    if _re.search(r"погугл[а-яё]*.*(?:озон|ozon)", original, _re.I | _re.S):
         model_words = normalize(selected_model).split()
         results = [row for row in results if row.get("choice") and all(
             word in normalize(str(row["choice"].get("name") or "")).split()

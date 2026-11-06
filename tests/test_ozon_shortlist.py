@@ -25,11 +25,12 @@ def test_intent_routes_many_links_to_shop_before_same_seller():
     assert out["wants"][0] == "ozon_shop"
 
 
-def test_explicit_web_then_ozon_request_searches_web_first(monkeypatch):
+@pytest.mark.parametrize('marketplace', ['Озоне', 'Ozon'])
+def test_explicit_web_then_ozon_request_searches_web_first(monkeypatch, marketplace):
     monkeypatch.setenv("INTENT_LIVE", "1")
     ctx = SimpleNamespace(text_model=lambda *a, **kw: (
         '{"needs_tool":true,"wants":["ozon_shop"],"must_call":""}'))
-    out = intent._read(ctx, "Погугли обзоры хороших рюкзаков, потом найди на Озоне", "", "", {})
+    out = intent._read(ctx, f"Погугли обзоры хороших рюкзаков, потом найди на {marketplace}", "", "", {})
     assert out["must_call"] == "search"
     assert out["wants"][:2] == ["search", "ozon_shop"]
 
@@ -59,12 +60,13 @@ def test_failed_followup_does_not_discard_research_already_found():
     assert state['research_shop_evidence'] == 'Review: Thule Subterra 2'
 
 
-def test_next_web_search_keeps_both_models():
+@pytest.mark.parametrize('marketplace', ['Озон', 'Ozon'])
+def test_next_web_search_keeps_both_models(marketplace):
     result = 'Review of Bellroy Transit Backpack. ' * 12
     ctx = SimpleNamespace(deps=SimpleNamespace(run_web_search=lambda *_: result),
                           set_stage=lambda *_: None, remember=lambda *_: None,
                           web_search_enabled=True)
-    state = {'user_input_original': 'Погугли рюкзаки, потом Озон',
+    state = {'user_input_original': f'Погугли рюкзаки, потом {marketplace}',
              'research_shop_evidence': 'Review of Thule Subterra 2.',
              'research_shop_verified': True}
     agent_tools._handle_search(ctx, state, {'query': 'Bellroy Transit Backpack review'})
@@ -73,16 +75,30 @@ def test_next_web_search_keeps_both_models():
     assert not state['research_shop_verified']
 
 
-def test_research_then_shop_rejects_generic_ozon_request(monkeypatch):
+@pytest.mark.parametrize('marketplace', ['Озоне', 'Ozon'])
+def test_research_then_shop_rejects_generic_ozon_request(monkeypatch, marketplace):
     monkeypatch.setattr(ozon_shopper, "shop", lambda *a, **kw: pytest.fail("generic search ran"))
     calls = []
     monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda *a: calls.append(True))
-    state = {"user_input_original": "Погугли обзоры, потом найди на Озоне",
+    state = {"user_input_original": f"Погугли обзоры, потом найди на {marketplace}",
              "research_shop_evidence": "Thule Subterra 2 has a padded laptop compartment"}
     out = handler._handle_ozon_shop(SimpleNamespace(), state,
                                     {"request": "рюкзак для ноутбука 16 дюймов"})
     assert "specific model" in out
     assert calls == [True]
+
+
+def test_failed_research_shop_never_returns_generic_index_links(monkeypatch):
+    monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda *a: None)
+    monkeypatch.setattr(handler, '_indexed_ozon_links', lambda *a: pytest.fail('generic index search ran'))
+    def fail(*args, **kwargs):
+        raise RuntimeError('blocked')
+    monkeypatch.setattr(ozon_shopper, 'shop', fail)
+    state = {'user_input_original': 'Погугли обзоры, потом найди на Ozon',
+             'research_shop_evidence': 'Review: Thule Subterra 2'}
+    out = handler._handle_ozon_shop(SimpleNamespace(turn_products=[]), state,
+                                    {'request': 'Thule Subterra 2'})
+    assert '[TOOL ERROR]' in out
     assert handler._NAMED_MODEL.search("Thule Subterra 2 27L")
 
 

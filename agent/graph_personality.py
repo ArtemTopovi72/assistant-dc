@@ -452,7 +452,7 @@ def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_c
     # before Telegram's forwarded Ozon links are folded into the turn. The
     # links in this very message are stronger evidence than that stale read.
     raw = str(text or "") + " " + str(state.get("user_input_original") or "")
-    if re.search(r"погугл[а-яё]*.*озон", raw, re.I | re.S):
+    if re.search(r"погугл[а-яё]*.*(?:озон|ozon)", raw, re.I | re.S):
         tool = "ozon_shop" if "search" in (already_called or ()) else "search"
         if any(name == tool for (name, _), count in (failed_calls or {}).items() if count):
             return ""
@@ -2323,7 +2323,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                                     user_input, original_input,
                                     failed_promises=failed_promises,
                                     verification_negative=verification_negative)
-    if (re.search(r"погугл[а-яё]*.*озон", str(original_input or user_input), re.I | re.S)
+    if (re.search(r"погугл[а-яё]*.*(?:озон|ozon)", str(original_input or user_input), re.I | re.S)
             and not state.get("research_shop_verified")):
         if state.get('research_shop_candidates'):
             final_answer = _unverified_research_answer(state, getattr(ctx, 'turn_sources', ()))
@@ -2331,11 +2331,6 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             final_answer = ("Не удалось подтвердить на Озоне карточку конкретной модели из обзоров. "
                         "Поэтому пока не буду советовать случайный товар или выдавать старую "
                         "цену за актуальную.")
-            leads = re.findall(r"https://(?:www\.)?ozon\.ru/product/[^\s]+",
-                               state.get("research_shop_leads") or "")
-            if leads:
-                final_answer += ("\n\nВ поисковом индексе есть возможная карточка: " + leads[0]
-                                 + " — её цену и наличие я не смог проверить.")
 
     # Last resort. Bench deliver_fix 2026-09-23 (no-think): the model spent
     # all 16 rounds -- one edit repeated three times, two indentation misses --

@@ -134,7 +134,7 @@ def _handle_search(ctx, state, args: dict) -> str:
     before = len(sources) if isinstance(sources, list) else 0
     try:
         result = dep(ctx, "run_web_search", run_web_search)(search_ctx, query)
-        if result.strip() == NO_RESULTS and "озон" in _asked.lower() \
+        if result.strip() == NO_RESULTS and re.search(r"озон|ozon", _asked, re.I) \
                 and re.search(r"\bbackpacks?\b", query, re.I):
             shorter = re.sub(r"\b(?:best|durable|comfortable|reliable|high-end|premium|20\d\d)\b",
                              "", query, flags=re.I)
@@ -145,7 +145,7 @@ def _handle_search(ctx, state, args: dict) -> str:
         if isinstance(sources, list):
             del sources[before:]
         raise
-    research_shop = bool(re.search(r"погугл[а-яё]*.*озон", _asked, re.I | re.S))
+    research_shop = bool(re.search(r"погугл[а-яё]*.*(?:озон|ozon)", _asked, re.I | re.S))
     if research_shop:
         state.setdefault("research_shop_evidence", "")
         state.setdefault("research_shop_verified", False)

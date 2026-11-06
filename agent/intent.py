@@ -520,7 +520,7 @@ def _read(ctx, text: str, previous: str, attached: str, cache: dict) -> dict:
         return dict(FALLBACK)
     if os.getenv("INTENT_TRACE") and not attached:
         import traceback; logger.info("intent-trace %s", " | ".join("%s:%d" % (f.name, f.lineno) for f in traceback.extract_stack()[-7:-1]))
-    if re.search(r"погугл[а-яё]*.*озон", text, re.I | re.S):
+    if re.search(r"погугл[а-яё]*.*(?:озон|ozon)", text, re.I | re.S):
         out["needs_tool"] = True
         out["must_call"] = "search"
         out["wants"] = ["search", "ozon_shop"] + [w for w in out["wants"]
