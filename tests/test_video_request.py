@@ -12,6 +12,18 @@ REQUEST = "Animate the red balloon with a slow camera push-in. Keep the blue box
 DRAFT = "The green balloon sways while the camera pushes in."
 
 
+def test_approved_part_keeps_the_duration_shown_in_the_plan(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    rig = _Rig(tmp_path, herrgott_on=lambda: False)
+    ctx = rig.ctx(video_plan_parts=['The balloon sways.'], video_plan_seconds=[8.0],
+                  text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': REQUEST},
+                                    {'description': 'The balloon sways.', 'seconds': 12, 'use_current_images': True})
+    assert rig.renders()[0][1]['seconds'] == 8.0
+
+
 @pytest.mark.parametrize("approved", [[], ["The red balloon sways."]])
 def test_finished_video_is_checked_against_request_or_approved_plan(tmp_path, approved):
     still = tmp_path / "source.png"

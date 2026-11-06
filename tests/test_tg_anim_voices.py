@@ -220,9 +220,11 @@ def test_every_continuation_part_keeps_the_voice_and_the_first_picture(tmp_path)
                                   first_frame=lambda a, b: True)
     ctx = types.SimpleNamespace(video_engine=eng, clip_tools=tools, set_stage=lambda s: None,
                                 is_cancelled=lambda: False, vision_model=lambda *a, **k: "NONE")
-    H._render_remaining_parts(ctx, str(clip), ["p1", "p2", "p3"], {}, people=["orig.jpg"], voices=["v.wav"])
+    H._render_remaining_parts(ctx, str(clip), ["p1", "p2", "p3"], {}, people=["orig.jpg"], voices=["v.wav"],
+                              seconds=[5.2, 8.0, 9.0])
     assert len(seen) == 2
     assert all(k["audios"] == ["v.wav"] and k["images"][1:] == ["orig.jpg"] for k in seen)
+    assert [k["seconds"] for k in seen] == [8.0, 9.0]
 
 
 def test_a_part_that_skipped_its_opening_lines_is_made_again(tmp_path, monkeypatch):

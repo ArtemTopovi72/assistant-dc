@@ -1610,7 +1610,7 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
     return last
 
 
-def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), voices=(), fresh_from="") -> str:
+def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), voices=(), fresh_from="", seconds=()) -> str:
     """Parts 2..n of a long script, each continuing the clip so far from its real
     last frame (its tail as <Video 1>, that frame as <Picture 1>), joined on. A part
     that fails or a cancel stops here: the clip made so far is still delivered.
@@ -1629,6 +1629,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
             break
         first_try, r = None, {}
         ctx.video_part = f"{i}/{len(parts)}"
+        part_seconds = seconds[i - 1] if len(seconds) >= i else 0.0
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
         frame = os.path.join(work, f"seed_{i}.jpg")
         tail = os.path.join(work, f"tail_{i}.mp4")
@@ -1652,6 +1653,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                 takes = []
                 for attempt in (1, 2, 3):
                     r = video_mod.generate_video(ctx, part, images=[fresh_from], keyframe=True,
+                                                 seconds=part_seconds,
                                                  aspect=args.get("aspect") or "",
                                                  seed=args.get("seed") if attempt == 1 else None)
                     if not r.get("path"):
@@ -1674,6 +1676,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                     r = video_mod.generate_video(ctx, video_mod.CONTINUE_CTX_PREFIX
                                                  + video_mod.with_scene(part, " ".join(parts[:i - 1])),
                                                  context_video=tail,
+                                                 seconds=part_seconds,
                                                  aspect=args.get("aspect") or "", seed=args.get("seed"))
                 else:
                     look = "".join(f" The character of <Picture {k}> looks exactly as in that picture."
@@ -1684,6 +1687,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
                         look += " The speaker's voice stays exactly the voice of <Audio 1>."
                     r = video_mod.generate_video(ctx, video_mod.CONTINUE_PREFIX + part + look,
                                                  images=[frame, *people], videos=[tail], audios=list(voices),
+                                                 seconds=part_seconds,
                                                  aspect=args.get("aspect") or "", seed=args.get("seed"))
                 # no chain check here before: a part whose opening lines H3 skipped went into the clip
                 if attempt == 2 or not r.get("path"):
@@ -2388,7 +2392,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         parts = [raw]
     # 🎬 The plan the user approved under the card (tg_video_plan): exactly those parts.
     approved = [p for p in (getattr(ctx, "video_plan_parts", None) or []) if p]
+    approved_seconds = list(getattr(ctx, "video_plan_seconds", None) or [])
     ctx.video_plan_parts = []
+    ctx.video_plan_seconds = []
     if approved:
         ctx.video_request = "\n".join(str(p) for p in approved)
         ctx.video_speech = ""
@@ -2404,6 +2410,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if want > 15.0 and len(parts) > 1 and want > sum(secs) * 1.15:
         per = min(video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO), want / len(parts))
         secs = [max(x, round(per, 2)) for x in secs]
+    if approved and parts == approved and len(approved_seconds) == len(parts):
+        secs = [float(s) if float(s or 0) > 0 else estimate for s, estimate in zip(approved_seconds, secs)]
     # A loop: the picture is the first and the last frame (FL2VA keyframes), one part --
     # the clip of Лёха flexing under the track had to repeat without a jump (2026-10-22).
     loop = bool(args.get("loop") and images and not videos and not continuing)
@@ -2525,7 +2533,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     ctx, first_prompt,
                     images=images, videos=videos, audios=audios,
                     seconds=(prepped[0][1] if prepped else
-                             (args.get("seconds") or (secs[0] if static_hold and secs else 0.0))),
+                             (secs[0] if approved and secs else
+                              (args.get("seconds") or (secs[0] if static_hold and secs else 0.0)))),
                     prepared=bool(prepped),
                     aspect=args.get("aspect") or "",
                     seed=args.get("seed") if attempt == 1 else None,
@@ -2658,7 +2667,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
 
     if len(parts) > 1 and not chain_id:
         path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios,
-                                       fresh_from=anchor[0] if head else "")
+                                       fresh_from=anchor[0] if head else "", seconds=secs if approved else ())
         if getattr(ctx, "continue_voice_error", False):
             state["video_status"] = "error"
             return "[TOOL ERROR] Could not apply the original speaker's voice to every segment; no finished video was delivered."

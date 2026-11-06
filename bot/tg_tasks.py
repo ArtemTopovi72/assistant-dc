@@ -1210,6 +1210,8 @@ class TaskRunnerMixin:
         # is the same one without it, or ▶ drew the plan again, round and round (live 2026-10-19).
         if plan_replay:
             ctx.video_plan_parts = list(sess.video_plan_ok)
+            ctx.video_plan_seconds = ([p.get('sec', 0) for p in sess.video_plan]
+                                      if [p.get('text') for p in sess.video_plan] == ctx.video_plan_parts else [])
             sess.video_plan, sess.video_plan_request, sess.video_plan_ok = [], "", []
             sess.video_plan_images = []
             sess.video_plan_continuation = {}
