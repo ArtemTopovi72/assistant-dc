@@ -58,8 +58,34 @@ def _glimmer_strength(messages: List[dict], strength: str) -> List[dict]:
     return out
 
 
+_MODEL_ARCH_CACHE = {}
+
+
+def _model_architecture(model_name: str) -> str:
+    cached = _MODEL_ARCH_CACHE.get(model_name)
+    if cached and time.monotonic() - cached[0] < 60:
+        return cached[1]
+    try:
+        response = requests.get(LM_STUDIO_BASE.rstrip('/') + '/api/v1/models', timeout=2)
+        response.raise_for_status()
+        for model in response.json().get('models', []):
+            ids = [model.get('key')] + [item.get('id') for item in model.get('loaded_instances', [])]
+            if model_name in ids:
+                architecture = str(model.get('architecture') or '').lower()
+                _MODEL_ARCH_CACHE[model_name] = (time.monotonic(), architecture)
+                return architecture
+    except (requests.RequestException, ValueError, TypeError, AttributeError):
+        pass
+    return ''
+
+
 def _is_qwen(model_name: str) -> bool:
-    return "qwen" in (model_name or "").lower()
+    name = (model_name or '').lower()
+    if 'qwen' in name:
+        return True
+    if not name or any(family in name for family in ('gemma', 'glimmer', 'gpt-oss')):
+        return False
+    return _model_architecture(model_name).startswith('qwen')
 
 
 def _is_gemma4(model_name: str) -> bool:

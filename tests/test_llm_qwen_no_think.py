@@ -35,6 +35,31 @@ def test_qwen_gets_its_closed_think_block():
     assert p["messages"][-1] == {"role": "assistant", "content": llm.QWEN_NO_THINK_PREFILL}
 
 
+def test_qwen_alias_uses_reported_architecture(monkeypatch):
+    monkeypatch.setattr(llm, '_model_architecture', lambda name: 'qwen35', raising=False)
+    p = _payload('hauhaucs-aggressive@?')
+    assert p['messages'][-1] == {'role': 'assistant', 'content': llm.QWEN_NO_THINK_PREFILL}
+
+
+def test_architecture_lookup_uses_loaded_alias_and_caches(monkeypatch):
+    calls = []
+    response = types.SimpleNamespace(raise_for_status=lambda: None, json=lambda: {
+        'models': [{'key': 'source-model', 'architecture': 'qwen35',
+                    'loaded_instances': [{'id': 'alias'}]}]})
+    monkeypatch.setattr(llm.requests, 'get', lambda *a, **k: calls.append(a) or response)
+    monkeypatch.setattr(llm, '_MODEL_ARCH_CACHE', {})
+    assert llm._is_qwen('alias') and llm._is_qwen('alias')
+    assert len(calls) == 1
+
+
+def test_architecture_lookup_failure_does_not_guess(monkeypatch):
+    def offline(*args, **kwargs):
+        raise llm.requests.ConnectionError('offline')
+    monkeypatch.setattr(llm.requests, 'get', offline)
+    monkeypatch.setattr(llm, '_MODEL_ARCH_CACHE', {})
+    assert not llm._is_qwen('unknown-alias')
+
+
 def test_forced_tool_call_on_qwen_has_no_prefill():
     tools = [{"type": "function", "function": {"name": "calculate", "parameters": {"type": "object"}}}]
     p = _payload("qwen3.6-35b-a3b", tools=tools, tool_choice="required")
