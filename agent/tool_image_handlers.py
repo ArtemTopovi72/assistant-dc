@@ -1861,7 +1861,9 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
                       "video motion from them. Any changes the user requests take precedence. "
                       + measured +
                       ("Compare the reference with the video for major unrequested new subjects, effects or "
-                         "background changes, while allowing the motion the user asked for. " if references else "") +
+                         "background changes, while allowing the motion the user asked for. If a person "
+                         "is inside an inset or screen in the reference, check whether their body parts "
+                         "cross into the surrounding scene without being asked. " if references else "") +
                       "Judge only this request, never requirements invented by a tool draft or earlier chat. "
                       "List, in a few words each, requested visible actions or appearance constraints the frames fail "
                       "(an object that never moves or leaves, a person who never does it). Speech and "
@@ -2705,7 +2707,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # A talking head acts with its mouth only and its camera is locked: checked against the agent's
     # «the camera zooms in», the note said an action was missing and the reply told the user to
     # «pick a voice variant» (live 2026-10-20)
-    ctx.video_action_note = "" if continuing or head else _check_actions(ctx, path, parts, references=images)
+    ctx.video_action_note = "" if head or (continuing and not images) else _check_actions(ctx, path, parts, references=images)
     if images and not continuing and not head:
         background_note = _check_static_background(ctx, video_mod, path, ctx.video_request or description)
         objects_note = ('The video may contain added objects or effects.'

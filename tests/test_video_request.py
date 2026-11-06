@@ -79,6 +79,7 @@ def test_finished_video_is_checked_against_request_or_approved_plan(tmp_path, ap
     expected = approved[0] if approved else REQUEST
     assert expected in seen["user_text"]
     assert "green balloon" not in seen["user_text"]
+    assert 'body parts' in seen['user_text'] and 'inset' in seen['user_text']
     assert ctx.video_action_note == ""
     assert "actions are NOT visible" not in result
     assert any(path == str(still) for _, path in seen["image_paths"])
