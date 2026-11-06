@@ -270,11 +270,13 @@ def test_a_talking_head_part_starts_from_the_still_not_from_the_clip_so_far(tmp_
                                   first_frame=lambda a, b: True)
     ctx = types.SimpleNamespace(video_engine=eng, clip_tools=tools, set_stage=lambda s: None,
                                 is_cancelled=lambda: False, vision_model=lambda *a, **k: "NONE")
-    H._render_remaining_parts(ctx, str(clip), ["p1", "p2", "p3"], {}, voices=["v.wav"], fresh_from="orig.jpg")
+    H._render_remaining_parts(ctx, str(clip), ["p1", "p2", "p3"], {}, voices=["v.wav"],
+                              fresh_from="orig.jpg", seconds=[5.2, 8.0, 9.0])
     assert len(seen) == 2
     # the still is frame 0 (FL2VA) and no voice sample rides: Ref2VA+voice recast the face and the
     # eyes (white-of-eye 0.01-0.04 vs 0.00-0.003); the voice is put on the finished clip (revoice)
     assert all(k["images"] == ["orig.jpg"] and not k.get("videos") and k["keyframe"] and not k.get("audios") for k in seen)
+    assert [k['seconds'] for k in seen] == [8.0, 9.0]
 
 
 
