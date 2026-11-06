@@ -647,13 +647,10 @@ class _Browser:
                                 "were not read; do not rank them or guess from brand names.")
                             break
                         if "net::ERR_" in str(exc):
-                            # The network itself cannot reach ozon.ru (the VPN exit
-                            # drops it) -- a second 90 s attempt only doubles the wait.
+                            # A network error alone does not identify where access failed.
                             box["error"] = OzonBlocked(
-                                "ozon.ru is unreachable from this server's network (%s). "
-                                "Ozon blocks VPN and datacenter addresses; it needs "
-                                "OZON_PROXY (a Russian home/mobile proxy) or ozon.ru "
-                                "routed outside the VPN." % str(exc).split(" at ")[0][:80])
+                                "ozon.ru could not be reached from this network (%s). "
+                                "The cause is unknown." % str(exc).split(" at ")[0][:80])
                             break
                         if attempt:
                             box["error"] = OzonError(f"browser failed: {exc}")
@@ -740,9 +737,8 @@ class _Browser:
         title = page.title() or ""
         if _BLOCK_RE.search(title):
             raise OzonBlocked(
-                "Ozon refuses this network (its page says: '%s'). It blocks VPN and "
-                "datacenter addresses. Set OZON_PROXY to a Russian home/mobile proxy "
-                "or route ozon.ru outside the VPN." % title[:60])
+                "Ozon displayed an access challenge (page title: '%s'). "
+                "The cause is unknown." % title[:60])
 
     @classmethod
     def _close(cls, slot):

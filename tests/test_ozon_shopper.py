@@ -7,7 +7,14 @@ import pytest
 import ozon_client as O
 import ozon_shopper as S
 import tools as T
+import tool_ozon_handlers as OH
 from seams import Over
+
+
+def test_blocked_ozon_error_does_not_invent_vpn_cause():
+    out = OH._fail(O.OzonBlocked('Ozon displayed an antibot challenge'))
+    assert 'VPN network' not in out and 'NOT a temporary outage' not in out
+    assert 'Do not invent' in out
 
 
 def test_failed_ozon_search_is_not_reported_as_empty_catalog(monkeypatch):

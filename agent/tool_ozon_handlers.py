@@ -72,10 +72,9 @@ def _owned(fn):
 
 def _fail(exc: Exception) -> str:
     if isinstance(exc, _oz.OzonBlocked):
-        return ("[TOOL ERROR] " + str(exc) + " This is NOT a temporary outage: tell the user "
-                "Ozon blocks this server's VPN network, so retrying later will not help until "
-                "the admin sets OZON_PROXY or excludes ozon.ru from the VPN. Do not retry, do "
-                "not suggest trying again in a minute, do not invent products.")
+        return ("[TOOL ERROR] " + str(exc) + " The cause and duration are not established. "
+                "Do not claim the product is unavailable or guess why access failed. "
+                "Do not invent products or prices.")
     return (f"[TOOL ERROR] Ozon: {exc}. Do not invent products or prices. "
             "Do not claim a product is unavailable or a previous choice is the best "
             "when the Ozon search failed.")
