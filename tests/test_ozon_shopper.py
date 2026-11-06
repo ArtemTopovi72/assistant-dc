@@ -195,6 +195,12 @@ def test_empty_review_page_does_not_erase_known_review_count(world):
     assert 'Тексты отзывов не удалось прочитать' in S.digest({'choice': choice})
 
 
+def test_empty_review_page_without_count_is_unknown(world):
+    source = item('3', 'Тарелки', 200)
+    del source['reviews']
+    assert S.inspect(source, _ctx())['review_texts'] is None
+
+
 def test_decision_uses_card_reviews_even_when_model_invents_claims(world):
     _, script = world
     script["decide_extra"] = {
