@@ -2420,7 +2420,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             return "[TOOL ERROR] A loop cannot safely use numbered picture references. Ask the user to select one image for the loop."
         images, parts = [images[-1], images[-1]], [raw]    # newest last: [0] animated an older picture
         secs = [max(video_mod.estimate_seconds(raw, reads=dep(ctx, "script_read", None)), 5.2)]
-    if len(parts) > 1 and not approved and not own_script and getattr(ctx, "video_plan_ask", False):
+    short_plan = want > 15.0 and want > sum(secs) + 0.5
+    if (len(parts) > 1 or short_plan) and not approved and not own_script and getattr(ctx, "video_plan_ask", False):
         # Several minutes per part: the chat sees the parts, the clip length and the
         # render time first, and may drop or condense parts (user, 2026-10-10).
         state["video_plan"] = [{"text": p, "sec": x} for p, x in zip(parts, secs)]

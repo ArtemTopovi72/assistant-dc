@@ -24,6 +24,19 @@ def test_approved_part_keeps_the_duration_shown_in_the_plan(tmp_path):
     assert rig.renders()[0][1]['seconds'] == 8.0
 
 
+def test_short_single_part_is_shown_for_approval_before_render(tmp_path):
+    rig = _Rig(tmp_path, herrgott_on=lambda: False)
+    ctx = rig.ctx(video_plan_ask=True, video_plan_parts=[], text_model=lambda *a, **kw: '',
+                  vision_model=lambda *a, **kw: 'NONE', deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    state = {'user_input_original': 'Make a 25 second video of a balloon swaying.'}
+    result = handlers._handle_generate_video(ctx, state,
+                                             {'description': 'The balloon sways.', 'seconds': 25})
+    assert '[NOT MADE YET]' in result
+    assert state['video_plan_requested_seconds'] == 25
+    assert sum(p['sec'] for p in state['video_plan']) < 25
+    assert not rig.renders()
+
+
 @pytest.mark.parametrize("approved", [[], ["The red balloon sways."]])
 def test_finished_video_is_checked_against_request_or_approved_plan(tmp_path, approved):
     still = tmp_path / "source.png"
