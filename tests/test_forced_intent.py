@@ -62,7 +62,7 @@ assert plain["must_call"] == ""
 got = {}
 told = lambda c, t, prev="", att="": got.setdefault("att", att) and intent.FALLBACK
 G._turn_intent(NS(last_image_path="x.png", intent_read=told), {"messages": []}, "сколько я потратил?")
-assert got["att"] == "a photo", got
+assert got["att"] == "a photo from earlier in the chat, not attached to this message", got
 got.clear()
 csv = [{"role": "user", "content": "Jan;125400;98300\nFeb;131200;101500\nMar;118900;97800\nApr;142300;110200"}]
 ctx.intent_read = told
