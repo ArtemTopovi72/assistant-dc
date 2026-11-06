@@ -256,3 +256,36 @@ def test_video_plan_persists_and_clears_its_continuation(tmp_path):
     assert bot._store.get(101).video_plan_continuation == continuation
     bot._cb_video_plan(101, 'vp:x')
     assert bot._store.get(101).video_plan_continuation == {}
+
+
+def test_plan_with_missing_source_does_not_generate_from_another_file(tmp_path):
+    import uuid
+    from test_tg_incoming_durability import make_bot
+    bot = make_bot(tmp_path)
+    bot._get_ctx = lambda: FakeCtx()
+    bot._get_graph = lambda: object()
+    bot._get_base_state = lambda: {'messages': []}
+    seen, sent = [], []
+    class Graph:
+        def invoke(self, base): seen.append(base)
+    bot.graph_builder = lambda ctx: Graph()
+    bot._backend = T.InMemoryBackend()
+    bot._send_text = lambda cid, text, **kw: sent.append(text)
+    bot._running = True
+    threading.Thread(target=bot._consumer_loop, daemon=True).start()
+    tail = tmp_path / 'tail.mp4'
+    tail.write_bytes(b'tail')
+    sess = bot._get_session(101)
+    sess.video_plan_request = 'Продолжи ролик'
+    sess.video_plan_ok = ['Продолжение']
+    sess.video_plan_continuation = {'tail': str(tail), 'src': str(tmp_path / 'missing.mp4')}
+    bot._store.put(sess)
+    task = T._Task(task_id=str(uuid.uuid4()), chat_id=101, user_text=sess.video_plan_request,
+                   enqueue_ts=time.time())
+    with bot._task_lock: bot._pending_journal[task.task_id] = task
+    bot._backend.push(task)
+    end = time.monotonic() + 15
+    while time.monotonic() < end and not any('больше недоступно' in text for text in sent):
+        time.sleep(0.1)
+    assert any('больше недоступно' in text for text in sent)
+    assert not seen
