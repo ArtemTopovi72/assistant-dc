@@ -417,7 +417,7 @@ def _turn_inputs(ctx, state, text: str) -> tuple:
 
 def _forced_ozon_reviews(read, called, failures, tools, user_text='', products=()):
     requested = (bool(re.search(r'отзыв|reviews?', user_text, re.I))
-                 and not re.search(r'(?:без|не\s+(?:нуж\w*|показыва\w*|ищ\w*))\s+отзыв', user_text, re.I))
+                 and not re.search(r'(?:без|не\s+(?:нуж\w*|показыва\w*|ищ\w*))\s+отзыв|(?:without|no)\s+reviews?', user_text, re.I))
     after_search = 'ozon_search' in called and products and requested
     after_product = read.get('ok') and 'ozon_reviews' in read.get('wants', []) and 'ozon_product' in called
     if ((after_search or after_product) and 'ozon_reviews' not in called

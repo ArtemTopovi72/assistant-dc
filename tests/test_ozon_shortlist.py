@@ -52,6 +52,7 @@ def test_requested_reviews_after_search_even_if_intent_missed_them():
     assert force(read, {'ozon_search'}, {}, tools, 'Найди товар и покажи отзывы', products) == 'ozon_reviews'
     assert not force(read, {'ozon_search'}, {}, tools, 'Найди товар и покажи отзывы', [])
     assert not force(read, {'ozon_search'}, {}, tools, 'Найди товар без отзывов', products)
+    assert not force(read, {'ozon_search'}, {}, tools, 'Find it without reviews', products)
     assert not force(read, {'ozon_search', 'ozon_reviews'}, {}, tools, 'Покажи отзывы', products)
     assert not force(read, {'ozon_search'}, {('ozon_reviews', 'x'): 1}, tools, 'Покажи отзывы', products)
 

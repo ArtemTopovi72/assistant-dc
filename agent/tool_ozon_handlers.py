@@ -506,7 +506,7 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
         req = _with_user_words(state, (args.get("request") or "").strip())
     original = str((state or {}).get("user_input_original") or "")
     show_reviews = bool(_re.search(r'отзыв|reviews?', original, _re.I)) and not _re.search(
-        r'(?:без|не\s+(?:нуж\w*|показыва\w*|ищ\w*))\s+отзыв', original, _re.I)
+        r'(?:без|не\s+(?:нуж\w*|показыва\w*|ищ\w*))\s+отзыв|(?:without|no)\s+reviews?', original, _re.I)
     if _re.search(r"погугл[а-яё]*.*(?:озон|ozon)", original, _re.I | _re.S):
         if not (state or {}).get("research_shop_evidence"):
             return ("[TOOL ERROR] The requested web research found no usable evidence. "
