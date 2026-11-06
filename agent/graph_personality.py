@@ -415,6 +415,15 @@ def _turn_inputs(ctx, state, text: str) -> tuple:
     return t, _previous_reply(state), att
 
 
+def _forced_ozon_reviews(read, called, failures, tools):
+    if (read.get('ok') and 'ozon_reviews' in read.get('wants', [])
+            and 'ozon_product' in called and 'ozon_reviews' not in called
+            and not any(name == 'ozon_reviews' and count for (name, _), count in failures.items())
+            and any(t.get('function', {}).get('name') == 'ozon_reviews' for t in tools)):
+        return 'ozon_reviews'
+    return ''
+
+
 def _guard_failed_ozon_reviews(answer, calls, ctx, user_text=''):
     asked = bool(re.search(r'отзыв|reviews?', user_text, re.I))
     if 'ozon_reviews' in calls or not ('ozon_reviews!' in calls or (asked and 'ozon_product' in calls)):
@@ -1337,6 +1346,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             _edit_mode_now = True
             edit_mode_rounds -= 1
         _force = (force_next_tool
+                  or _forced_ozon_reviews(_read, tools_called_this_turn, failed_call_counts, turn_tools)
                   or _forced_subtitles(_turn_text, turn_tools, tools_called_this_turn)
                   or _forced_button(_own(original_input or user_input), turn_tools,
                                     tools_called_this_turn)

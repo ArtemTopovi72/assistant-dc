@@ -28,6 +28,16 @@ def test_failed_review_lookup_cannot_be_reported_as_no_reviews():
     assert 'не удалось' in skipped.lower() and 'Отзывов нет.' not in skipped
 
 
+def test_requested_reviews_are_checked_after_the_product_without_retry_loop():
+    read = {'ok': True, 'wants': ['ozon_product', 'ozon_reviews']}
+    tools = [{'function': {'name': 'ozon_reviews'}}]
+    force = personality._forced_ozon_reviews
+    assert force(read, {'ozon_product'}, {}, tools) == 'ozon_reviews'
+    assert not force(read, {'ozon_product', 'ozon_reviews'}, {}, tools)
+    assert not force(read, {'ozon_product'}, {('ozon_reviews', 'x'): 1}, tools)
+    assert not force({'ok': True, 'wants': ['ozon_product']}, {'ozon_product'}, {}, tools)
+
+
 def test_intent_routes_many_links_to_shop_before_same_seller():
     out = {"must_call": "ozon_same", "wants": ["ozon_same", "ozon_shop"]}
     intent._same_or_analogue(SimpleNamespace(),
