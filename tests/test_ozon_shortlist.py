@@ -190,6 +190,18 @@ def test_research_then_shop_accepts_model_named_in_evidence(monkeypatch):
     assert state["research_shop_verified"] is True
 
 
+def test_research_shop_does_not_mistake_brand_for_researched_model(monkeypatch):
+    monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda *a: None)
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: (
+        {'mode': 'one'}, [{'choice': {'sku': '1', 'name': 'The North Face Рюкзак'}}]))
+    state = {'user_input_original': 'Погугли обзоры, потом найди на Ozon',
+             'research_shop_evidence': 'Review: The North Face Borealis backpack.'}
+    result = handler._handle_ozon_shop(SimpleNamespace(turn_products=[]), state,
+        {'request': 'The North Face Borealis Commuter 16 inch laptop backpack'})
+    assert 'No confirmed Ozon listing' in result
+    assert not state.get('research_shop_verified')
+
+
 def test_researched_model_with_size_is_not_mistaken_for_generic(monkeypatch):
     called = []
     monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: (

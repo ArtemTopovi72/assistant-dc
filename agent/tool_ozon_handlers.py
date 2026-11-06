@@ -510,10 +510,11 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
         request_words = normalize(requested).split()
         evidence_words = ' ' + normalize(state["research_shop_evidence"]) + ' '
         named = _NAMED_MODEL.search(requested)
-        if (len(request_words) >= 2 and request_words[0] not in _GENERIC_MODELS
-                and _re.fullmatch(r'[A-Za-z0-9]', requested[:1])
-                and (' ' + ' '.join(request_words) + ' ') in evidence_words):
-            selected_model = requested
+        prefix = next((' '.join(request_words[:n]) for n in range(len(request_words), 1, -1)
+                       if (' ' + ' '.join(request_words[:n]) + ' ') in evidence_words), '')
+        if (prefix and request_words[0] not in _GENERIC_MODELS
+                and _re.fullmatch(r'[A-Za-z0-9]', requested[:1])):
+            selected_model = prefix
         elif (named and named.group().split()[0].lower() not in _GENERIC_MODELS
               and (' ' + normalize(named.group()) + ' ') in evidence_words):
             selected_model = named.group()
