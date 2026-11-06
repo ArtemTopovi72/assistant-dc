@@ -267,6 +267,20 @@ def outbox(since: float = 0.0, user=None) -> list:
 # ---- the HTTP API: the same user, driven over 127.0.0.1 (the GUI tab, scripts) ----
 
 API_PORT = int(os.getenv("DEBUG_USER_PORT", "8765"))
+_GUI_CONTROL = None
+_GUI_TOKEN = ""
+
+
+def register_gui_control(control):
+    """Enable authenticated, allowlisted GUI actions through the existing local API."""
+    import secrets
+    global _GUI_CONTROL, _GUI_TOKEN
+    os.makedirs(ROOT, exist_ok=True)
+    token = secrets.token_urlsafe(32)
+    path = os.path.join(ROOT, 'gui-control-token')
+    with open(path, 'w', encoding='ascii') as fh:
+        fh.write(token)
+    _GUI_CONTROL, _GUI_TOKEN = control, token
 
 
 def _api_handler():
@@ -285,8 +299,23 @@ def _api_handler():
             self.end_headers()
             self.wfile.write(data)
 
+        def _gui_authorized(self):
+            import hmac
+            token = self.headers.get('X-Assistant-Control', '')
+            try:
+                return bool(not self.headers.get('Origin') and _GUI_TOKEN
+                            and hmac.compare_digest(token, _GUI_TOKEN))
+            except TypeError:
+                return False
+
         def do_GET(self):
             u = urlparse(self.path)
+            if u.path == '/gui/actions':
+                if not self._gui_authorized():
+                    return self._send(403, {'error': 'forbidden'})
+                if not enabled() or _GUI_CONTROL is None:
+                    return self._send(503, {'error': 'GUI control unavailable'})
+                return self._send(200, {'actions': sorted(_GUI_CONTROL.buttons)})
             if u.path == "/messages":
                 q = parse_qs(u.query)
                 since = float((q.get("since") or ["0"])[0])
@@ -298,9 +327,21 @@ def _api_handler():
 
         def do_POST(self):
             try:
-                n = int(self.headers.get("Content-Length") or 0)
-                body = json.loads(self.rfile.read(n) or b"{}")
                 path = urlparse(self.path).path
+                n = int(self.headers.get("Content-Length") or 0)
+                if path == '/gui/press':
+                    if not self._gui_authorized():
+                        return self._send(403, {'error': 'forbidden'})
+                    if n < 0 or n > 4096:
+                        return self._send(413, {'error': 'body too large'})
+                    if not enabled() or _GUI_CONTROL is None:
+                        return self._send(503, {'error': 'GUI control unavailable'})
+                    body = json.loads(self.rfile.read(n) or b'{}')
+                    if not isinstance(body, dict):
+                        return self._send(400, {'error': 'expected an object'})
+                    result = _GUI_CONTROL.press(str(body.get('action') or ''))
+                    return self._send(200 if result.get('ok') else 400, result)
+                body = json.loads(self.rfile.read(n) or b"{}")
                 user = int(body.get("user") or 0)
                 if path == "/say":
                     say(str(body["text"]), user)

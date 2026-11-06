@@ -225,6 +225,18 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
 
         self.setAcceptDrops(True)
         self._build_ui()
+        try:
+            import debug_user
+            from gui_control import GuiControl
+            self._gui_control = GuiControl({
+                'voice': self.voice_btn, 'pause_speech': self.pause_btn,
+                'ultra_search': self.ultra_btn, 'use_database': self.usedb_btn,
+                'stop': self.stop_btn,
+            })
+            if os.getenv('F5_TEST_RUN') != '1':
+                debug_user.register_gui_control(self._gui_control)
+        except (ImportError, OSError):
+            logger.exception('GUI control API unavailable')
         self._install_log_handler()
         # Restore the last-used layout (window geometry, splitter sizes, which panels are
         # open and in what order). Safe no-op on first run / if nothing was saved.
