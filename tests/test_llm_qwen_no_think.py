@@ -63,6 +63,21 @@ def test_native_reasoning_has_room_and_is_not_returned_as_answer():
     assert result['reasoning_only'] is True
 
 
+def test_gemma_tool_grammar_gets_reasoning_headroom_when_switch_off():
+    seen = {}
+    def fake(ctx, payload):
+        seen.update(payload)
+        return {'role': 'assistant', 'content': '',
+                'tool_calls': [{'function': {'name': 'calculate', 'arguments': '{}'}}]}
+    ctx = Ctx('gemma4-26b', fake)
+    ctx.no_think = True
+    tool = {'type': 'function', 'function': {'name': 'calculate', 'parameters': {'type': 'object'}}}
+    llm.send_to_lm_studio(ctx, [{'role': 'user', 'content': 'test'}],
+                          max_tokens=80, tools=[tool], tool_choice='required')
+    assert seen['messages'][-1]['role'] == 'user'
+    assert seen['max_tokens'] >= 1104
+
+
 def test_thought_followed_by_tool_call_is_not_marked_incomplete():
     ctx = Ctx('qwen3.8', lambda ctx, payload: {
         'role': 'assistant', 'content': '<think>' + 'x' * 250 + '</think>',

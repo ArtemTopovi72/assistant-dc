@@ -577,6 +577,7 @@ def send_to_lm_studio(
     is_glimmer = _is_glimmer(model_name)
     is_qwen = _is_qwen(model_name)
     native_off = bool(getattr(ctx, 'no_think', False)) and not force_think
+    native_reasoning = not native_off or bool(is_gemma and (tools or json_schema))
 
     if is_gemma or is_qwen:
         # Let the model produce its own reasoning; a closed think block conflicts
@@ -588,7 +589,7 @@ def send_to_lm_studio(
             prefill = None
         elif is_gemma and native_off:
             prefill = GEMMA_NO_THINK_PREFILL
-        if not native_off:
+        if native_reasoning:
             max_tokens += 1024
 
     # Strip Gemma 4 <channel|> artifacts that may have been saved to history.
@@ -746,7 +747,7 @@ def send_to_lm_studio(
                 content = str(message.get("content", "") or "").strip()
 
                 from_reasoning = False
-                if not content and not is_oss and not ((is_qwen or is_gemma) and not native_off):
+                if not content and not is_oss and not ((is_qwen or is_gemma) and native_reasoning):
                     # Some Qwen finetunes inline the whole answer into reasoning_content
                     # with empty content; recover it there. NEVER for gpt-oss — its
                     # reasoning_content is the raw harmony ANALYSIS channel (chain of
@@ -758,7 +759,7 @@ def send_to_lm_studio(
                 _pre_strip_len = len(content or "")
                 content = strip_think_tags(content)
                 if (not content and not message.get("tool_calls") and
-                        (is_qwen or is_gemma) and not native_off and message.get("reasoning_content")):
+                        (is_qwen or is_gemma) and native_reasoning and message.get("reasoning_content")):
                     message["reasoning_only"] = True
                     message["reasoning_chars"] = len(message["reasoning_content"])
                 # The model spent the whole reply thinking and never wrote an
@@ -824,7 +825,7 @@ def send_to_lm_studio(
                         message["tool_calls"] = tc_list
                         content = remaining
 
-                if ((is_qwen or is_gemma) and not native_off and tools and
+                if ((is_qwen or is_gemma) and native_reasoning and tools and
                         tool_choice == "required" and not message.get("tool_calls")):
                     logger.warning("Required tool call missing; suppressing incomplete model output")
                     if ctx is not None:

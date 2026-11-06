@@ -756,6 +756,17 @@ def test_render_asked_with_no_tool_called_gets_a_corrective_round():
           (tools3.calls, len(llm3.calls)))
 
 
+def test_video_render_exhaustion_never_returns_a_storyboard_as_result():
+    wants = {"needs_tool": True, "wants": ["generate_video"], "ok": True}
+    llm = LLM([_asst("План анимации ниже.")] * 8)
+    tools = Tools()
+    asks = lambda q, t, **k: "MAKE a video clip" in q and "видео" in t
+    out = _run(_ctx(yes_no=asks), llm, tools,
+               {"messages": [], "user_input": "продолжи это видео"}, read=wants)
+    assert not tools.calls
+    assert 'не удалось' in out['final_answer'].lower()
+
+
 def test_an_edit_answered_with_an_offer_gets_a_corrective_round():
     # «Ленин в кибер-костюме в аду» from the ✏️ edit menu: «Хочешь, чтобы я попробовал нарисовать
     # эту битву заново?» and nothing made -- the «?» let it through (live 2026-10-21)

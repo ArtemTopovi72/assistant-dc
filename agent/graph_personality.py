@@ -1142,6 +1142,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     # Tools that failed this turn and left nothing behind. Cleared per tool on a
     # later success, so a retry that works does not keep the turn muzzled.
     failed_promises: set = set()
+    video_requested_without_tool = False
     verifier_escalated = False
     force_next_tool = None
     # Sticky edit mode after a refused whole-file rewrite (see _REWRITE_REFUSED).
@@ -1555,6 +1556,8 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             if (corrective_count < _MAX_CORRECTIVE and not tools_ran_now and draft
                     and _render and _own_read.get("ok")
                     and ("?" not in draft or _offers_instead(ctx, user_input, draft))):
+                if _render[0] == "generate_video":
+                    video_requested_without_tool = True
                 corrective_count += 1
                 logger.warning("Answer to a %s request with no tool called — corrective "
                                "round %d/%d", _render[0], corrective_count, _MAX_CORRECTIVE)
@@ -2323,6 +2326,11 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                                     user_input, original_input,
                                     failed_promises=failed_promises,
                                     verification_negative=verification_negative)
+    if (video_requested_without_tool and "generate_video" not in tools_called_this_turn
+            and "?" not in final_answer):
+        final_answer = ("Не удалось запустить создание видео, поэтому ролик не создан. Попробуй ещё раз."
+                        if re.search(r"[А-Яа-яЁё]", original_input or user_input or "")
+                        else "I couldn't start video generation, so no video was created. Please try again.")
     if (re.search(r"погугл[а-яё]*.*(?:озон|ozon)", str(original_input or user_input), re.I | re.S)
             and not state.get("research_shop_verified")):
         if state.get('research_shop_candidates'):
