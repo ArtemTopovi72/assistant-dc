@@ -564,10 +564,14 @@ def _speech_admitted(timeout=600, ctx=None):
         _SPEECH_GATE.release()
 
 
+_CARD_ADMISSIONS = threading.local()
+
+
 def _claim_card(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None) -> None:
     import gpu_admission
     admission = contextlib.nullcontext() if this_thread_holds_card() else gpu_admission.admit(ctx=progress_ctx or ctx)
-    with admission:
+    admission.__enter__()
+    try:
         with _SPEECH_GATE:
             _SPEECH_FREE.clear()
             status_ctx = progress_ctx or ctx
@@ -590,6 +594,13 @@ def _claim_card(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None
                         if not _excl_users:
                             _SPEECH_FREE.set()
                     raise
+    except BaseException:
+        admission.__exit__(*__import__('sys').exc_info())
+        raise
+    stack = getattr(_CARD_ADMISSIONS, 'stack', None)
+    if stack is None:
+        stack = _CARD_ADMISSIONS.stack = []
+    stack.append(admission)
 
 
 def _claim_card_locked(label: str, min_free_mb: int = None, ctx=None, progress_ctx=None) -> None:
@@ -681,11 +692,16 @@ def reset_card_state() -> None:
 
 
 def _release_card(ctx=None) -> None:
-    with _SPEECH_GATE:
-        with _LIFECYCLE_LOCK:
-            _release_card_locked(ctx)
-            if not _excl_users:
-                _SPEECH_FREE.set()
+    try:
+        with _SPEECH_GATE:
+            with _LIFECYCLE_LOCK:
+                _release_card_locked(ctx)
+                if not _excl_users:
+                    _SPEECH_FREE.set()
+    finally:
+        stack = getattr(_CARD_ADMISSIONS, 'stack', None)
+        if stack:
+            stack.pop().__exit__(None, None, None)
 
 
 def _release_card_locked(ctx=None) -> None:

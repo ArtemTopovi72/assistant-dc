@@ -76,8 +76,7 @@ def admit(ctx=None, timeout=600, client=None):
                 raise RuntimeError('GPU queue ticket lost')
             if position == 1:
                 break
-            import comfy_client
-            ahead = position - 1 + int(not comfy_client._SPEECH_FREE.is_set())
+            ahead = position - 1
             if ahead != last_ahead and ctx is not None:
                 import progress
                 try:

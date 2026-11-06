@@ -86,6 +86,49 @@ def test_speech_reports_work_only_after_gpu_is_acquired():
         assert not ctx._gpu_queue_waited
 
 
+def test_active_render_is_not_counted_twice(client):
+    import comfy_client
+    messages = []
+    ctx = SimpleNamespace(set_progress=lambda _a, _b, text: messages.append(text))
+    def waiter():
+        with queue.admit(ctx=ctx, timeout=3, client=client):
+            pass
+    try:
+        with queue.admit(timeout=3, client=client):
+            comfy_client._SPEECH_FREE.clear()
+            thread = threading.Thread(target=waiter)
+            thread.start()
+            deadline = time.monotonic() + 2
+            while not messages and time.monotonic() < deadline:
+                time.sleep(.01)
+            assert messages == ['In the GPU queue (1 ahead)']
+    finally:
+        comfy_client._SPEECH_FREE.set()
+    thread.join(3)
+    assert not thread.is_alive()
+
+
+def test_exclusive_render_keeps_admission_until_render_finishes(monkeypatch):
+    import contextlib
+    import comfy_client
+    active = []
+
+    @contextlib.contextmanager
+    def admission(**_kwargs):
+        active.append(True)
+        try:
+            yield
+        finally:
+            active.pop()
+
+    monkeypatch.setattr(queue, 'admit', admission)
+    monkeypatch.setattr(comfy_client, '_claim_card_locked', lambda *args: None)
+    monkeypatch.setattr(comfy_client, '_release_card_locked', lambda *args: None)
+    with comfy_client._gpu_slot(exclusive=True, label='test'):
+        assert active == [True]
+    assert not active
+
+
 def test_status_callback_error_does_not_block_gpu():
     import comfy_client
     def fail(_):
@@ -108,6 +151,7 @@ def test_card_claim_survives_status_callback_error(monkeypatch):
         comfy_client._claim_card('drawing', ctx=ctx)
         assert called == [True]
     finally:
+        comfy_client._release_card(ctx)
         comfy_client._SPEECH_FREE.set()
 
 
@@ -178,9 +222,9 @@ def test_nested_video_claim_does_not_wait_behind_teacher(client, monkeypatch):
         thread = threading.Thread(target=teacher)
         thread.start()
         deadline = time.monotonic() + 2
-        while client.llen(queue._QUEUE) == 0 and time.monotonic() < deadline:
+        while client.llen(queue._QUEUE) < 2 and time.monotonic() < deadline:
             time.sleep(.01)
-        assert client.llen(queue._QUEUE) == 1
+        assert client.llen(queue._QUEUE) == 2
         with comfy_client._gpu_slot(exclusive=True, ctx=ctx):
             assert not entered.is_set()
     thread.join(3)
