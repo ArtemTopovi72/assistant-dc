@@ -219,6 +219,9 @@ def _prompt_leak_guard(ctx, answer: str) -> str:
 
 _EN_WORDS = frozenset("the is are what how many much of and to you your it does "
                       "has have with which who why when where can this that there".split())
+# shortcut: only unambiguous short replies are translated; expand when other cases are verified.
+_SHORT_ENGLISH = frozenset("yes no one two three four five six seven eight nine ten "
+                           "eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty".split())
 
 
 def _english_words(text: str) -> int:
@@ -290,7 +293,9 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
     elif _foreign_ratio(original_input) < 0.3 or (_foreign_ratio(answer) > 0.1 and not mixed_english):
         return answer
     if len(answer.strip()) < 20:
-        return answer
+        words = re.findall(r"[A-Za-z]+", answer)
+        if len(words) != 1 or words[0].lower() not in _SHORT_ENGLISH or not re.fullmatch(r"\s*[A-Za-z]+[.!?]*\s*", answer):
+            return answer
     try:
         if not _latin_q:
             lang = "Ukrainian" if re.search(r"[іїєґІЇЄҐ]", original_input) else "Russian"
