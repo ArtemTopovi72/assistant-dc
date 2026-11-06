@@ -160,6 +160,23 @@ def test_frame_review_is_reported_as_uncertain(tmp_path):
     assert 'actions are NOT visible' not in result
 
 
+def test_reference_continuation_checks_its_finished_frames(tmp_path, monkeypatch):
+    still, src, tail = (tmp_path / n for n in ('source.png', 'src.mp4', 'tail.mp4'))
+    for path in (still, src, tail):
+        path.write_bytes(b'x')
+    rig = _Rig(tmp_path, herrgott_on=lambda: False, static_continuation=lambda *a: False,
+               join_continuation=lambda *a, **k: str(src))
+    seen = []
+    monkeypatch.setattr(handlers, '_check_actions', lambda ctx, path, parts, references: seen.append(references) or 'Inset changed')
+    ctx = rig.ctx(continue_src=str(src), continue_tail=str(tail),
+                  text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': REQUEST},
+                                    {'description': DRAFT, 'seconds': 5, 'use_current_images': True})
+    assert seen == [[str(still)]]
+    assert ctx.video_action_note == 'Inset changed'
+
+
 def test_large_background_change_is_reported_when_vision_says_none(tmp_path):
     still = tmp_path / 'source.png'
     still.write_bytes(b'source')
