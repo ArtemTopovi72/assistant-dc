@@ -1,5 +1,6 @@
 """One album style request must queue a redraw for each picture."""
 import os
+import pytest
 import sys
 from types import SimpleNamespace
 
@@ -78,14 +79,16 @@ def test_followup_restyle_queues_each_previous_album_photo(tmp_path):
     assert called[0][4:6] == (b'first', [b'second'])
 
 
-def test_bare_video_link_in_draw_menu_is_read_without_old_image(tmp_path, monkeypatch):
+@pytest.mark.parametrize('with_image', [False, True])
+def test_bare_video_link_in_draw_menu_keeps_selected_image(tmp_path, monkeypatch, with_image):
     monkeypatch.delenv('F5_TEST_RUN', raising=False)
     bot = make_bot(tmp_path)
     sess = bot._get_session(101)
     sess.menu, sess.pending_prefix = 'draw', 'generate an image of: '
     old = tmp_path / 'old.jpg'
     old.write_bytes(b'old')
-    sess.target_image = T._log_image(sess, str(old), src='user')
+    if with_image:
+        sess.target_image = T._log_image(sess, str(old), src='user')
     bot._store.put(sess)
     bot._get_ctx = lambda: SimpleNamespace()
     bot.reads = SimpleNamespace(**reads(read=lambda _: {}, yes=lambda *a: False, pick=lambda *a: None))
@@ -102,6 +105,6 @@ def test_bare_video_link_in_draw_menu_is_read_without_old_image(tmp_path, monkey
     url = 'https://youtu.be/K7QHpeEsNy4'
     bot._resolve_and_push(101, [{'type': 'text', 'text': url}])
     assert seen == [url]
-    assert tasks and not tasks[0].image_id and not tasks[0].image_path
+    assert tasks and bool(tasks[0].image_id) == with_image and not tasks[0].image_path
     assert not tasks[0].user_text.startswith('generate an image of:')
-    assert 'Кратко перескажи видео по ссылке:' in tasks[0].user_text
+    assert ('вместе с выбранной картинкой' if with_image else 'Кратко перескажи видео по ссылке:') in tasks[0].user_text

@@ -291,6 +291,8 @@ class ResolveMixin:
         lone_video = _tg_links.video_url(lone_text)
         standalone_video = bool(lone_video and lone_text == lone_video and
                                 input_prefix in ('', 'generate an image of: '))
+        selected_image = tg_bot._image_by_id(sess, sess.target_image) if standalone_video else None
+        selected_image = selected_image if selected_image and os.path.isfile(selected_image.get('path') or '') else None
         if standalone_video and input_prefix == 'generate an image of: ':
             input_prefix = ''
 
@@ -1208,8 +1210,13 @@ class ResolveMixin:
                 # twice in one message. Collapsing a repeat cannot lose meaning.
                 _req = self._as_request(item, raw)
                 if standalone_video:
-                    _req = (('Кратко перескажи видео по ссылке: ' if lang == 'ru' else
-                             'Summarize the video at this link: ') + lone_video)
+                    if selected_image:
+                        _req = (('Проанализируй видео вместе с выбранной картинкой; объясни связь, если она видна, '
+                                 'и не придумывай её: ') if lang == 'ru' else
+                                'Analyze the video with the selected picture; explain any visible connection without guessing: ') + lone_video
+                    else:
+                        _req = (('Кратко перескажи видео по ссылке: ' if lang == 'ru' else
+                                 'Summarize the video at this link: ') + lone_video)
                 if not texts or texts[-1] != _req:
                     texts.append(_req)
                 # A link is a page to read (tg_links). Off under tests: no
@@ -1845,7 +1852,7 @@ class ResolveMixin:
         # it resolved to one above, or the picture is simply the current one.
         # A DOCUMENT in the same message is the thing the instruction is about
         # («убери дубликаты» + DCIM.zip must not get «Какую картинку?»).
-        if not standalone_video and not any('_target_captured' in it for it in batch):
+        if not any('_target_captured' in it for it in batch):
             pressed_image_id = pressed_image_id or sess.target_image
         _queued_song = bool(_tg_songs.parse_song_payload(merged)[0])
         if (not standalone_video and not _queued_song and not img_bytes and not file_in_folder
