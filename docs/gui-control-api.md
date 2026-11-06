@@ -9,6 +9,7 @@ token from `runtime/debug_user/gui-control-token` and send it in the
 - `POST /gui/press` accepts JSON such as `{"action":"voice"}`.
 
 The current allowlist covers `voice`, `pause_speech`, `ultra_search`,
-`use_database`, and `stop`. Disabled controls return an error; browser-origin
+`use_database`, `stop`, and `restart`. Restart closes the app and interrupts
+active jobs, just like the window button. Disabled controls return an error; browser-origin
 requests and requests without the token are rejected. A timeout means the
 action's outcome is unknown, so check the app state before retrying.

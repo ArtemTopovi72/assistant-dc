@@ -231,7 +231,7 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
             self._gui_control = GuiControl({
                 'voice': self.voice_btn, 'pause_speech': self.pause_btn,
                 'ultra_search': self.ultra_btn, 'use_database': self.usedb_btn,
-                'stop': self.stop_btn,
+                'stop': self.stop_btn, 'restart': self.restart_btn,
             })
             if os.getenv('F5_TEST_RUN') != '1':
                 debug_user.register_gui_control(self._gui_control)

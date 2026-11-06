@@ -1,8 +1,6 @@
-import os
 import threading
 import time
-
-os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+import pytest
 
 from PyQt5.QtWidgets import QApplication, QPushButton
 from gui_control import GuiControl
@@ -94,7 +92,8 @@ def test_gui_endpoint_requires_token_and_rejects_browser_origin(monkeypatch):
         server.server_close()
 
 
-def test_http_press_activates_qt_button_while_window_is_hidden(monkeypatch):
+@pytest.mark.parametrize('action', ['voice', 'restart'])
+def test_http_press_activates_qt_button_while_window_is_hidden(monkeypatch, action):
     import json
     import urllib.request
     from http.server import ThreadingHTTPServer
@@ -103,7 +102,7 @@ def test_http_press_activates_qt_button_while_window_is_hidden(monkeypatch):
     button = QPushButton('Voice')
     hits = []
     button.clicked.connect(lambda: hits.append(True))
-    control = GuiControl({'voice': button})
+    control = GuiControl({action: button})
     monkeypatch.setattr(debug_user, '_GUI_CONTROL', control)
     monkeypatch.setattr(debug_user, '_GUI_TOKEN', 'secret')
     monkeypatch.setattr(debug_user, 'enabled', lambda: True)
@@ -114,7 +113,7 @@ def test_http_press_activates_qt_button_while_window_is_hidden(monkeypatch):
     def send():
         request = urllib.request.Request(
             f'http://127.0.0.1:{server.server_port}/gui/press',
-            data=json.dumps({'action': 'voice'}).encode(),
+            data=json.dumps({'action': action}).encode(),
             headers={'X-Assistant-Control': 'secret'}, method='POST')
         with urllib.request.urlopen(request, timeout=3) as result:
             response.append(json.load(result))

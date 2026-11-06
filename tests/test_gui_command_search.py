@@ -32,6 +32,14 @@ def window(tmp_path):
     win.close()
 
 
+def test_api_restart_uses_restart_button(window):
+    called = []
+    window.restart_btn.clicked.disconnect()
+    window.restart_btn.clicked.connect(lambda: called.append('restart'))
+    assert window._gui_control.press('restart') == {'ok': True}
+    assert called == ['restart']
+
+
 def visible_keys(nav):
     return [nav.item(i).data(Qt.UserRole) for i in range(nav.count())
             if nav.item(i).data(Qt.UserRole) and not nav.item(i).isHidden()]
