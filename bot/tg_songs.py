@@ -269,19 +269,28 @@ class SongsMixin:
         """«🎤 Спеть как есть» / «✍️ Написать новый текст» for ready words."""
         sess = self._get_session(chat_id)
         lang = self._lang(sess)
-        draft, sess.song_draft = getattr(sess, "song_draft", ""), ""
+        draft = getattr(sess, "song_draft", "")
         if sess.reg_state == "song_topic":
             sess.reg_state = ""
         self._store.put(sess)
         if not draft:
             self._send_text(chat_id, tg_bot._t("song_topic_prompt", lang))
             return
-        if data.endswith(":polish"):
-            self._run_cancellable(chat_id, tg_bot._t("lyr_working_improve", lang),
-                                  self._song_polish_then_sing, chat_id, lang, draft, lang=lang)
+        try:
+            if data.endswith(":polish"):
+                self._run_cancellable(chat_id, tg_bot._t("lyr_working_improve", lang),
+                                      self._song_polish_then_sing, chat_id, lang, draft, lang=lang)
+            else:
+                topic = (LYRICS_MARK + "\n" + draft) if data.endswith(":keep") else draft
+                self._start_song_generation(chat_id, topic, lang)
+        except Exception:
+            tg_bot.logger.exception("could not start song for chat %s", chat_id)
+            self._send_text(chat_id, tg_bot._t("song_error", lang))
             return
-        topic = (LYRICS_MARK + "\n" + draft) if data.endswith(":keep") else draft
-        self._start_song_generation(chat_id, topic, lang)
+        sess = self._get_session(chat_id)
+        if getattr(sess, "song_draft", "") == draft:
+            sess.song_draft = ""
+            self._store.put(sess)
 
     def _start_song_generation(self, chat_id: int, topic: str, lang: str,
                                duration: int = 0) -> None:

@@ -609,6 +609,25 @@ def test_ready_words_polish_then_sing(monkeypatch):
     assert bot.queued and "[lyrics]" in bot.queued[-1]["text"] and "закат" in bot.queued[-1]["text"]
 
 
+def test_sing_as_is_keeps_draft_if_queue_fails_then_allows_retry():
+    bot = _bot()
+    sess = bot._get_session(13)
+    sess.song_draft, sess.reg_state, sess.lang = LAZY, 'song_topic', 'ru'
+    bot._store.put(sess)
+    def fail(*args):
+        raise OSError('queue unavailable')
+    bot._enqueue_item = fail
+    bot._cb_song_lyrics(13, 'song_lyr:keep')
+    assert bot._get_session(13).song_draft == LAZY
+    def enqueue(cid, item):
+        assert bot._get_session(cid).song_draft == LAZY
+        bot.queued.append(item)
+    bot._enqueue_item = enqueue
+    bot._cb_song_lyrics(13, 'song_lyr:keep')
+    assert len(bot.queued) == 1 and LAZY in bot.queued[0]['text']
+    assert bot._get_session(13).song_draft == ''
+
+
 def test_the_ready_words_question_offers_keep_or_polish():
     import tg_strings
     assert tg_strings._MSG["song_polish_btn"]["ru"] == "✨ Доработать и спеть"
