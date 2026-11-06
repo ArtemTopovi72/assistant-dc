@@ -1565,7 +1565,6 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
         ctx.video_part = f"{i}/{len(parts)}"
-        ctx.video_part_request = part
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
         said = video_mod.quoted_lines(part[0])
         r, crashed = {}, False
@@ -1631,6 +1630,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
             break
         first_try, r = None, {}
         ctx.video_part = f"{i}/{len(parts)}"
+        ctx.video_part_request = part
         part_seconds = seconds[i - 1] if len(seconds) >= i else 0.0
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
         frame = os.path.join(work, f"seed_{i}.jpg")

@@ -212,7 +212,7 @@ def test_every_continuation_part_keeps_the_voice_and_the_first_picture(tmp_path)
     clip = tmp_path / "c.mp4"; clip.write_bytes(b"x")
 
     def gen(ctx, desc, **kw):
-        seen.append(kw)
+        seen.append({**kw, 'part_request': ctx.video_part_request})
         return {"path": str(clip)}
     eng = Over(V, generate_video=gen, motion_context_on=lambda: False, join_continuation=lambda a, b: str(clip),
                _adopt_output=lambda p, d: p, OUTPUT_DIR=str(tmp_path))
@@ -225,6 +225,7 @@ def test_every_continuation_part_keeps_the_voice_and_the_first_picture(tmp_path)
     assert len(seen) == 2
     assert all(k["audios"] == ["v.wav"] and k["images"][1:] == ["orig.jpg"] for k in seen)
     assert [k["seconds"] for k in seen] == [8.0, 9.0]
+    assert [k['part_request'] for k in seen] == ['p2', 'p3']
 
 
 def test_failed_later_video_part_is_marked_incomplete(tmp_path):
