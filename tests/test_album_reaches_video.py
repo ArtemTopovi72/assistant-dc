@@ -219,7 +219,7 @@ def test_approved_video_plan_restores_its_own_original_clip(tmp_path, voice_choi
         def __init__(self, ctx): self.ctx = ctx
         def invoke(self, base):
             seen.append((self.ctx.continue_tail, self.ctx.continue_src, self.ctx.voice_choice,
-                         self.ctx.last_image_path))
+                         self.ctx.last_image_path, self.ctx.video_plan_seconds))
             return {'final_answer': 'ok', 'messages': base.get('messages', [])}
     bot._get_ctx = lambda: FakeCtx()
     bot._get_graph = lambda: object()
@@ -239,6 +239,7 @@ def test_approved_video_plan_restores_its_own_original_clip(tmp_path, voice_choi
     sess = bot._get_session(101)
     sess.video_plan_request = 'Продолжи этот ролик'
     sess.video_plan_ok = ['говорит одну фразу']
+    sess.video_plan = [{'text': 'говорит одну фразу', 'sec': 8.0}]
     sess.video_plan_continuation = {'tail': str(tail), 'src': str(source), 'people': []}
     sess.video_plan_images = [str(seed)] if has_seed else []
     sess.target_image = T._log_image(sess, str(stale), src='user')
@@ -250,7 +251,7 @@ def test_approved_video_plan_restores_its_own_original_clip(tmp_path, voice_choi
     bot._backend.push(task)
     end = time.monotonic() + 15
     while time.monotonic() < end and not seen: time.sleep(0.1)
-    assert seen == [(str(tail), str(source), voice_choice or 'default', str(seed) if has_seed else None)]
+    assert seen == [(str(tail), str(source), voice_choice or 'default', str(seed) if has_seed else None, [8.0])]
 
 
 def test_video_plan_persists_and_clears_its_continuation(tmp_path):
