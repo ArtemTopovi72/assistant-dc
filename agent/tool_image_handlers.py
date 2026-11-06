@@ -1042,6 +1042,16 @@ _TRANSLIT = str.maketrans({"а": "a", "б": "b", "в": "v", "г": "g", "д": "d"
                            "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya"})
 
 
+def _preserve_existing_lettering(instructions: str, user_text: str) -> str:
+    if not re.search(r'(?:сохран\w*|остав\w*|preserv\w*|keep)\b.{0,120}(?:надпис\w*|текст\w*|вывеск\w*|text|lettering|sign)',
+                     user_text or '', re.I | re.S):
+        return instructions
+    pattern = r'''(?i)\b(?:(?:exact|existing|cyrillic|russian)\s+){0,3}(?:text|lettering|inscription)\s*[:=]?\s*["'«“]([^"'»”]+)["'»”]'''
+    def keep_or_replace(match):
+        return match.group(0) if match.group(1).casefold() in (user_text or '').casefold() else 'existing lettering'
+    return re.sub(pattern, keep_or_replace, instructions)
+
+
 def _keep_quoted_names(description: str, state) -> str:
     """A name the user quoted in Cyrillic («Колосок») is lettering, verbatim.
 
@@ -2827,6 +2837,10 @@ def _handle_redraw_image(ctx, state, args: dict) -> str:
                 decoded = ""
             if decoded:
                 instructions = decoded
+    else:
+        from prompt_guard import user_words
+        instructions = _preserve_existing_lettering(
+            instructions, user_words(str(state.get('user_input_original') or state.get('user_input') or '')))
     # 'enhance'/'upscale'/'restore'/'outpaint' have no engine left to run on: the
     # old model checkpoint behind them was removed from the product (Ideogram +
     # FireRed only) and its files deleted from disk. Every redraw goes through the same

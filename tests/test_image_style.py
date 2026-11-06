@@ -12,6 +12,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import image as I
 import image_style as IS
 import style_presets as SP
+
+
+def test_preserving_existing_lettering_does_not_invent_transcription():
+    import tool_image_handlers as H
+    generated = "Preserve the wooden sign with the exact Cyrillic text 'Утренний KOT'."
+    clean = H._preserve_existing_lettering(generated, 'Сохрани кота, чашку и надпись')
+    assert 'Утренний KOT' not in clean and 'existing lettering' in clean
+    explicit = 'Сохрани надпись «Утренний Кот»'
+    assert H._preserve_existing_lettering("Preserve text 'Утренний Кот'", explicit).endswith("'Утренний Кот'")
+    assert H._preserve_existing_lettering("Write text 'HELLO'", 'Напиши HELLO') == "Write text 'HELLO'"
 from fakes import Over, deps_ctx
 
 
