@@ -20,6 +20,12 @@ def test_video_description_and_retelling_do_not_guess_gender_from_appearance():
     assert 'reliable context' in tg_tasks.retell_system('ru', True)
 
 
+def test_absence_of_video_image_connection_is_limited_to_sampled_frames():
+    text = 'Прямой визуальной связи между ними нет: фото и видео разные.'
+    assert tg_tasks._qualify_video_link_reply(text, 'ru').startswith('По доступным кадрам: ')
+    assert tg_tasks._qualify_video_link_reply('Возможно, это общий мотив.', 'ru') == 'Возможно, это общий мотив.'
+
+
 def test_the_caption_line_exists_in_both_languages():
     assert "ИИ" in tg_bot._t("fwd_video_caption", "ru", caption="ИИ")
     assert "ИИ" in tg_bot._t("fwd_video_caption", "en", caption="ИИ")

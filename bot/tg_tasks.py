@@ -42,6 +42,13 @@ def _fresh_finished_video(ctx, since: float) -> bool:
         return False
 
 
+def _qualify_video_link_reply(text: str, lang: str) -> str:
+    if _re.search(r'(?:связ\w*[^.!?\n]{0,80}\bнет\b|\bнет\b[^.!?\n]{0,80}связ\w*|'
+                  r'\bno\s+(?:direct\s+|visual\s+)*connection\b)', text or '', _re.I):
+        return ('По доступным кадрам: ' if lang == 'ru' else 'From the sampled frames: ') + text
+    return text
+
+
 def _layout_candidates(sess, chat_id, recent):
     """Recover layout metadata from this chat's recent image archive."""
     entries = list(getattr(sess, 'image_log', None) or [])
@@ -2028,6 +2035,8 @@ class TaskRunnerMixin:
         # An empty reply is an internal sentinel (voice must not be synthesised
         # for it) and is never shown as a debug placeholder.
         reply = (final.get("final_answer") or "").strip()
+        if '[video_link_context]' in task.user_text:
+            reply = _qualify_video_link_reply(reply, lang)
         empty_reply = not reply
         from graph_finalize import is_failure_placeholder
         reply_is_failure = is_failure_placeholder(reply)
@@ -2076,7 +2085,8 @@ class TaskRunnerMixin:
                 # Edit buttons under a bare comment read as a mistake: ask first.
                 # ...but not after the answer to a question about the picture
                 # («сколько тут итого?»): the answer was the point, the offer is noise.
-                if reply and not reply_is_failure and not self._asked_a_question(task.user_text, ctx=ctx):
+                if (reply and not reply_is_failure and '[video_link_context]' not in task.user_text
+                        and not self._asked_a_question(task.user_text, ctx=ctx)):
                     reply = reply.rstrip() + "\n\n" + tg_bot._t("img_offer", lang)
         try:
             if voice_turn and reply and not empty_reply:
