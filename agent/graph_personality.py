@@ -416,11 +416,12 @@ def _turn_inputs(ctx, state, text: str) -> tuple:
 
 
 def _guard_failed_ozon_reviews(answer, calls, ctx, user_text=''):
-    if 'ozon_reviews!' not in calls or 'ozon_reviews' in calls:
+    asked = bool(re.search(r'отзыв|reviews?', user_text, re.I))
+    if 'ozon_reviews' in calls or not ('ozon_reviews!' in calls or (asked and 'ozon_product' in calls)):
         return answer
     ru = not user_text or bool(re.search(r'[А-Яа-яЁё]', user_text))
-    warning = ('Не удалось загрузить отзывы с Озона. Нельзя сделать вывод, что их нет.' if ru else
-               'Ozon reviews could not be loaded. This does not mean there are no reviews.')
+    warning = ('Не удалось проверить тексты отзывов на Озоне. Нельзя сделать вывод, что их нет.' if ru else
+               'Ozon reviews could not be checked. This does not mean there are no reviews.')
     products = getattr(ctx, 'turn_products', None) or []
     if len(products) != 1:
         return warning

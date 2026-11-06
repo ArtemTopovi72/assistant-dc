@@ -24,6 +24,8 @@ def test_failed_review_lookup_cannot_be_reported_as_no_reviews():
     assert 'не удалось' in answer.lower() and 'Отзывов на данный товар нет' not in answer
     assert 'https://www.ozon.ru/product/item-123/' in answer and '5 000' in answer
     assert personality._guard_failed_ozon_reviews('Отзывы есть.', ['ozon_reviews!', 'ozon_reviews'], ctx) == 'Отзывы есть.'
+    skipped = personality._guard_failed_ozon_reviews('Отзывов нет.', ['ozon_product'], ctx, 'Проверь отзывы')
+    assert 'не удалось' in skipped.lower() and 'Отзывов нет.' not in skipped
 
 
 def test_intent_routes_many_links_to_shop_before_same_seller():
