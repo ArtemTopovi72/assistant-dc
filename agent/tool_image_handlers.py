@@ -1565,6 +1565,7 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
         if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
             break
         ctx.video_part = f"{i}/{len(parts)}"
+        ctx.video_part_request = part
         ctx.set_stage(f"Generating a video ({i}/{len(parts)})")
         said = video_mod.quoted_lines(part[0])
         r, crashed = {}, False
@@ -1923,6 +1924,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     ctx.video_plan_warnings = []
     ctx.video_parts_incomplete = False
     ctx.video_duration_short = False
+    ctx.video_part_request = ""
     ctx.video_text_required = ctx.video_text_source = False
     ctx.video_untrusted_ocr = ()
 
@@ -2485,13 +2487,16 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # renders below then run with the card held (and the model out) start to finish.
     prepped = []
     if chain_id and len(parts) > 1:
+        ctx.video_part_request = parts[0]
         prepped = [video_mod.prepare_prompt(ctx, description, images=images, seconds=secs[0] if secs else 0.0,
                                            mode="i2va" if images and chain_idx <= 1 else "t2va")]
         voices = video_mod.voices_of(prepped[0][0])
         voices = f"Voices so far, the same if they speak again: {voices} " if voices else ""
-        prepped += [video_mod.prepare_prompt(
-            ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, voices + " ".join(parts[:i])),
-            seconds=secs[i] if i < len(secs) else 0.0, mode="t2va") for i, p in enumerate(parts[1:], start=1)]
+        for i, p in enumerate(parts[1:], start=1):
+            ctx.video_part_request = p
+            prepped.append(video_mod.prepare_prompt(
+                ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, voices + " ".join(parts[:i])),
+                seconds=secs[i] if i < len(secs) else 0.0, mode="t2va"))
     # With voices the first picture rides every part too: each part starts from the last
     # frame of the one before, and the face drifted a little further every time.
     # ...and so do all of them: with two heroes on two pictures, parts 2+ saw only the first
@@ -2526,6 +2531,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     with hold:
         # what generate_video's own stages say too (video._video_stage)
         ctx.video_part = f"1/{len(parts)}" if len(parts) > 1 else ""
+        ctx.video_part_request = parts[0] if len(parts) > 1 else ""
         ctx.set_stage(f"Generating a video ({ctx.video_part})" if ctx.video_part else "Generating a video")
         first_prompt = prepped[0][0] if prepped else description
         # A static shot opening a chain on a photo: H3 sometimes covers it with drawn flowers
@@ -2685,6 +2691,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             return "[TOOL ERROR] Could not apply the original speaker's voice to every segment; no finished video was delivered."
         result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
     ctx.video_part = ""
+    ctx.video_part_request = ""
 
     if head and audios and path:
         ctx.set_stage("Putting the voice on")

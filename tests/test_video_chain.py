@@ -217,6 +217,19 @@ def test_continuation_reads_requested_duration_when_tool_omits_it(tmp_path, monk
     assert not rig.renders()
 
 
+def test_each_prepared_chain_part_has_its_own_action_scope(tmp_path):
+    seen, drafts = [], []
+    def prepare(ctx, description, **kw):
+        seen.append(ctx.video_part_request)
+        drafts.append(description)
+        return description, 6.0
+    parts = ['He waves.', 'He raises a cup.']
+    rig, ctx, _ = _continued(tmp_path, rig_kw={'prepare_prompt': prepare}, video_plan_parts=parts)
+    H._handle_generate_video(ctx, {}, {'description': LONG})
+    assert seen == parts
+    assert 'raises a cup' not in drafts[0]
+
+
 def test_the_joins_of_a_chain_are_looked_at_once_after_the_card_is_free(tmp_path):
     # The joins check lived only on the old join path; the live chain path never ran it.
     rig = _Rig(tmp_path)

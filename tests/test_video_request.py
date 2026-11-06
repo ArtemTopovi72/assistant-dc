@@ -99,6 +99,17 @@ def test_context_ir_sees_authoritative_request_separately_from_tool_draft():
     assert DRAFT in seen["user_text"]
 
 
+def test_context_ir_uses_only_the_current_approved_part():
+    seen = {}
+    ctx = SimpleNamespace(video_request='He waves. Then raises a cup.',
+                          video_part_request='He waves.',
+                          vision_model=lambda ctx, **kw: seen.update(kw) or '')
+    video.to_context_ir(ctx, 'Animate: He waves.', mode='ref2va', seconds=5,
+                        images=['source.png'], n_videos=1)
+    assert 'He waves.' in seen['user_text']
+    assert 'raises a cup' not in seen['user_text']
+
+
 def test_video_writer_does_not_invent_an_image_or_forbid_requested_camera_motion():
     seen = {}
     good = ("integrated_multimodal_description: [Shot 1] A balloon sways.\n\n"

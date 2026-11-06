@@ -2049,7 +2049,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
     back without the required fields -- never a half-formed prompt.
     """
     ref = mode == "ref2va"
-    request = getattr(ctx, "video_request", "") or description
+    request = getattr(ctx, "video_part_request", "") or getattr(ctx, "video_request", "") or description
     speech_source = description
     if request != description:
         spoken = " ".join(quoted_lines(request)) + " " + str(getattr(ctx, "video_speech", "") or "")
@@ -2178,12 +2178,12 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                "any requested camera movement develops continuously, without a cut or jump.\n"
                if images else "") +
             ("\nAuthoritative current user request or approved plan:\n"
-             + str(getattr(ctx, "video_request", ""))
+             + str(request)
              + "\nThe shot draft below is subordinate to this request. Correct any conflicting "
                "appearance, action, camera or sound detail using this request and the attached source images. "
                "For one part of a longer request, keep the draft's current-part scope: never import "
                "actions or spoken lines assigned to other parts.\n"
-             if getattr(ctx, "video_request", "") else "") +
+             if request != description else "") +
             "\nRequest / shot draft:\n" + _SCENE_NOTE_RE.sub("", description) + _shown_before(description))
     def ask(user):
         if images:
