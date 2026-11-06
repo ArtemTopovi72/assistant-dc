@@ -51,6 +51,20 @@ def test_below_budget_nothing_changes():
     assert C.manage(Ctx(), msgs) is msgs          # identity: prefix untouched, KV reusable
 
 
+def test_compaction_does_not_repeat_failed_summarizer(monkeypatch):
+    calls = []
+    monkeypatch.setattr(C, '_llm_delta', lambda ctx, state, text: calls.append(text) or None)
+    monkeypatch.setattr(C, '_span_kind', lambda *a, **k: 'chat')
+    msgs = [SYS] + sum((turn(n, tool_len=20) for n in range(1, 11)), [])
+    out = C.manage(Ctx(), msgs, force=True)
+    assert len(calls) == 1
+    assert 'шаг 1' in out[1]['content'] and 'шаг 7' in out[1]['content']
+    assert 'шаг 10' in str(out)
+    import re
+    aid = re.search(r"recall_context\(id='([^']+)'\)", out[1]['content']).group(1)
+    assert 'шаг 1' in C.recall(aid) and 'шаг 8' in C.recall(aid)
+
+
 def test_masking_keeps_pairs_and_paths_and_recall():
     msgs = [SYS] + turn(1) + turn(2) + turn(3) + turn(4)
     os.environ["CONTEXT_COMPACT_AT"] = "9"        # masking only

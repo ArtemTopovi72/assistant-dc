@@ -531,10 +531,13 @@ def manage(ctx, messages: List[dict], *, query: str = "", force: bool = False) -
             now = extract_now(span, ctx=ctx)
             _add(state, "artifacts", now["artifacts"])
             _add(state, "prefs", now["prefs"])
+            summarizer_available = True
             for chunk in _turn_chunks(span):
                 ck_text = _render_span(chunk)
-                ck_kind = _span_kind(chunk, ck_text, ctx=ctx)
-                delta = _llm_delta(ctx, state, ck_text)
+                ck_kind = _span_kind(chunk, ck_text, ctx=ctx) if summarizer_available else 'chat'
+                delta = _llm_delta(ctx, state, ck_text) if summarizer_available else None
+                if delta is None:
+                    summarizer_available = False
                 if delta:
                     for key in ("add_decisions", "add_open"):
                         delta[key] = _tag(ck_kind, delta.get(key))
