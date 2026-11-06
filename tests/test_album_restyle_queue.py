@@ -109,3 +109,16 @@ def test_bare_video_link_in_draw_menu_keeps_selected_image(tmp_path, monkeypatch
     assert tasks and bool(tasks[0].image_id) == (image_source != 'none') and not tasks[0].image_path
     assert not tasks[0].user_text.startswith('generate an image of:')
     assert ('вместе с выбранной картинкой' if image_source != 'none' else 'Кратко перескажи видео по ссылке:') in tasks[0].user_text
+
+
+def test_video_link_in_photo_caption_is_read(tmp_path, monkeypatch):
+    monkeypatch.delenv('F5_TEST_RUN', raising=False)
+    bot = make_bot(tmp_path)
+    bot._get_ctx = lambda: SimpleNamespace()
+    bot.reads = SimpleNamespace(**reads(read=lambda _: {}, yes=lambda *a: False, pick=lambda *a: None))
+    bot._dl_bytes = lambda _: b'photo'
+    seen = []
+    bot._read_links = lambda ctx, sess, chat, user, text, scaffold: seen.append(text) or True
+    url = 'https://youtu.be/K7QHpeEsNy4'
+    bot._resolve_and_push(101, [{'type': 'photo', 'file_id': 'p', 'caption': url}])
+    assert seen == [url]

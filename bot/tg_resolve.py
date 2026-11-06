@@ -287,7 +287,9 @@ class ResolveMixin:
         input_context = batch[0].get('_input_context')
         input_prefix = input_context['prefix'] if input_context else sess.pending_prefix
         input_menu = input_context['menu'] if input_context else sess.menu
-        lone_text = (batch[0].get('text') or '').strip() if len(batch) == 1 and batch[0].get('type') == 'text' else ''
+        lone_text = ''
+        if len(batch) == 1 and batch[0].get('type') in ('text', 'photo'):
+            lone_text = (batch[0].get('text' if batch[0]['type'] == 'text' else 'caption') or '').strip()
         lone_video = _tg_links.video_url(lone_text)
         standalone_video = bool(lone_video and lone_text == lone_video and
                                 input_prefix in ('', 'generate an image of: '))
@@ -1425,7 +1427,15 @@ class ResolveMixin:
                     _album_extra_bytes.append(data)
                 elif data: img_bytes = data; _photo_upload = True
                 cap = (item.get("caption") or "").strip()
-                if cap: texts.append(cap)
+                if cap:
+                    video_link = _tg_links.video_url(cap)
+                    texts.append(('Проанализируй видео вместе с этой картинкой и объясни их связь, если она видна: '
+                                  + cap) if video_link and cap == video_link and lang == 'ru' else
+                                 ('Analyze the video with this picture and explain any visible connection: '
+                                  + cap) if video_link and cap == video_link else cap)
+                    if video_link and not sess.reg_state and not os.getenv('F5_TEST_RUN'):
+                        if self._read_links(ctx, sess, chat_id, user, cap, scaffold):
+                            return
                 # no auto-analyze: vision_agent_node will describe the image;
                 # the model acknowledges receipt and waits for user instructions.
                 # Unless 📷 Analyze Photo was pressed first — that arms an
