@@ -2082,6 +2082,10 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "(cartoon, anime, drawn, photoreal) and keep it through the clip: never write "
             "'Live-action', 'photorealistic' or 'real people' over a drawn or animated "
             "frame, never morph the style mid-clip.\n" if images else "") +
+            ("COMPOSITION -- Preserve the spatial relationship of all visible layers in "
+             "<Picture 1>. If a person appears inside an inset or screen, keep them inside "
+             "that same inset; do not place them physically in its surrounding background. "
+             "If no inset exists, do not invent one.\n" if images and n_videos else "") +
             "ACTION RULES -- ONE action arc per shot: the "
             "subject starts one action, it develops, one result -- do not stack several "
             "independent actions (strains AND tenses AND furrows AND something lands AND "

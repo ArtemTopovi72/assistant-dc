@@ -74,6 +74,16 @@ def test_video_writer_does_not_invent_an_image_or_forbid_requested_camera_motion
     assert "The shot keeps <Picture 1>'s framing from start to end" not in seen['user_text']
 
 
+def test_video_writer_preserves_inset_as_a_separate_visual_layer():
+    seen = {}
+    ctx = SimpleNamespace(video_request='Continue this scene without changing the layout.',
+                          vision_model=lambda ctx, **kw: seen.update(kw) or '')
+    video.to_context_ir(ctx, 'Continue the shot.', mode='ref2va', seconds=5,
+                        images=['source.png'], n_videos=1)
+    assert 'inset' in seen['user_text'].lower()
+    assert 'background' in seen['user_text'].lower()
+
+
 def test_camera_instruction_comes_from_current_request_rather_than_old_draft():
     asked = []
     ctx = SimpleNamespace(
