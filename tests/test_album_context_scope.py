@@ -36,3 +36,5 @@ def test_video_and_picture_keep_current_evidence_without_old_chat_memory():
     assert 'A cat on a sofa' in text and 'a cat jumps' in text
     assert 'Old backpack recommendation' not in text
     assert 'do not resume earlier tasks or edit the image' in text
+    assert 'not visible in the available frames' in text
+    assert 'interpretation, not a fact' in text

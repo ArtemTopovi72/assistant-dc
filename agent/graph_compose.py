@@ -360,7 +360,10 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
     # would wrongly redraw the old one).
     if video_link:
         parts.append("[Answer only from the video observations and the supplied picture. "
-                     "Compare them if asked; do not resume earlier tasks or edit the image.]")
+                     "Compare them if asked; do not resume earlier tasks or edit the image. "
+                     "Video frames are samples: if a visual connection is not established, say it is "
+                     "not visible in the available frames, not that it definitely does not exist. "
+                     "Label a possible thematic connection as an interpretation, not a fact.]")
     elif state.get("picture_question"):
         parts.append(
             "[The user asks a QUESTION about the picture. Answer it in words from the "
