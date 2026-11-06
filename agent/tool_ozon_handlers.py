@@ -597,6 +597,8 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
             logger.warning("ozon_shop same-seller check failed: %s", exc)
             results[0]["same_offer_unchecked"] = True
     chosen = [r["choice"] for r in results if r.get("choice")]
+    ctx._ozon_shop_review_checked = bool(chosen and all(
+        c.get("review_texts") is not None for c in chosen))
     if _re.search(r"погугл[а-яё]*.*(?:озон|ozon)", original, _re.I | _re.S):
         model_words = normalize(selected_model).split()
         results = [row for row in results if row.get("choice") and all(
