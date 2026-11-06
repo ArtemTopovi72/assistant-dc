@@ -961,6 +961,7 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = ""
         if improved:
             # the user reads what is left: rule findings in their language, by the caller
             best = {"text": cur, "score": total, "sense": sense, "quality": quality,
+                    "sense_valid": assessment["valid"],
                     "critical": critical, "critical_problems": assessment["critical_problems"], "left": problems,
                     "left_rules": rule["issues"], "left_sense": probs}
         if not assessment["valid"] or not problems or r == rounds:
@@ -992,7 +993,7 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = ""
             break                                   # a broken rewrite: keep what we have
         cur = new
     if best is None:                                # ⛔ before the first check
-        best = {"text": text.strip(), "score": 0.0, "sense": 0, "left": [], "left_rules": [], "left_sense": []}
+        best = {"text": text.strip(), "score": 0.0, "sense": 0, "sense_valid": False, "left": [], "left_rules": [], "left_sense": []}
     best.update(rounds=done, original=text.strip())
     return best
 

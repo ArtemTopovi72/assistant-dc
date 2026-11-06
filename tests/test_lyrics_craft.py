@@ -750,6 +750,17 @@ def test_an_unchanged_lyric_with_problems_left_is_not_called_good(monkeypatch):
     assert "Править нечего" not in head and "не вышла лучше" in head
 
 
+def test_failed_lyric_review_does_not_report_a_numeric_score_or_fake_attempt(monkeypatch):
+    monkeypatch.setattr(L, '_review', lambda *a, **k: {
+        'valid': False, 'score': 0, 'critical': 0, 'critical_problems': ['Не удалось проверить смысл'],
+        'problems': ['Не удалось проверить смысл']})
+    result = L.polish(_C(), LAZY)
+    bot = _bot()
+    bot._lyrics_show(5, 'ru', 'improve', result, [])
+    head = bot.sent[0][0].lower()
+    assert '/10' not in head and 'ни одна переделка' not in head and 'не удалось' in head
+
+
 def test_back_under_a_result_keeps_it_and_removes_only_the_buttons():
     """↩ Назад under «🎵 Спеть / ✨ Ещё» deleted the song text."""
     import tg_bot

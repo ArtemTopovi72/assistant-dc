@@ -325,7 +325,7 @@ _MSG: dict[str, dict[str, str]] = {
     "song_keep_btn": {"en": "🎤 Sing as is", "ru": "🎤 Спеть как есть"},
     "song_polish_btn": {"en": "✨ Polish and sing", "ru": "✨ Доработать и спеть"},
     "song_new_btn": {"en": "✍️ Write new words", "ru": "✍️ Написать новый текст"},
-    "song_polish_going": {"en": "🎵 Singing the polished lyric…", "ru": "🎵 Пою доработанный текст…"},
+    "song_polish_going": {"en": "🎵 Singing the lyric…", "ru": "🎵 Пою текст…"},
     "anv_offer": {"en": "🎙 Voices for the clip ({n} speaking): send your own samples — voice notes "
                         "or round videos, one per person, left to right — or go with the default voices.",
                   "ru": "🎙 Голоса для ролика (говорящих: {n}). Пришли свои — голосовые или кружки, "
@@ -1209,6 +1209,10 @@ _MSG: dict[str, dict[str, str]] = {
                          "ru": "✨ <b>Ваш улучшенный текст</b> — оценка {score}/10, проходов: {rounds}. Что поправил:"},
     "lyr_head_same":    {"en": "✨ <b>The lyric</b> — score {score}/10 after {rounds} pass(es).",
                          "ru": "✨ <b>Текст</b> — оценка {score}/10, проходов: {rounds}."},
+    "lyr_head_unrated": {"en": "✨ <b>The lyric</b> — the meaning check could not be completed.",
+                         "ru": "✨ <b>Текст</b> — не удалось завершить проверку смысла."},
+    "lyr_review_failed_unchanged": {"en": "The lyric is unchanged because the check did not finish.",
+                                     "ru": "Текст оставил как есть, потому что проверка не завершилась."},
     "lyr_head_write":   {"en": "✍️ <b>Lyric written</b> — score {score}/10 after {rounds} pass(es) of checks. The text is in the next message.",
                          "ru": "✍️ <b>Текст готов</b> — оценка {score}/10, проходов проверки: {rounds}. Сам текст — следующим сообщением."},
     "lyr_already_good": {"en": "Nothing to fix: rhymes, rhythm and sense hold up.",

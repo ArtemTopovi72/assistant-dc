@@ -69,13 +69,14 @@ class LyricsMixin:
         self._store.put(sess)
         same = mode == "improve" and res["text"] == res["original"]
         # «Ваш улучшенный текст… Что поправил:» over «nothing came out better» read as a lie
-        head = tg_bot._t("lyr_head_same" if same else "lyr_head_" + mode, lang,
+        rated = res.get("sense_valid", True)
+        head = tg_bot._t(("lyr_head_same" if same else "lyr_head_" + mode) if rated else "lyr_head_unrated", lang,
                          score=f"{res['score']:.1f}", rounds=res["rounds"])
         body = []
         left = [LC.describe(i, lang) for i in res.get("left_rules", [])] + list(res.get("left_sense", []))
         if same:
             # «Править нечего» above a list of what is left read as a lie
-            body.append(tg_bot._t("lyr_not_better" if left else "lyr_already_good", lang))
+            body.append(tg_bot._t(("lyr_not_better" if left else "lyr_already_good") if rated else "lyr_review_failed_unchanged", lang))
         body += [html.escape(n) for n in notes]
         if left:
             body.append(tg_bot._t("lyr_left", lang) + "\n" + "\n".join(
