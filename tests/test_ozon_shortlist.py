@@ -12,9 +12,18 @@ import ozon_shopper
 import intent
 import tool_ozon_handlers as handler
 import tools as agent_tools
+import graph_personality as personality
 
 
 URLS = [f"https://ozon.ru/t/card{i}" for i in range(7)]
+
+
+def test_failed_review_lookup_cannot_be_reported_as_no_reviews():
+    ctx = SimpleNamespace(turn_products=[{'name': 'Рюкзак', 'url': 'https://www.ozon.ru/product/item-123/', 'price': 5000}])
+    answer = personality._guard_failed_ozon_reviews('Отзывов на данный товар нет.', ['ozon_product', 'ozon_reviews!'], ctx)
+    assert 'не удалось' in answer.lower() and 'Отзывов на данный товар нет' not in answer
+    assert 'https://www.ozon.ru/product/item-123/' in answer and '5 000' in answer
+    assert personality._guard_failed_ozon_reviews('Отзывы есть.', ['ozon_reviews!', 'ozon_reviews'], ctx) == 'Отзывы есть.'
 
 
 def test_intent_routes_many_links_to_shop_before_same_seller():

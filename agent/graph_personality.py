@@ -415,6 +415,27 @@ def _turn_inputs(ctx, state, text: str) -> tuple:
     return t, _previous_reply(state), att
 
 
+def _guard_failed_ozon_reviews(answer, calls, ctx, user_text=''):
+    if 'ozon_reviews!' not in calls or 'ozon_reviews' in calls:
+        return answer
+    ru = not user_text or bool(re.search(r'[А-Яа-яЁё]', user_text))
+    warning = ('Не удалось загрузить отзывы с Озона. Нельзя сделать вывод, что их нет.' if ru else
+               'Ozon reviews could not be loaded. This does not mean there are no reviews.')
+    products = getattr(ctx, 'turn_products', None) or []
+    if len(products) != 1:
+        return warning
+    product = products[0]
+    name = re.sub(r'[\[\]()*`\r\n]', '', str(product.get('name') or 'Товар'))
+    url = str(product.get('url') or '')
+    if not re.fullmatch(r'https://(?:www\.)?ozon\.ru/product/[A-Za-z0-9%._~/\-]+', url):
+        return warning
+    result = f"{'Карточка товара' if ru else 'Product'}: [{name}]({url})"
+    price = product.get('price')
+    if isinstance(price, (int, float)) and not isinstance(price, bool) and price > 0:
+        result += f"\n{'Цена по карточке' if ru else 'Price on the listing'}: {price:,.0f} ₽".replace(',', ' ')
+    return result + '\n' + warning
+
+
 def _unverified_research_answer(state, sources=()) -> str:
     rows = state.get('research_shop_candidates') or []
     from tool_ozon_handlers import _verified_links_only
@@ -2338,6 +2359,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
                                     user_input, original_input,
                                     failed_promises=failed_promises,
                                     verification_negative=verification_negative)
+    final_answer = _guard_failed_ozon_reviews(final_answer, audit_calls, ctx, original_input or user_input)
     if (video_requested_without_tool and "generate_video" not in tools_called_this_turn
             and "?" not in final_answer):
         final_answer = ("Не удалось запустить создание видео, поэтому ролик не создан. Попробуй ещё раз."
