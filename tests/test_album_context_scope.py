@@ -37,4 +37,5 @@ def test_video_and_picture_keep_current_evidence_without_old_chat_memory():
     assert 'Old backpack recommendation' not in text
     assert 'do not resume earlier tasks or edit the image' in text
     assert 'not visible in the available frames' in text
-    assert 'interpretation, not a fact' in text
+    assert 'as an interpretation' in text
+    assert 'Do not guess that the person is the author' in text
