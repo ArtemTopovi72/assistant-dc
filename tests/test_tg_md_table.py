@@ -6,6 +6,10 @@ import tg_markup as M
 h = M._md_to_html("Вот:\n\n| A | Bb |\n| --- | --- |\n| 1 | **x** |\n| 22 | y |\nконец")
 assert "<pre>" in h and "---" not in h and "|" not in h and "**" not in h, h
 assert "22  y" in h, h
+wide = M._md_to_html('| Тип | Описание | Пример |\n| --- | --- | --- |\n| Последовательно | ' + 'Длинное объяснение ' * 8 + ' | Две детали |')
+assert '<pre>' not in wide and 'Последовательно' in wide and 'Длинное объяснение' in wide and 'Две детали' in wide, wide
+wide_link = M._md_to_html('| Имя | Описание |\n| --- | --- |\n| [Товар](https://example.com/p) | ' + 'Подробности ' * 12 + ' |')
+assert '<a href="https://example.com/p">Товар</a>' in wide_link, wide_link
 # a table already inside a code fence is left as the author wrote it
 h2 = M._md_to_html("```\n| a | b |\n| - | - |\n```")
 assert "| a | b |" in h2, h2

@@ -56,9 +56,15 @@ def _md_tables_to_fences(text: str) -> str:
             n = max(len(r) for r in rows)
             rows = [r + [""] * (n - len(r)) for r in rows]
             w = [max(len(r[k]) for r in rows) for k in range(n)]
-            out.append("```")
-            out += ["  ".join(r[k].ljust(w[k]) for k in range(n)).rstrip() for r in rows]
-            out.append("```")
+            if len(rows) > 1 and sum(w) + 2 * (n - 1) > 80:
+                for row in rows[1:]:
+                    out.append(f"**{row[0]}**" if row[0] else "•")
+                    out.extend(f"• {rows[0][k]}: {row[k]}" for k in range(1, n) if row[k])
+                    out.append("")
+            else:
+                out.append("```")
+                out += ["  ".join(r[k].ljust(w[k]) for k in range(n)).rstrip() for r in rows]
+                out.append("```")
             i = j
         else:
             out.append(lines[i])
