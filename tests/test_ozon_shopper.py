@@ -181,6 +181,13 @@ def test_web_review_query_keeps_exact_model_not_capacity_or_form_factor():
     assert S._model_name("JBL Go 4") == "JBL Go 4"
 
 
+def test_short_product_name_does_not_cut_an_article_in_half():
+    full = 'Рюкзак Peak Design The Everyday Backpack Zip 20L V2.0 Eclipse (BEDBZ-20-EP-3)'
+    short = S._short(full)
+    assert len(short) <= 70 and short.endswith('…')
+    assert '(BEDBZ' not in short
+
+
 def test_shopper_does_not_publish_family_speed_or_invent_review_opinions():
     assert S._review_evidence([{"score": 5, "comment": "Работает нормально"}]) == \
         "В отзывах карточки: «Работает нормально»"

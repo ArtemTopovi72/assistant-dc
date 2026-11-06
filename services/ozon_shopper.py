@@ -669,7 +669,13 @@ def _card_line(d: dict) -> str:
 
 def _short(name) -> str:
     """«Рюкзак мужской из натуральной кожи BOPAI, городской для ноутбука, 15,6…» -> up to the first comma."""
-    return str(name or "товар").split(",")[0].strip()[:70]
+    name = str(name or "товар").split(",")[0].strip()
+    if len(name) <= 70:
+        return name
+    head = name[:69].rsplit(' ', 1)[0].rstrip()
+    if '(' in head and ')' not in head[head.rfind('('):]:
+        head = head[:head.rfind('(')].rstrip()
+    return (head or name[:69]) + '…'
 
 
 def _reviews_word(n) -> str:
