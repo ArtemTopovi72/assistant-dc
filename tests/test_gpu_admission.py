@@ -129,6 +129,42 @@ def test_exclusive_render_keeps_admission_until_render_finishes(monkeypatch):
     assert not active
 
 
+def test_exclusive_render_blocks_a_different_process(client, monkeypatch):
+    import subprocess
+    import sys
+    import comfy_client
+    original = queue.admit
+    monkeypatch.setattr(queue, 'admit', lambda ctx=None, timeout=600: original(ctx=ctx, timeout=timeout, client=client))
+    monkeypatch.setattr(comfy_client, '_claim_card_locked', lambda *args: None)
+    monkeypatch.setattr(comfy_client, '_release_card_locked', lambda *args: None)
+    script = """import sys, redis
+import gpu_admission as q
+q._QUEUE, q._PRESENCE = sys.argv[1:3]
+with q.admit(timeout=8, client=redis.from_url(sys.argv[3])):
+    print('admitted', flush=True)
+"""
+    env = dict(os.environ)
+    env['PYTHONPATH'] = os.pathsep.join([os.path.join(os.path.dirname(__file__), '..', 'core'), env.get('PYTHONPATH', '')])
+    url = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
+    child = None
+    try:
+        with comfy_client._gpu_slot(exclusive=True, label='test'):
+            child = subprocess.Popen([sys.executable, '-c', script, queue._QUEUE, queue._PRESENCE, url],
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+            deadline = time.monotonic() + 5
+            while client.llen(queue._QUEUE) < 2 and time.monotonic() < deadline:
+                time.sleep(.02)
+            assert client.llen(queue._QUEUE) == 2
+            assert child.poll() is None
+        stdout, stderr = child.communicate(timeout=10)
+        assert child.returncode == 0, stderr
+        assert stdout.strip() == 'admitted'
+    finally:
+        if child and child.poll() is None:
+            child.kill()
+            child.wait(timeout=5)
+
+
 def test_status_callback_error_does_not_block_gpu():
     import comfy_client
     def fail(_):
