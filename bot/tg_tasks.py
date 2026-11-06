@@ -2035,7 +2035,8 @@ class TaskRunnerMixin:
         # An empty reply is an internal sentinel (voice must not be synthesised
         # for it) and is never shown as a debug placeholder.
         reply = (final.get("final_answer") or "").strip()
-        if '[video_link_context]' in task.user_text:
+        if ('[video_link_context]' in task.user_text and
+                'It was downloaded and watched' in task.user_text):
             reply = _qualify_video_link_reply(reply, lang)
         empty_reply = not reply
         from graph_finalize import is_failure_placeholder
