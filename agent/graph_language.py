@@ -245,6 +245,10 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
     # Product names and URLs are literals, not evidence of the prose language.
     prose = re.sub(r'\[[^\]]*\]\(https?://[^\s)]+\)|https?://[^\s)]+', '', answer)
     links = set(re.findall(r'https?://[^\s)]+', answer))
+    def complete(out):
+        # shortcut: catches severe truncation only; use structured checks if subtler losses recur.
+        return (bool(out) and links.issubset(set(re.findall(r'https?://[^\s)]+', out)))
+                and (len(answer) < 300 or len(out) >= len(answer) * 0.4))
     # An explicit request for English ("и то же самое по-английски") is the
     # one Cyrillic turn whose English answer is RIGHT. The guard must not
     # translate it back -- the model has obeyed the user and the pipeline
@@ -269,7 +273,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
         except Exception as exc:
             logger.warning("Pinned-English translation failed (%s)", exc)
             return answer
-        return out if out and links.issubset(set(re.findall(r'https?://[^\s)]+', out))) and _foreign_ratio(out) < 0.1 else answer
+        return out if complete(out) and _foreign_ratio(out) < 0.1 else answer
     # The user typed in a non-Latin script but the answer came back all-Latin,
     # or the reverse: «Wie spät ist es in Berlin?» in a Russian session was
     # answered in Russian -- the model only saw the English
@@ -314,7 +318,7 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
         out = (out or "").strip()
         # Only accept a result that is actually in the user's script — a model
         # that echoes the English back must not be trusted over the original.
-        if out and links.issubset(set(re.findall(r'https?://[^\s)]+', out))) and (_foreign_ratio(out) < 0.1 if _latin_q else _foreign_ratio(out) > 0.3):
+        if complete(out) and (_foreign_ratio(out) < 0.1 if _latin_q else _foreign_ratio(out) > 0.3):
             logger.info("Final answer was English on a %s turn — translated back",
                         "non-Latin" if original_input else "?")
             return out

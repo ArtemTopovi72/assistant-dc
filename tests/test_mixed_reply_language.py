@@ -58,3 +58,11 @@ def test_translation_does_not_drop_original_links(monkeypatch):
     ctx = SimpleNamespace(is_cancelled=lambda: False, reply_lang='ru')
     answer = 'Here is the product and the details: https://example.com/product-123'
     assert language._match_reply_language(ctx, answer, 'Где купить?') == answer
+
+
+def test_translation_does_not_replace_long_reply_with_a_fragment(monkeypatch):
+    monkeypatch.setattr(language, '_read', lambda *a, **k: {'reply_language': '', 'translate': False, 'language_mode': ''})
+    monkeypatch.setattr(language, 'text_model', lambda ctx: lambda *a, **k: 'Вот начало перевода.')
+    ctx = SimpleNamespace(is_cancelled=lambda: False, reply_lang='ru')
+    answer = 'Here are the details of the product and the available options. ' * 12
+    assert language._match_reply_language(ctx, answer, 'Что известно?') == answer
