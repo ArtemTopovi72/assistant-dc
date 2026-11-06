@@ -412,20 +412,27 @@ def _turn_inputs(ctx, state, text: str) -> tuple:
 
 def _unverified_research_answer(state, sources=()) -> str:
     rows = state.get('research_shop_candidates') or []
-    answer = ('Не удалось проверить карточки на Озоне: цены, наличие и продавцы неизвестны. '
-              'В результатах веб-поиска упомянуты модели; ссылки ниже — только возможные совпадения из поискового индекса, '
-              'они не проверены на Озоне:')
+    original = str(state.get('user_input_original') or state.get('user_input') or '')
+    verified_only = bool(re.search(r'(?<!не )только\s+(?:на\s+)?проверенн|only\s+verified', original, re.I))
+    answer = 'Не удалось проверить карточки на Озоне: цены, наличие и продавцы неизвестны. '
+    answer += ('Непроверенные ссылки не привожу. В веб-поиске упомянуты модели:' if verified_only else
+               'В результатах веб-поиска упомянуты модели; ссылки ниже — только возможные совпадения из поискового индекса, '
+               'они не проверены на Озоне:')
     for row in rows[:3]:
         model = str(row.get('model') or '')
         if not re.fullmatch(r'[\w .+\-/]{3,100}', model):
             continue
         url = str(row.get('url') or '')
-        if not re.fullmatch(r'https://(?:www\.)?ozon\.ru/product/[A-Za-z0-9%._~/\-]+', url):
+        if verified_only or not re.fullmatch(r'https://(?:www\.)?ozon\.ru/product/[A-Za-z0-9%._~/\-]+', url):
             url = ''
-        answer += '\n• ' + model + (': ' + url if url else ' — точную карточку в индексе не нашёл')
+        answer += '\n• ' + model + (': ' + url if url else
+                                    ' — карточка не проверена' if verified_only else
+                                    ' — точную карточку в индексе не нашёл')
     links = []
     for source in sources or ():
         url = str(source.get('url') or '') if isinstance(source, dict) else ''
+        if verified_only and re.match(r'https://(?:www\.)?ozon\.ru/', url, re.I):
+            continue
         if re.fullmatch(r'https://[A-Za-z0-9.\-]+(?::\d+)?/[A-Za-z0-9%._~/?=&+\-]*', url) and url not in links:
             links.append(url)
         if len(links) == 3:

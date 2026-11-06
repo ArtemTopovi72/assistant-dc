@@ -133,6 +133,17 @@ def test_unverified_index_results_are_labelled_not_recommended():
     assert 'купи' not in answer.lower()
 
 
+def test_only_verified_request_does_not_return_unverified_shop_links():
+    from graph_personality import _unverified_research_answer
+    answer = _unverified_research_answer({
+        'user_input_original': 'Дай ссылки только на проверенные модели.',
+        'research_shop_candidates': [
+            {'model': 'Thule Subterra 2', 'url': 'https://ozon.ru/product/thule-subterra-2-123/'}]},
+        [{'url': 'https://www.ozon.ru/product/thule-subterra-2-123/'}])
+    assert 'Thule Subterra 2' in answer
+    assert 'ozon.ru/product/' not in answer
+
+
 def test_fallback_researches_more_when_only_one_model_is_known(monkeypatch):
     import search
     calls = []
