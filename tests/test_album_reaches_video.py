@@ -57,6 +57,53 @@ class StubGraph:
         return {"final_answer": "ok", "messages": base.get("messages", [])}
 
 
+def test_finished_video_gets_time_to_finish_reply_after_gpu_goes_idle(tmp_path):
+    import types
+    import uuid
+    from test_tg_incoming_durability import make_bot
+    bot = make_bot(tmp_path)
+    result = []
+    class Graph:
+        def __init__(self, ctx): self.ctx = ctx
+        def invoke(self, base):
+            video = tmp_path / 'finished.mp4'
+            video.write_bytes(b'video')
+            self.ctx.video_made = str(video)
+            time.sleep(7)
+            result.append(not self.ctx.cancel_event.is_set())
+            return {'final_answer': 'ok', 'messages': base.get('messages', [])}
+    def make_ctx():
+        return FakeCtx()
+    bot._get_ctx = make_ctx
+    bot._get_graph = lambda: object()
+    bot._get_base_state = lambda: {'messages': []}
+    bot.graph_builder = lambda ctx: Graph(ctx)
+    bot.text_model = lambda *a, **kw: '{}'
+    bot.cfg = {'TG_INVOKE_TIMEOUT_S': 5}
+    bot.modules = {'comfy_client': types.SimpleNamespace(card_in_use=lambda: False, server_busy=lambda: False)}
+    bot._backend = T.InMemoryBackend()
+    bot._send_get_id = lambda *a, **k: 1
+    bot._edit_text = bot._delete = lambda *a, **k: None
+    bot._running = True
+    threading.Thread(target=bot._consumer_loop, daemon=True).start()
+    task = T._Task(task_id=str(uuid.uuid4()), chat_id=101, user_text='Continue video', enqueue_ts=time.time())
+    with bot._task_lock: bot._pending_journal[task.task_id] = task
+    bot._backend.push(task)
+    end = time.monotonic() + 15
+    while time.monotonic() < end and not result: time.sleep(0.1)
+    assert result == [True]
+
+
+def test_old_video_does_not_extend_a_new_task(tmp_path):
+    import types
+    from tg_tasks import _fresh_finished_video
+    video = tmp_path / 'old.mp4'
+    video.write_bytes(b'old')
+    old = time.time() - 10
+    os.utime(video, (old, old))
+    assert not _fresh_finished_video(types.SimpleNamespace(video_made=str(video)), time.time())
+
+
 def test_every_picture_of_an_album_reaches_the_agent():
     import uuid
     bot = T.TelegramBot("123:TEST", lambda: FakeCtx(), lambda: object(), lambda: {"messages": []},

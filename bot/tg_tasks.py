@@ -34,6 +34,14 @@ _WORD_RE = _re.compile(r"[^\W\d_]+", _re.UNICODE)
 LANG_PIN_TTL = 6 * 3600     # «answer in English from now on» lasts until 6 h of quiet
 
 
+def _fresh_finished_video(ctx, since: float) -> bool:
+    path = getattr(ctx, 'video_made', '') or ''
+    try:
+        return bool(path and os.path.isfile(path) and os.path.getmtime(path) >= since - 1.0)
+    except OSError:
+        return False
+
+
 def _layout_candidates(sess, chat_id, recent):
     """Recover layout metadata from this chat's recent image archive."""
     entries = list(getattr(sess, 'image_log', None) or [])
@@ -1869,6 +1877,7 @@ class TaskRunnerMixin:
         _STEP = min(15.0, max(0.05, _invoke_timeout / 4.0))
         _waited = 0.0
         _extended = False
+        _video_idle_since = None
         while True:
             _invoke_thread.join(timeout=min(_STEP, max(1.0, _hard_ceiling - _waited)))
             if not _invoke_thread.is_alive():
@@ -1880,7 +1889,14 @@ class TaskRunnerMixin:
                 try:
                     _comfy_mod = module(self, "comfy_client")
                     if not (_comfy_mod.card_in_use() or _comfy_mod.server_busy()):
+                        if _fresh_finished_video(ctx, _turn_t0) or getattr(ctx, 'video_part', ''):
+                            if _video_idle_since is None:
+                                _video_idle_since = time.monotonic()
+                            grace = max(0, tg_bot._cfg_int('TG_VIDEO_POST_GRACE_S', 120))
+                            if time.monotonic() - _video_idle_since < grace:
+                                continue
                         break
+                    _video_idle_since = None
                 except Exception:
                     break
                 if not _extended:
