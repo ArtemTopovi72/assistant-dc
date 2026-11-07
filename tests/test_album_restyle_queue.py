@@ -28,6 +28,23 @@ def test_batch_read_context_cancels_only_messages_before_stop():
     assert intent.current_turn() is None
 
 
+def test_batch_shows_and_clears_real_model_wait_status():
+    import intent
+    import threading
+    events = []
+    bot = SimpleNamespace(_stop_lock=threading.Lock(), _stop_requests={},
+        _get_session=lambda chat: object(), _lang=lambda sess: 'ru',
+        _send_get_id=lambda chat, text, **kw: events.append(('send', text)) or 42,
+        _edit_text=lambda chat, ident, text, **kw: events.append(('edit', text)),
+        _delete=lambda chat, ident: events.append(('delete', ident)))
+    def resolve(chat, batch):
+        intent.current_turn().cancel_context.set_stage('Waiting for the graphics card')
+    bot._resolve_scoped = resolve
+    R.ResolveMixin._resolve_and_push(bot, 1, [{'_arrival_ts': 10}])
+    assert events[0][0] == 'send' and 'видеокарт' in events[0][1]
+    assert events[-1] == ('delete', 42)
+
+
 def test_all_photos_style_request_is_distinct_from_single_photo_and_description():
     assert R._wants_all_photos_restyled("все пять — в стиле киберпанк")
     assert R._wants_all_photos_restyled("перерисуй каждую фотографию в аниме стиле")

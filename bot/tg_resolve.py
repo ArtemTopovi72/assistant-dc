@@ -244,9 +244,37 @@ class ResolveMixin:
         def cancelled():
             with self._stop_lock:
                 return getattr(self, '_stopping', False) or arrival <= self._stop_requests.get(chat_id, 0)
+        status_id = None
+        status_done = False
+        def set_stage(stage):
+            nonlocal status_id
+            if status_done or cancelled():
+                return
+            try:
+                import stages
+                lang = self._lang(self._get_session(chat_id))
+                text = '⏳ ' + stages.translate(stage, lang)
+                if status_id:
+                    self._edit_text(chat_id, status_id, text)
+                else:
+                    status_id = self._send_get_id(chat_id, text)
+            except Exception:
+                tg_bot.logger.debug('batch status update failed', exc_info=True)
         with intent.turn_scope() as turn:
-            turn.cancel_context = SimpleNamespace(is_cancelled=cancelled)
-            return self._resolve_scoped(chat_id, batch)
+            turn.cancel_context = SimpleNamespace(is_cancelled=cancelled, set_stage=set_stage)
+            try:
+                return self._resolve_scoped(chat_id, batch)
+            finally:
+                status_done = True
+                if status_id:
+                    try:
+                        self._edit_text(chat_id, status_id, '✅')
+                    except Exception:
+                        tg_bot.logger.debug('batch status completion failed', exc_info=True)
+                    try:
+                        self._delete(chat_id, status_id)
+                    except Exception:
+                        tg_bot.logger.debug('batch status cleanup failed', exc_info=True)
 
     def _resolve_scoped(self, chat_id: int, batch: list):
         from tg_incoming import BATCH_IDS
