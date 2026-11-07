@@ -180,13 +180,15 @@ def slot(ctx=None, gate_dir=None, n_slots=None, on=None):
                 logger.info("waiting for a model slot: %d ahead (prio %d, %d slot(s))",
                             ahead, prio, n)
                 if ctx is not None and hasattr(ctx, "set_stage"):
-                    ctx.set_stage(f"Waiting for the model ({max(ahead, 1)} ahead)")
+                    ctx.set_stage(f"Waiting for the model ({ahead} ahead)" if ahead else "Waiting for the model")
             time.sleep(POLL)
         with contextlib.suppress(OSError):
             ticket.unlink()
         waited = time.perf_counter() - t0
         if waited > 1.0:
             logger.info("model slot acquired after %.1fs", waited)
+        if last_ahead >= 0 and ctx is not None and hasattr(ctx, "set_stage"):
+            ctx.set_stage("Processing the request with the model")
         yield
     finally:
         with contextlib.suppress(OSError):

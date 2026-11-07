@@ -233,8 +233,9 @@ def test_pending_video_offer_persists_its_own_images_and_enqueues_its_primary(tm
     first = T._log_image(sess, paths[0], src='user')
     sess.turn_image = T._log_image(sess, paths[1], src='user')
     queued = []
+    notices = []
     bot._enqueue_item = lambda cid, item: queued.append(item)
-    bot._busy_note = lambda *a: None
+    bot._busy_note = lambda *a: notices.append((list(queued), a))
     bot._voice_from_request_link = lambda *a: False
     bot.text_model = lambda *a, **kw: '{"lines": ["The two together"]}'
     if offer == 'voice':
@@ -250,6 +251,7 @@ def test_pending_video_offer_persists_its_own_images_and_enqueues_its_primary(tm
         bot._voices_go(101, sess, 'ru')
     else:
         bot._cb_video_plan(101, 'vp:go')
+        assert notices and notices[-1][0] and notices[-1][1][3] is True
     assert queued[0]['image_id'] == first
     sess.clear_context()
     assert sess.voice_pending_images == sess.video_plan_images == []

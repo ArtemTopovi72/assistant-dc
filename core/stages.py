@@ -119,6 +119,8 @@ _STAGES: dict[str, dict[str, str]] = {
     "Deep Research":               {"ru": "Глубокое исследование"},
     "Reading your documents":      {"ru": "Читаю твои документы"},
     "Starting":                    {"ru": "Начинаю"},
+    "Waiting for the model":       {"ru": "Жду освобождения модели"},
+    "Processing the request with the model": {"ru": "Обрабатываю запрос с помощью модели"},
     "Transcribing":                {"ru": "Расшифровываю"},
     "Searching documents":         {"ru": "Ищу по документам"},
     "Ready":                       {"ru": "Готово"},

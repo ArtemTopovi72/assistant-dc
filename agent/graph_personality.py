@@ -818,6 +818,12 @@ def _detect_silent_failure(tool_name: str, result: str, state: AgentState) -> st
     return result
 
 
+def _pending_video_offer(tool_name, result, state):
+    if tool_name != "generate_video" or not result.lstrip().startswith("[NOT MADE YET]"):
+        return ""
+    return "plan" if state.get("video_plan") else "voices" if state.get("ask_voices") else ""
+
+
 _BUILDER_TOOLS = frozenset({"run_code", "write_file"})
 # A round that may write code needs room for the code: a 300-line matplotlib
 # flowchart is ~3500 tokens, and at the 1500-token loop ceiling the call was
@@ -1234,6 +1240,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     obs_pack = dep(ctx, "obs_pack", os.getenv("OBS_PACK", "1") == "1")
     observations: list = []    # (message, round it arrived in)
     packed: set = set()
+    pending_video_offer = ""
     while round_idx + 1 < budget:
         round_idx += 1
         if obs_pack:
@@ -2367,6 +2374,19 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             })
             if obs_pack:
                 observations.append((messages[-1], round_idx))
+            pending_video_offer = _pending_video_offer(tool_name, tool_result, state)
+            if pending_video_offer:
+                response_message["tool_calls"] = tool_calls[:ci + 1]
+                ru = bool(re.search(r"[А-Яа-яЁё]", original_input or user_input or ""))
+                answer = ("План видео ниже — выбери, что делать дальше." if pending_video_offer == "plan"
+                          else "Выбери голос для видео.") if ru else (
+                          "The video plan is below. Choose how to proceed." if pending_video_offer == "plan"
+                          else "Choose a voice for the video.")
+                last_message = {"role": "assistant", "content": answer}
+                break
+
+        if pending_video_offer:
+            break
 
         # End of round: if we're at the budget wall but still actively recovering
         # from a failure (last result was an error) and recovery rounds remain,

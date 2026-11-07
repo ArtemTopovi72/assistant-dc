@@ -23,6 +23,7 @@ def test_asks_before_rendering_people_talking():
     out = H._handle_generate_video(ctx(""), st, {"description": "two friends chat", "speakers": 2,
                                                  "use_current_images": False})
     assert "NOT MADE YET" in out and st["ask_voices"] == 2 and not made
+    assert st.get("_renders_used", 0) == 0
 
 
 def test_quoted_lines_ask_even_when_the_model_forgot_speakers():

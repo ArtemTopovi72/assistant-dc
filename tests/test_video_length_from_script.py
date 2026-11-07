@@ -252,6 +252,7 @@ def test_a_length_named_only_in_the_words_stretches_the_parts():
     st = {"user_input_original": said, "user_input": said}
     out = H._handle_generate_video(ctx, st, {"description": KITE, "use_current_images": False})
     assert out.startswith("[NOT MADE YET]"), out
+    assert st.get("_renders_used", 0) == 0
     total = sum(p["sec"] for p in st["video_plan"])
     assert 27 <= total <= 31, st["video_plan"]
     # the same script with no length named keeps the script's own length

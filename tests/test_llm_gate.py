@@ -40,6 +40,19 @@ def test_one_slot_serialises_calls():
     assert peak[0] == 1
 
 
+def test_waiting_status_is_replaced_when_model_slot_is_acquired():
+    holder_in = threading.Event(); release = threading.Event()
+    def holder():
+        with _slot(_Ctx(0)):
+            holder_in.set(); release.wait(5)
+    h = threading.Thread(target=holder); h.start(); holder_in.wait(5)
+    c = _Ctx(0)
+    threading.Timer(0.6, release.set).start()
+    with _slot(c):
+        assert c.stages[-1] == "Processing the request with the model"
+    h.join(5)
+
+
 def test_a_person_goes_before_a_bench():
     order = []
     holder_in = threading.Event(); release = threading.Event()
@@ -71,6 +84,7 @@ def test_cancel_stops_waiting_and_shows_the_place():
             pass
     release.set(); h.join(5)
     assert any(s.startswith("Waiting for the model") for s in c.stages)
+    assert "Waiting for the model" in c.stages
     assert not list(_GATE["dir"].glob("t_*")), "ticket left behind"
 
 
@@ -99,3 +113,4 @@ def test_it_can_be_switched_off():
 def test_the_russian_status_line():
     import stages
     assert stages.translate("Waiting for the model (2 ahead)", "ru").startswith("Жду своей очереди")
+    assert stages.translate("Waiting for the model", "ru") == "Жду освобождения модели"

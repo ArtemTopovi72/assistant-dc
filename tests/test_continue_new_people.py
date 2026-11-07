@@ -156,6 +156,9 @@ def test_a_plan_waiting_for_the_user_is_not_a_failed_render():
     # the voice question waits the same way (read as a failure: no buttons, «не получилось»)
     ask = "[NOT MADE YET] Before rendering, the user chooses the voices."
     assert G._detect_silent_failure("generate_video", ask, {"ask_voices": 2}) == ask
+    assert G._pending_video_offer("generate_video", msg, {"video_plan": [{"text": "a"}]}) == "plan"
+    assert G._pending_video_offer("generate_video", ask, {"ask_voices": 2}) == "voices"
+    assert not G._pending_video_offer("generate_video", "[TOOL ERROR] failed", {"video_plan": [1]})
 
 
 def test_a_plan_keeps_the_clip_and_the_new_person_for_the_approved_run(fakes, tmp_path):

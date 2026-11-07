@@ -2004,13 +2004,6 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             "was made. Do NOT claim a video was created, and do not retry."
         )
 
-    # A clip costs the whole turn: minutes of GPU, not seconds.
-    _over = dep(ctx, "_render_budget_exhausted", _t._render_budget_exhausted)(
-        state, "generate_video",
-        cost=max(1, int(getattr(config, "IMAGE_MAX_RENDERS_PER_TURN", 3) or 3)))
-    if _over:
-        return _over
-
     images, videos = [], []
     if args.get("use_current_images", True) or re.search(r"<Picture \d+>", description):
         images = dep(ctx, "_current_image_paths", _current_image_paths)(ctx, state)
@@ -2495,6 +2488,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 "plan first: it is shown under your message with buttons. Reply with ONE "
                 "short line in their language that the plan is below. Do not describe the "
                 "clip, do not call generate_video again this turn.")
+    # A plan or voice question makes no render and must not consume this budget.
+    _over = dep(ctx, "_render_budget_exhausted", _t._render_budget_exhausted)(
+        state, "generate_video",
+        cost=max(1, int(getattr(config, "IMAGE_MAX_RENDERS_PER_TURN", 3) or 3)))
+    if _over:
+        return _over
     if bridge_first:
         body = description.removeprefix(video_mod.CONTINUE_CTX_PREFIX)
         description = video_mod.CONTINUE_CTX_PREFIX + _bridged(ctx, cont_src, body)
