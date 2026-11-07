@@ -40,3 +40,12 @@ def test_video_and_picture_keep_current_evidence_without_old_chat_memory():
     assert 'as an interpretation' in text
     assert 'Do not guess that the person is the author' in text
     assert 'infer emotions or intentions from their pose' in text
+
+
+def test_video_storyboard_does_not_justify_gender_inference():
+    ctx = Context(models=None, transcription_cache={}, cache_file=Path('tests/_album_scope.json'),
+                  asr_lock=threading.Lock(), tts_lock=threading.Lock(), no_think=True)
+    state = {'user_input': 'Кратко перескажи видео.\n<<<QUOTED MESSAGE -- visual description of the attached video, for context>>>\nПерформер на сцене\n<<<END OF QUOTED MESSAGE>>>', 'messages': []}
+    text, _, _ = _compose_user_message(ctx, state)
+    assert 'Do not infer gender from appearance' in text
+    assert 'explicitly established' in text

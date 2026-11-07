@@ -354,6 +354,8 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
         parts.append(f"Earlier in this chat (background only; never mention or summarise it):\n{memory_text}")
     if vision_summary:
         parts.append(f"Image description:\n{vision_summary}")
+    if 'visual description of the attached video' in (state.get('user_input_original') or user_input):
+        parts.append('[Do not infer gender from appearance, voice or clothing. If gender is not explicitly established by the user or reliable context, use a neutral description; preserve any explicit correction.]')
     # Steer edit-type requests to the editing tools. Only forbid generate_image
     # when an image was sent THIS turn; for a merely-previous image, leave room
     # for a brand-new generation (otherwise "draw a dog" after an earlier image
