@@ -3,6 +3,11 @@ from types import SimpleNamespace
 import graph_language as language
 
 
+def test_back_translation_must_not_invent_gender():
+    assert 'Do not infer gender' in language._TRANSLATE_OUT_PROMPT
+    assert 'performer' in language._TRANSLATE_OUT_PROMPT
+
+
 def test_short_english_answer_is_translated_without_touching_names(monkeypatch):
     calls = []
     monkeypatch.setattr(language, '_read', lambda *a, **k: {'reply_language': '', 'translate': False, 'language_mode': ''})

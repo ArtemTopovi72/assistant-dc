@@ -143,7 +143,10 @@ def _restore_literals(text: str, keep: dict) -> str:
 _LANG_DETECT_PROMPT = "Name the language this text is written in. One English word."
 _TRANSLATE_OUT_PROMPT = (
     "You are a translator. Translate the text below into {lang}. Preserve meaning, tone, "
-    "markdown, links, numbers and proper names exactly. Do not answer it, add anything, "
+    "markdown, links, numbers and proper names exactly. Do not infer gender from appearance, "
+    "voice, hairstyle, or neutral words such as performer: if the source does not specify "
+    "gender, preserve that uncertainty using a gender-neutral description where possible. "
+    "Do not answer it, add anything, "
     "or comment. Reply with ONLY the translation."
 )
 
