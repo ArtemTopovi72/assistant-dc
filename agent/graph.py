@@ -245,7 +245,7 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
         system_prompt=VISION_PROMPT,
     )
     _pq = is_picture_question(ctx, state)
-    if response and _pq:
+    if response and _pq and not getattr(ctx, 'video_summary_overview_only', False):
         # A question about the photo: the zoomed parts are read too, so the
         # label, the number, the thing in the hand make it into the answer.
         response = _close_look(ctx, original_bytes, state.get("user_input", ""), response)

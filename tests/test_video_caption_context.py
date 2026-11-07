@@ -20,6 +20,36 @@ def test_video_description_and_retelling_do_not_guess_gender_from_appearance():
     assert 'reliable context' in tg_tasks.retell_system('ru', True)
 
 
+def test_only_plain_video_summary_skips_storyboard_zoom():
+    assert tg_tasks._plain_video_summary('Кратко перескажи видео.\n<<<QUOTED MESSAGE -- context>>>')
+    assert tg_tasks._plain_video_summary('Перескажи видео коротко')
+    assert not tg_tasks._plain_video_summary('Перескажи видео и прочитай надпись на картинке')
+    assert not tg_tasks._plain_video_summary('Как связаны видео и картинка?')
+
+
+def test_storyboard_summary_keeps_overview_but_skips_extra_zoom(monkeypatch, tmp_path):
+    import io
+    from types import SimpleNamespace
+    from PIL import Image
+    import graph
+    calls = []
+    monkeypatch.setattr(graph, 'is_picture_question', lambda ctx, state: True)
+    monkeypatch.setattr(graph, '_add_earlier_pictures', lambda ctx, state, summary: summary)
+    monkeypatch.setattr(graph, '_close_look', lambda *args: calls.append('zoom') or 'zoomed')
+    buf = io.BytesIO()
+    Image.new('RGB', (20, 20)).save(buf, format='PNG')
+    ctx = SimpleNamespace(video_summary_overview_only=True, deps=SimpleNamespace(
+        downscale_image_bytes=lambda data: data, OUTPUT_DIR=tmp_path),
+        vision_model=lambda **kwargs: 'overview', set_stage=lambda stage: None,
+        remember=lambda *args: None, memory_text=lambda: '')
+    state = {'image_data': buf.getvalue(), 'user_input': 'Кратко перескажи видео'}
+    out = graph.vision_agent_node(ctx, state)
+    assert out['vision_summary'] == 'overview' and not calls
+    ctx.video_summary_overview_only = False
+    out = graph.vision_agent_node(ctx, {'image_data': buf.getvalue(), 'user_input': 'Что за надпись?'})
+    assert out['vision_summary'] == 'zoomed' and calls == ['zoom']
+
+
 def test_video_comparison_drops_unsupported_viewer_guess_but_keeps_observations():
     reply = ('Визуальной связи между ними нет: на фото человек, а в видео монтаж. '
              'Как интерпретацию можно предположить, что это кадр человека, который смотрит такое видео во время отдыха.')

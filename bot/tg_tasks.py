@@ -34,6 +34,14 @@ _WORD_RE = _re.compile(r"[^\W\d_]+", _re.UNICODE)
 LANG_PIN_TTL = 6 * 3600     # «answer in English from now on» lasts until 6 h of quiet
 
 
+def _plain_video_summary(text: str) -> bool:
+    own = (text or '').split('\n<<<QUOTED MESSAGE', 1)[0].strip()
+    return bool(_re.fullmatch(
+        r'(?:(?:кратко|коротко|сжато)\s+)?(?:перескажи|резюмируй)\s+'
+        r'(?:(?:это|это\s+самое|этот)\s+)?(?:видео|ролик)(?:\s+(?:кратко|коротко|сжато))?[.!?]*',
+        own, _re.I))
+
+
 def _fresh_finished_video(ctx, since: float) -> bool:
     path = getattr(ctx, 'video_made', '') or ''
     try:
@@ -1285,6 +1293,9 @@ class TaskRunnerMixin:
                     img_bytes = fh.read()
             except Exception as exc:
                 tg_bot.logger.warning("img tmp read failed %s: %s", task.image_path, exc)
+        ctx.video_summary_overview_only = bool(
+            img_bytes and getattr(task, 'source_video_path', '') and not getattr(task, 'image_is_photo', False)
+            and _plain_video_summary(task.user_text))
 
         status_id: Optional[int] = None
 
