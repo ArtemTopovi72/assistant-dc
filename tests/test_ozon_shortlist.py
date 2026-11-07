@@ -75,6 +75,24 @@ def test_explicit_web_then_ozon_request_searches_web_first(monkeypatch, marketpl
     assert out["wants"][:2] == ["search", "ozon_shop"]
 
 
+def test_web_reviews_then_ozon_does_not_skip_research(monkeypatch):
+    monkeypatch.setenv("INTENT_LIVE", "1")
+    ctx = SimpleNamespace(text_model=lambda *a, **kw: (
+        '{"needs_tool":true,"wants":["ozon_search"],"must_call":""}'))
+    text = ('Сначала найди конкретные модели по обзорам в интернете, затем проверь '
+            'эти же модели на Ozon, цены и отзывы')
+    out = intent._read(ctx, text, '', '', {})
+    assert out['must_call'] == 'search'
+    assert out['wants'][:2] == ['search', 'ozon_shop']
+
+
+def test_web_reviews_then_ozon_rejects_unresearched_shop(monkeypatch):
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: pytest.fail('research was skipped'))
+    state = {'user_input_original': 'Сначала найди модели по обзорам в интернете, затем проверь на Ozon'}
+    result = handler._handle_ozon_shop(SimpleNamespace(), state, {'request': 'рюкзак'})
+    assert '[TOOL ERROR]' in result
+
+
 def test_empty_backpack_review_search_retries_with_shorter_query():
     queries = []
     def search(_ctx, query):

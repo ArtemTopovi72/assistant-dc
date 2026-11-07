@@ -507,7 +507,8 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
     original = str((state or {}).get("user_input_original") or "")
     show_reviews = bool(_re.search(r'отзыв|reviews?', original, _re.I)) and not _re.search(
         r'(?:без|не\s+(?:нуж\w*|показыва\w*|ищ\w*))\s+отзыв|(?:without|no)\s+reviews?', original, _re.I)
-    if _re.search(r"погугл[а-яё]*.*(?:озон|ozon)", original, _re.I | _re.S):
+    from intent import research_then_ozon
+    if research_then_ozon(original):
         if not (state or {}).get("research_shop_evidence"):
             return ("[TOOL ERROR] The requested web research found no usable evidence. "
                     "Try a shorter web search before shopping; do not choose from a generic Ozon listing.")
@@ -603,7 +604,7 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
     chosen = [r["choice"] for r in results if r.get("choice")]
     ctx._ozon_shop_review_checked = bool(chosen and all(
         c.get("review_texts") is not None for c in chosen))
-    if _re.search(r"погугл[а-яё]*.*(?:озон|ozon)", original, _re.I | _re.S):
+    if research_then_ozon(original):
         model_words = normalize(selected_model).split()
         results = [row for row in results if row.get("choice") and all(
             word in normalize(str(row["choice"].get("name") or "")).split()

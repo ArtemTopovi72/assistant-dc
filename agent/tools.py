@@ -145,7 +145,8 @@ def _handle_search(ctx, state, args: dict) -> str:
         if isinstance(sources, list):
             del sources[before:]
         raise
-    research_shop = bool(re.search(r"погугл[а-яё]*.*(?:озон|ozon)", _asked, re.I | re.S))
+    from intent import research_then_ozon
+    research_shop = research_then_ozon(_asked)
     if research_shop:
         state.setdefault("research_shop_evidence", "")
         state.setdefault("research_shop_verified", False)

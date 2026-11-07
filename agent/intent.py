@@ -423,6 +423,13 @@ def _bound(text: str, previous: str, attached: str):
 _OZON_CARD = re.compile(r"ozon\.ru/(?:product|t)/", re.I)
 
 
+def research_then_ozon(text: str) -> bool:
+    text = text or ''
+    return bool(re.search(r'погугл[а-яё]*.*(?:озон|ozon)', text, re.I | re.S)
+                or re.search(r'(?:сначала|first).*?(?:интернет|обзор|web|reviews?).*?'
+                             r'(?:затем|потом|then).*?(?:озон|ozon)', text, re.I | re.S))
+
+
 def _same_or_analogue(ctx, text: str, out: dict) -> None:
     """THIS exact item from other sellers (ozon_same) or analogues (ozon_shop), for a message
     with a card link. Three rewordings of the two tool descriptions only moved the error
@@ -521,7 +528,7 @@ def _read(ctx, text: str, previous: str, attached: str, cache: dict) -> dict:
         return dict(FALLBACK)
     if os.getenv("INTENT_TRACE") and not attached:
         import traceback; logger.info("intent-trace %s", " | ".join("%s:%d" % (f.name, f.lineno) for f in traceback.extract_stack()[-7:-1]))
-    if re.search(r"погугл[а-яё]*.*(?:озон|ozon)", text, re.I | re.S):
+    if research_then_ozon(text):
         out["needs_tool"] = True
         out["must_call"] = "search"
         out["wants"] = ["search", "ozon_shop"] + [w for w in out["wants"]

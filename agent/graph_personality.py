@@ -501,7 +501,8 @@ def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_c
     # before Telegram's forwarded Ozon links are folded into the turn. The
     # links in this very message are stronger evidence than that stale read.
     raw = str(text or "") + " " + str(state.get("user_input_original") or "")
-    if re.search(r"погугл[а-яё]*.*(?:озон|ozon)", raw, re.I | re.S):
+    from intent import research_then_ozon
+    if research_then_ozon(raw):
         tool = "ozon_shop" if "search" in (already_called or ()) else "search"
         if any(name == tool for (name, _), count in (failed_calls or {}).items() if count):
             return ""
@@ -2447,7 +2448,8 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         final_answer = ("Не удалось запустить создание видео, поэтому ролик не создан. Попробуй ещё раз."
                         if re.search(r"[А-Яа-яЁё]", original_input or user_input or "")
                         else "I couldn't start video generation, so no video was created. Please try again.")
-    if (re.search(r"погугл[а-яё]*.*(?:озон|ozon)", str(original_input or user_input), re.I | re.S)
+    from intent import research_then_ozon
+    if (research_then_ozon(str(original_input or user_input))
             and not state.get("research_shop_verified")):
         if state.get('research_shop_candidates'):
             final_answer = _unverified_research_answer(state, getattr(ctx, 'turn_sources', ()))
