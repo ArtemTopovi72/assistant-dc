@@ -2739,8 +2739,11 @@ def generate_video(ctx, description: str, *,
         return {"path": None, "status": "fail", "reason": "empty description"}
 
     references = re.findall(r'<Picture (\d+)>', description + ' ' + str(getattr(ctx, 'video_request', '') or ''))
-    if references and (any(not p or not os.path.exists(p) for p in (images or ()))
-                       or any(int(n) < 1 or int(n) > len(images or ()) for n in references)):
+    reference_images = list(images or ())
+    if chain and int(chain[1]) > 1 and not reference_images and reference:
+        reference_images = [reference]
+    if references and (any(not p or not os.path.exists(p) for p in reference_images)
+                       or any(int(n) < 1 or int(n) > len(reference_images) for n in references)):
         reason = "A numbered picture reference is missing. Select the original image again."
         _VIDEO_FAILURE.update({"reason": "references", "detail": reason})
         return {"path": None, "status": "fail", "reason": reason}

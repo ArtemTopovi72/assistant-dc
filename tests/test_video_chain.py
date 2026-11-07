@@ -166,6 +166,18 @@ def _no_vision(*a, **k):
     raise AssertionError("no model call between the parts of a chain (it reloads the LLM)")
 
 
+def test_chain_continuations_receive_the_original_picture_reference(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    first = tmp_path / 'first.mp4'
+    first.write_bytes(b'video')
+    rig = _Rig(tmp_path)
+    parts = [('<Picture 1> moves.', 5.2), ('<Picture 1> continues.', 5.2)]
+    last = H._render_chain_parts(rig.ctx(), str(first), parts, {}, 'chain', 1, reference=str(still))
+    assert last == 2
+    assert rig.renders()[0][1]['reference'] == str(still)
+
+
 def test_a_long_script_is_one_chain_stitched_once(tmp_path):
     asked = []
     rig = _Rig(tmp_path, bridge_part=_no_vision,

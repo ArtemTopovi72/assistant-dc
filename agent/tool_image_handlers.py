@@ -1549,7 +1549,7 @@ def _voice_sim(clip: str, voices) -> Optional[float]:
     return voice_clone.speaker_similarity(clip, voices[0])
 
 
-def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, start: int = 1) -> int:
+def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, start: int = 1, reference: str = "") -> int:
     """Parts 2..n of a long script as the next links of `chain` (each continues the
     previous part's saved latent). `parts` are ALL the parts as (prompt, seconds) from video.prepare_prompt,
     made before the card was taken: nothing in here calls a model. `start` is the first part's link
@@ -1573,7 +1573,8 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
                 r = video_mod.generate_video(ctx, part[0],
                                              seconds=part[1], prepared=True,
                                              aspect=args.get("aspect") or "", seed=args.get("seed"),
-                                             chain=(chain, start + i - 1), size_from=prev)
+                                             chain=(chain, start + i - 1), size_from=prev,
+                                             reference=reference)
             except Exception:
                 logger.exception("video chain: part %d crashed", i)
                 crashed = True
@@ -2716,7 +2717,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
 
         if chain_id:
             if len(parts) > 1:
-                chain_idx = _render_chain_parts(ctx, path, prepped, args, chain_id, chain_idx)
+                _chain_reference = images[0] if images and re.search(r'<Picture 1>', ctx.video_request or '', re.I) else ''
+                chain_idx = _render_chain_parts(ctx, path, prepped, args, chain_id, chain_idx,
+                                                reference=_chain_reference)
             if chain_idx > 1:
                 joined = video_mod.stitch_chain(ctx, chain_id, chain_idx)
                 if joined:

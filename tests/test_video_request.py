@@ -487,3 +487,22 @@ def test_start_lock_no_longer_contradicts_a_described_camera_move():
     result = video.to_context_ir(ctx, DRAFT, mode="i2va", seconds=5.17, images=["source.png"])
     question = seen.get("user_text") or seen.get("question") or seen.get("system") or ""
     assert "CAMERA:" in question and "holds still while the subject acts" in question, question[:300]
+
+
+def test_latent_continuation_accepts_its_existing_original_reference(tmp_path, monkeypatch):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'image')
+    class StopBuild(Exception):
+        pass
+    def build(*a, **kw):
+        assert kw['reference'] == str(still)
+        raise StopBuild('reached builder')
+    engine = SimpleNamespace(engine_available=lambda ctx: (True, ''), build_chain_part=build)
+    monkeypatch.setattr(video, '_eng', lambda ctx: engine)
+    ctx = SimpleNamespace(video_request='<Picture 1> moves')
+    with pytest.raises(StopBuild):
+        video.generate_video(ctx, '<Picture 1> continues', chain=('chain', 2),
+                             reference=str(still), prepared=True, seconds=5.2)
+    result = video.generate_video(ctx, '<Picture 1> continues', chain=('chain', 2),
+                                  reference=str(tmp_path / 'missing.png'), prepared=True, seconds=5.2)
+    assert result['status'] == 'fail' and 'reference' in result['reason'].lower()
