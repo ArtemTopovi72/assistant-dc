@@ -2738,7 +2738,8 @@ def generate_video(ctx, description: str, *,
                                "detail": "no description was given"})
         return {"path": None, "status": "fail", "reason": "empty description"}
 
-    references = re.findall(r'<Picture (\d+)>', description + ' ' + str(getattr(ctx, 'video_request', '') or ''))
+    request_refs = '' if chain and int(chain[1]) > 1 else str(getattr(ctx, 'video_request', '') or '')
+    references = re.findall(r'<Picture (\d+)>', description + ' ' + request_refs)
     reference_images = list(images or ())
     if chain and int(chain[1]) > 1 and not reference_images and reference:
         reference_images = [reference]

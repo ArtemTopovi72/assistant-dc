@@ -95,12 +95,12 @@ def test_approved_plan_does_not_invent_a_new_setting_in_bridges(tmp_path):
     assert rig.stitched
 
 
-def test_chain_continuation_prompt_can_see_the_source_image(tmp_path):
+def test_chain_continuation_prompt_keeps_the_previous_state_instead_of_resetting_to_source(tmp_path):
     still = tmp_path / 'source.png'
     still.write_bytes(b'source')
     seen = []
     def prepare(ctx, text, **kw):
-        seen.append(kw.get('images'))
+        seen.append((kw.get('images'), text))
         return text, kw.get('seconds') or 5.2
     rig = _Rig(tmp_path, prepare_prompt=prepare)
     ctx = rig.ctx(video_plan_parts=['The person moves.', 'The person speaks.'],
@@ -109,7 +109,9 @@ def test_chain_continuation_prompt_can_see_the_source_image(tmp_path):
                   deps=SimpleNamespace(asks_for_video=lambda *a: True))
     handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': 'Animate this picture.'},
                                     {'description': 'The person moves.', 'use_current_images': True})
-    assert seen == [[str(still)], [str(still)]]
+    assert seen[0][0] == [str(still)]
+    assert not seen[1][0]
+    assert 'whatever already changed stays changed' in seen[1][1]
 
 
 def test_short_output_is_marked_for_honest_reply(tmp_path):

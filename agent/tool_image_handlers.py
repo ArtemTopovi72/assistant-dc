@@ -1570,11 +1570,13 @@ def _render_chain_parts(ctx, first: str, parts: list, args: dict, chain: str, st
         r, crashed = {}, False
         for attempt in (1, 2):
             try:
-                r = video_mod.generate_video(ctx, part[0],
+                # A latent continuation starts from the previous part, not the
+                # original still: reusing that still resets changed outfits and poses.
+                continuation = re.sub(r'<Picture 1>', 'the same subjects from the previous shot', part[0], flags=re.I) if reference else part[0]
+                r = video_mod.generate_video(ctx, continuation,
                                              seconds=part[1], prepared=True,
                                              aspect=args.get("aspect") or "", seed=args.get("seed"),
-                                             chain=(chain, start + i - 1), size_from=prev,
-                                             reference=reference)
+                                             chain=(chain, start + i - 1), size_from=prev)
             except Exception:
                 logger.exception("video chain: part %d crashed", i)
                 crashed = True
@@ -2541,9 +2543,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         voices = f"Voices so far, the same if they speak again: {voices} " if voices else ""
         for i, p in enumerate(parts[1:], start=1):
             ctx.video_part_request = p
+            setting = (" Background context only (do not restore earlier clothing or poses): "
+                       + str(state.get('vision_summary') or '')[:600]) if images else ''
             prepped.append(video_mod.prepare_prompt(
-                ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, voices + " ".join(parts[:i])),
-                images=images, seconds=secs[i] if i < len(secs) else 0.0, mode="t2va"))
+                ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, setting + voices + " ".join(parts[:i])),
+                seconds=secs[i] if i < len(secs) else 0.0, mode="t2va"))
     # With voices the first picture rides every part too: each part starts from the last
     # frame of the one before, and the face drifted a little further every time.
     # ...and so do all of them: with two heroes on two pictures, parts 2+ saw only the first
