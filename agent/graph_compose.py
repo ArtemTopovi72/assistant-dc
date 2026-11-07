@@ -365,7 +365,7 @@ def _compose_user_message(ctx: Context, state: AgentState) -> tuple:
                      "not visible in the available frames, not that it definitely does not exist. "
                      "Only suggest a thematic connection grounded in visible or spoken details, and label it "
                      "as an interpretation. Do not guess that the person is the author, viewer or participant "
-                     "without evidence.]")
+                     "without evidence, or infer emotions or intentions from their pose or expression.]")
     elif state.get("picture_question"):
         parts.append(
             "[The user asks a QUESTION about the picture. Answer it in words from the "

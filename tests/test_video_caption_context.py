@@ -23,6 +23,7 @@ def test_video_description_and_retelling_do_not_guess_gender_from_appearance():
 def test_absence_of_video_image_connection_is_limited_to_sampled_frames():
     text = 'Прямой визуальной связи между ними нет: фото и видео разные.'
     assert tg_tasks._qualify_video_link_reply(text, 'ru').startswith('По доступным кадрам: ')
+    assert tg_tasks._qualify_video_link_reply('Визуальной связи между ними не видно.', 'ru').startswith('По доступным кадрам: ')
     assert tg_tasks._qualify_video_link_reply('Возможно, это общий мотив.', 'ru') == 'Возможно, это общий мотив.'
 
 

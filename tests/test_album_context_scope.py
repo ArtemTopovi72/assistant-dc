@@ -39,3 +39,4 @@ def test_video_and_picture_keep_current_evidence_without_old_chat_memory():
     assert 'not visible in the available frames' in text
     assert 'as an interpretation' in text
     assert 'Do not guess that the person is the author' in text
+    assert 'infer emotions or intentions from their pose' in text

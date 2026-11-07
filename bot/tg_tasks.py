@@ -43,7 +43,7 @@ def _fresh_finished_video(ctx, since: float) -> bool:
 
 
 def _qualify_video_link_reply(text: str, lang: str) -> str:
-    if _re.search(r'(?:связ\w*[^.!?\n]{0,80}\bнет\b|\bнет\b[^.!?\n]{0,80}связ\w*|'
+    if _re.search(r'(?:связ\w*[^.!?\n]{0,80}\b(?:нет|не видно)\b|\bнет\b[^.!?\n]{0,80}связ\w*|'
                   r'\bno\s+(?:direct\s+|visual\s+)*connection\b)', text or '', _re.I):
         return ('По доступным кадрам: ' if lang == 'ru' else 'From the sampled frames: ') + text
     return text
