@@ -824,6 +824,11 @@ def _pending_video_offer(tool_name, result, state):
     return "plan" if state.get("video_plan") else "voices" if state.get("ask_voices") else ""
 
 
+def _video_promise_needs_tool(ctx, state, said, asks_for_video):
+    return bool(getattr(ctx, "video_plan_ask", False) and said.get("promises")
+                and asks_for_video(ctx, state))
+
+
 _BUILDER_TOOLS = frozenset({"run_code", "write_file"})
 # A round that may write code needs room for the code: a 300-line matplotlib
 # flowchart is ~3500 tokens, and at the 1500-token loop ceiling the call was
@@ -1635,12 +1640,20 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # это видео: кот спрыгивает…» was answered «План анимации ниже.» -- the
             # previous turn's line, imitated -- and nothing came below (2026-10-17).
             _render = [t for t in _own_read["wants"] if t in _RENDER_TOOLS or t in _EDIT_TOOLS]
+            _video_confirmed = False
+            if (not _render and not tools_ran_now and draft and corrective_count < _MAX_CORRECTIVE
+                    and said.get("promises")):
+                import tool_image_handlers as _tih
+                if _video_promise_needs_tool(ctx, state, said, dep(ctx, "asks_for_video", _tih.asks_for_video)):
+                    _render = ["generate_video"]
+                    _video_confirmed = True
+                    _own_read = dict(_own_read, ok=True)
             if _render and _render[0] == "generate_video":
                 # «скажи голосом: привет, я кот-космонавт» with the cat picture in chat read
                 # as a video; the round forced generate_video, which refused it as no video
                 # request, and the reply became «не получилось сделать видео» (2026-10-17).
                 import tool_image_handlers as _tih
-                if not dep(ctx, "asks_for_video", _tih.asks_for_video)(ctx, state):
+                if not _video_confirmed and not dep(ctx, "asks_for_video", _tih.asks_for_video)(ctx, state):
                     _render = []
             if (corrective_count < _MAX_CORRECTIVE and not tools_ran_now and draft
                     and _render and _own_read.get("ok")

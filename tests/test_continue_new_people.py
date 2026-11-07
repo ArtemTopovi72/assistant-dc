@@ -161,6 +161,15 @@ def test_a_plan_waiting_for_the_user_is_not_a_failed_render():
     assert not G._pending_video_offer("generate_video", "[TOOL ERROR] failed", {"video_plan": [1]})
 
 
+def test_video_promise_uses_video_intent_when_router_missed_it():
+    from types import SimpleNamespace
+    import graph_personality as G
+    ctx = SimpleNamespace(video_plan_ask=True)
+    assert G._video_promise_needs_tool(ctx, {}, {"promises": True}, lambda c, s: True)
+    assert not G._video_promise_needs_tool(ctx, {}, {"promises": True}, lambda c, s: False)
+    assert not G._video_promise_needs_tool(ctx, {}, {"promises": False}, lambda c, s: True)
+
+
 def test_a_plan_keeps_the_clip_and_the_new_person_for_the_approved_run(fakes, tmp_path):
     # The plan-only turn must not consume the clip and the new person: the approved ▶ run needs both.
     import tool_image_handlers as H
