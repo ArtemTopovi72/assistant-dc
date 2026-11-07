@@ -19,8 +19,22 @@ def test_inset_review_samples_across_full_continuation():
     ctx = SimpleNamespace(vision_model=lambda *a, **kw: calls.append(kw) or 'NO')
     frames = [(i, f'{i}.jpg') for i in range(10)]
     handlers._check_inset_crossing(ctx, frames, ['source.jpg'], 'Continue the video')
-    paths = [path for _, path in calls[0]['image_paths']]
+    paths = [path for call in calls for _, path in call['image_paths']]
     assert {'source.jpg', '0.jpg', '4.jpg', '6.jpg', '9.jpg'} <= set(paths)
+
+
+def test_inset_review_checks_later_groups_after_a_clean_first_group():
+    answers = iter(['NO', 'YES: hand crosses the inset'])
+    ctx = SimpleNamespace(vision_model=lambda *a, **kw: next(answers))
+    frames = [(i, f'{i}.jpg') for i in range(6)]
+    assert handlers._check_inset_crossing(ctx, frames, ['source.jpg'], 'Continue')
+
+
+def test_inset_review_samples_first_seconds_after_original_clip():
+    times = handlers._inset_sample_times(15.796, 9.613)
+    assert any(9.8 < t < 10.2 for t in times)
+    assert any(10.5 < t < 11.5 for t in times)
+    assert max(times) < 15.796
 
 
 def test_video_review_notice_does_not_report_uncertain_findings_as_facts():

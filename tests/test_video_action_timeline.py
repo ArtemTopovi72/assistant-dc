@@ -4,17 +4,17 @@ from tool_image_handlers import _check_actions, _check_static_background
 
 
 def test_action_check_prioritizes_video_timeline_over_source_image():
-    seen = {}
+    seen = []
     def vision(ctx, **kwargs):
-        seen.update(kwargs)
+        seen.append(kwargs)
         return 'NONE'
     look = SimpleNamespace(duration_seconds=lambda _: 3, sample_times=lambda *a, **k: [0, 2],
                            extract_frames=lambda *a: [(0, 'start.jpg'), (2, 'end.jpg')])
     ctx = SimpleNamespace(vision_model=vision, modules={'video_look': look})
     _check_actions(ctx, 'video.mp4', ['The balloon moves right'], references=['original.jpg'])
-    assert [path for _, path in seen['image_paths']] == ['start.jpg', 'end.jpg', 'original.jpg']
-    assert 'compare' in seen['user_text'].lower()
-    assert 'unrequested' in seen['user_text'].lower()
+    action = next(call for call in seen if 'unrequested' in call['user_text'].lower())
+    assert [path for _, path in action['image_paths']] == ['start.jpg', 'end.jpg', 'original.jpg']
+    assert 'compare' in action['user_text'].lower()
 
 
 def test_static_background_drift_warns_only_without_camera_move():
@@ -26,9 +26,9 @@ def test_static_background_drift_warns_only_without_camera_move():
 
 
 def test_action_review_receives_measured_positions(tmp_path):
-    seen = {}
+    seen = []
     def vision(ctx, **kwargs):
-        seen.update(kwargs)
+        seen.append(kwargs)
         return 'NONE'
     look = SimpleNamespace(duration_seconds=lambda _: 3, sample_times=lambda *a, **k: [0, 2],
                            extract_frames=lambda *a: [(0, 'start.jpg'), (2, 'end.jpg')])
@@ -36,7 +36,7 @@ def test_action_review_receives_measured_positions(tmp_path):
     ctx = SimpleNamespace(vision_model=vision, video_engine=engine, modules={'video_look': look},
                           yes_no=lambda *a, **kw: False)
     _check_actions(ctx, 'video.mp4', ['The balloon moves right'], references=['original.jpg'])
-    assert '30%' in seen['user_text'] and '70%' in seen['user_text']
+    assert any('30%' in call['user_text'] and '70%' in call['user_text'] for call in seen)
 
 
 def test_incorrect_motion_claim_does_not_override_tracker():

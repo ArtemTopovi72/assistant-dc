@@ -1815,26 +1815,35 @@ def _check_static_background(ctx, video_mod, path: str, request: str) -> str:
         return ''
 
 
+def _inset_sample_times(duration: float, start: float) -> list:
+    remaining = max(0.0, duration - start)
+    return sorted({round(start + t, 2) for t in (0.3, 1.3, 2.3, 4.0, remaining / 2, remaining - 0.1)
+                   if 0 <= t < remaining})
+
+
 def _check_inset_crossing(ctx, frames, references, script: str) -> str:
     if not references or len(frames) < 2:
         return ''
     indices = set(range(0, len(frames), max(1, len(frames) // 5))) | {len(frames) - 1}
     chosen = [frames[i] for i in sorted(indices)]
-    try:
-        answer = (vision_model(ctx)(
-            ctx, temperature=0.0, max_tokens=2048,
-            image_paths=[('Reference:', references[0])] + [(f'Frame {t:.1f}s:', str(p)) for t, p in chosen],
-            user_text=('Compare the reference with the generated video frames. Is any part of a '
-                       'person shown inside an inset or screen crossing outside its rectangle into '
-                       'the surrounding scene, without the user asking for that? If there is no '
-                       'such inset or the user requested the crossing, answer NO. If unsure, answer '
-                       'UNKNOWN. Reply exactly YES, NO, or UNKNOWN and a short explanation. '
-                       'User request: ' + script[:900]))) or ''
-    except Exception:
-        logger.warning('video inset review failed', exc_info=True)
-        return ''
-    logger.info('video inset review: %s', answer[:200] or 'no answer')
-    return 'A person may cross the boundary of an inset without being asked.' if re.match(r'^\s*YES\b', answer, re.I) else ''
+    for i in range(0, len(chosen), 3):
+        try:
+            answer = (vision_model(ctx)(
+                ctx, temperature=0.0, max_tokens=2048,
+                image_paths=[('Reference:', references[0])] + [(f'Frame {t:.1f}s:', str(p)) for t, p in chosen[i:i + 3]],
+                user_text=('Compare the reference with the generated video frames. Is any part of a '
+                           'person shown inside an inset or screen crossing outside its rectangle into '
+                           'the surrounding scene, without the user asking for that? If there is no '
+                           'such inset or the user requested the crossing, answer NO. If unsure, answer '
+                           'UNKNOWN. Reply exactly YES, NO, or UNKNOWN and a short explanation. '
+                           'User request: ' + script[:900]))) or ''
+        except Exception:
+            logger.warning('video inset review failed', exc_info=True)
+            continue
+        logger.info('video inset review: %s', answer[:200] or 'no answer')
+        if re.match(r'^\s*YES\b', answer, re.I):
+            return 'A person may cross the boundary of an inset without being asked.'
+    return ''
 
 
 def _check_actions(ctx, path: str, parts: list, references=()) -> str:
@@ -1867,8 +1876,8 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
                     + ". Positions are relative to the frame; compare them when judging movement. " if motion else "")
         look = module(ctx, "video_look")
         duration = look.duration_seconds(path)
-        frames = look.extract_frames(path, look.sample_times(duration, every=1.5, max_frames=10),
-                                     Path(tempfile.mkdtemp(prefix="actcheck_")))
+        frame_dir = Path(tempfile.mkdtemp(prefix="actcheck_"))
+        frames = look.extract_frames(path, look.sample_times(duration, every=1.5, max_frames=10), frame_dir)
         if len(frames) < 2:
             return ""
         ans = " ".join((vision_model(ctx)(
@@ -1894,7 +1903,14 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
         logger.warning("video actions: the check failed", exc_info=True)
         return ""
     logger.info("video actions: checked against the request -> %s", ans[:200] or "no answer")
-    inset = _check_inset_crossing(ctx, frames, references, script)
+    inset_frames = frames
+    start = getattr(ctx, 'video_review_start', 0.0) or 0.0
+    if references and 0 < start < duration:
+        try:
+            inset_frames = look.extract_frames(path, _inset_sample_times(duration, start), frame_dir)
+        except Exception:
+            logger.warning('continuation inset frame sampling failed', exc_info=True)
+    inset = _check_inset_crossing(ctx, inset_frames, references, script)
     if inset:
         return inset
     matches_requested = False
@@ -2699,6 +2715,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             if len(parts) > 1 or chain_idx > 1:
                 result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
     ctx.video_join_note = ""
+    review_start = 0.0
     if chain_id and len(parts) > 1:
         ctx.video_join_note = _check_joins(ctx, getattr(ctx, "chain_joins", None) or [])
     if not chain_id and continuing and cont_src and os.path.exists(cont_src):
@@ -2707,6 +2724,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         if joined:
             path = video_mod._adopt_output(joined, video_mod.OUTPUT_DIR)       # the whole thing: original + what comes next
             result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
+            try:
+                source_probe = video_mod.probe(cont_src)
+                review_start = max(0.0, (source_probe.get('video_seconds') or source_probe.get('seconds') or 0) - 0.25)
+            except Exception:
+                logger.debug('could not locate continuation start for review', exc_info=True)
         else:
             logger.warning("continue video: the join failed, delivering the new part alone")
 
@@ -2732,7 +2754,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # A talking head acts with its mouth only and its camera is locked: checked against the agent's
     # «the camera zooms in», the note said an action was missing and the reply told the user to
     # «pick a voice variant» (live 2026-10-20)
-    ctx.video_action_note = "" if head or (continuing and not images) else _check_actions(ctx, path, parts, references=images)
+    ctx.video_review_start = review_start
+    try:
+        ctx.video_action_note = "" if head or (continuing and not images) else _check_actions(ctx, path, parts, references=images)
+    finally:
+        ctx.video_review_start = 0.0
     if images and not continuing and not head:
         background_note = _check_static_background(ctx, video_mod, path, ctx.video_request or description)
         objects_note = ('The video may contain added objects or effects.'
