@@ -27,6 +27,7 @@ def test_reference_continuation_rewrites_prompt_when_source_layout_is_wrong():
                               images=['source.png'], n_videos=1)
     assert 'person stays in the inset' in out
     assert len(calls) == 4
+    assert calls[1]['max_tokens'] >= 2048
 
 
 def test_reference_continuation_falls_back_when_layout_repair_fails():

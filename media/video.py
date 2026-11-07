@@ -2217,7 +2217,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
     if ref and images and n_videos:
         def layout_check(candidate):
             return (vision_model(ctx)(
-                ctx, image_paths=[('Source frame:', images[0])], temperature=0.0, max_tokens=120,
+                ctx, image_paths=[('Source frame:', images[0])], temperature=0.0, max_tokens=2048,
                 user_text=('CHECK THE LAYOUT: compare the source frame with this proposed continuation. '
                            'Does it put a person or object in a different visual layer or location '
                            'than the source, without the request asking for that change? A person '
