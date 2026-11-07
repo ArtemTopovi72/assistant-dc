@@ -49,6 +49,16 @@ def test_the_budget_grows_with_the_spoken_lines():
     assert asked[0] > 200 + 90 * 6 + sum(len(t) for t in long) // 3
 
 
+def test_plan_translation_reserves_reasoning_and_uses_structured_output():
+    calls = []
+    def model(ctx, system, user, **kw):
+        calls.append(kw)
+        return '{"lines": ["Первый кадр", "Второй кадр"]}'
+    assert len(P._summaries(PARTS, 'ru', types.SimpleNamespace(text_model=model))) == 2
+    assert calls[0]['max_tokens'] >= 4096
+    assert calls[0]['json_schema']['required'] == ['lines']
+
+
 def test_two_failures_fall_back_to_the_prompts():
     owner, asked = _owner("no json", "still none")
     assert P._summaries(PARTS, "ru", owner) == ["", ""]

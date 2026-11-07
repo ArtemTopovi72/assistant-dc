@@ -69,7 +69,12 @@ def _summaries(texts: list, lang: str, owner=None) -> list:
                 "light and particle effects (sparks, smoke, embers) unless they are the action. "
                 f'Reply with JSON only: {{"lines": ["...", "..."]}}, exactly {len(texts)} lines, '
                 "one per shot, same order.",
-                listing, temperature=0.2, max_tokens=400 + 90 * len(texts) + len(listing) // 2) or ""
+                listing, temperature=0.2,
+                max_tokens=max(4096, 400 + 90 * len(texts) + len(listing) // 2),
+                json_schema={'type': 'object', 'properties': {
+                    'lines': {'type': 'array', 'items': {'type': 'string'},
+                              'minItems': len(texts), 'maxItems': len(texts)}},
+                    'required': ['lines'], 'additionalProperties': False}) or ""
             lines = _lines_of(raw, len(texts)) or (safe_json_from_llm(raw, ["lines"]) or {}).get("lines") or []
         except Exception:
             tg_bot.logger.exception("video plan: summaries failed")
