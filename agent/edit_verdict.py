@@ -31,7 +31,7 @@ Answer with ONE JSON object and nothing else: {"after_shows": "...", "changed": 
 def _verdict(facts: dict) -> str:
     """The model states facts; the grading is fixed here (it graded a new strap «partial» and a
     skin patch it had just described «done», 2026-10-21)."""
-    if facts.get("something_else_instead") is True:
+    if facts.get("something_else_instead") is not False:
         return "not"
     if facts.get("asked_change_visible") is not True:
         if (facts.get("some_requested_changes_visible") is True

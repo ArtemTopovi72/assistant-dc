@@ -19,6 +19,8 @@ def test_facts_are_graded_by_code():
                        "something_else_instead": False, "defect": ""}) == "partial"
     assert E._verdict({"asked_change_visible": False, "some_requested_changes_visible": True,
                        "something_else_instead": True, "defect": ""}) == "not"
+    assert E._verdict({"asked_change_visible": True, "some_requested_changes_visible": True,
+                       "something_else_instead": "the replacement is missing", "defect": ""}) == "not"
 
 
 def test_ambiguous_incomplete_edit_gets_a_second_read(monkeypatch):
@@ -48,6 +50,17 @@ def test_edit_with_unrequested_object_does_not_retry_judgement(monkeypatch):
                            "something_else_instead": True, "changed": "added a person", "defect": ""})
     assert E.judge(SimpleNamespace(vision_model=vision), "before", "after", "edit clothing")["verdict"] == "not"
     assert len(calls) == 1
+
+
+def test_malformed_other_field_is_not_a_success(monkeypatch):
+    import json
+    from types import SimpleNamespace
+    monkeypatch.setattr(E, "_unchanged", lambda *a: False)
+    monkeypatch.setattr(E, "_close_ups", lambda *a: [])
+    facts = {"asked_change_visible": True, "some_requested_changes_visible": True,
+             "something_else_instead": "the replacement is missing", "changed": "barrel text added", "defect": ""}
+    ctx = SimpleNamespace(vision_model=lambda **kw: json.dumps(facts))
+    assert E.judge(ctx, "before", "after", "change two labels")["verdict"] == "not"
 
 
 def test_a_small_local_edit_is_a_change_and_a_copy_is_not(tmp_path):
