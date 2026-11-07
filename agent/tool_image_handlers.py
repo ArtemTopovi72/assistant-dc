@@ -2325,7 +2325,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     speech_theirs = dictated or video_mod.speech_is_users(raw, _said)
     # Over one clip's 15 s the parts follow the script: «на 30 секунд» was capped to one
     # 15 s clip and delivered without a word (2026-10-13).
-    if args.get("seconds") and float(args["seconds"]) <= 15.0:
+    if getattr(ctx, "video_plan_parts", None) or (args.get("seconds") and float(args["seconds"]) <= 15.0):
         parts = [raw]
     else:
         args.pop("seconds", None)
@@ -2462,7 +2462,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                        else approved[0])
         parts = video_mod.fit_speech(approved)
     # An asked length the script falls short of: each part plays longer, up to one clip's cap.
-    secs = [video_mod.estimate_seconds(p, reads=dep(ctx, "script_read", None)) for p in parts]
+    secs = ([float(s) for s in approved_seconds]
+            if approved and parts == approved and len(approved_seconds) == len(parts)
+            and all(float(s or 0) > 0 for s in approved_seconds)
+            else [video_mod.estimate_seconds(p, reads=dep(ctx, "script_read", None)) for p in parts])
     if want > 15.0 and len(parts) > 1 and want > sum(secs) * 1.15:
         per = min(video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO), want / len(parts))
         secs = [max(x, round(per, 2)) for x in secs]
@@ -2610,7 +2613,16 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 p = result.get("path")
                 look = watch and p and os.path.exists(p)
                 drawn = video_mod.drawn_over(p, images[0]) if look else None
-                drift = video_mod.overlay_drift(p) if look else None
+                # Whole-frame edge drift also measures the requested subject's movement.
+                # Treat it as fatal only when a fixed frame was explicitly requested.
+                fixed_frame = re.search(
+                    r'\b(?:stationary|static|locked|fixed)\s+(?:camera|shot|frame)\b|'
+                    r'\b(?:camera|shot|frame)\s+(?:stays?\s+|is\s+)?(?:stationary|static|locked|fixed)\b|'
+                    r'(?:неподвижн\w*|статичн\w*|зафиксирован\w*)\s+камер\w*|'
+                    r'камер\w*.{0,30}(?:неподвижн\w*|статичн\w*|не двигает\w*|без движен\w*)|'
+                    r'без движен\w* камер\w*',
+                    (state.get('user_input_original') or '') + '\n' + (ctx.video_request or ''), re.I)
+                drift = video_mod.overlay_drift(p) if look and fixed_frame else None
                 eyes = video_mod.eye_drift(images[0], p, light=False) if head and p and os.path.exists(p) else None
                 # part 1 had no speech check: its last word, cut by the clip's end, went to the user
                 # in runs 17 and 18 (2026-10-20); a take that says it all ranks first

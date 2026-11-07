@@ -66,6 +66,20 @@ def test_approved_part_keeps_the_duration_shown_in_the_plan(tmp_path):
     assert rig.renders()[0][1]['seconds'] == 8.0
 
 
+def test_approved_plan_does_not_replan_the_original_script(tmp_path):
+    def unexpected(*a, **kw):
+        raise AssertionError('an approved plan must not be split again')
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    rig = _Rig(tmp_path, herrgott_on=lambda: False, split_script=unexpected)
+    ctx = rig.ctx(video_plan_parts=['The balloon sways.'], video_plan_seconds=[8.0],
+                  text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': REQUEST},
+                                    {'description': 'The balloon sways.', 'use_current_images': True})
+    assert rig.renders()[0][1]['seconds'] == 8.0
+
+
 def test_short_output_is_marked_for_honest_reply(tmp_path):
     rig = _Rig(tmp_path, herrgott_on=lambda: False, probe=lambda p: {'seconds': 6})
     ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
@@ -303,6 +317,21 @@ def test_chain_does_not_continue_from_corrupted_first_part(tmp_path):
     assert '[TOOL ERROR]' in result
     assert len([call for call in rig.calls if call[0] != 'PREP']) == 3
     assert not rig.stitched
+
+
+def test_chain_with_requested_person_motion_does_not_reject_edge_motion(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    rig = _Rig(tmp_path, drawn_over=lambda *a: 0.0,
+               overlay_drift=lambda path: 64, OVERLAY_DRIFT_MAX=35)
+    ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  yes_no=lambda *a, **kw: False,
+                  video_plan_parts=['The people move across the scene.', 'They continue moving.'],
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    result = handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': 'Animate the people moving across the scene.'},
+                                             {'description': 'The people move across the scene.', 'seconds': 12, 'use_current_images': True})
+    assert '[TOOL ERROR]' not in result
+    assert rig.stitched
 
 
 @pytest.mark.parametrize("spoken_output", ["", '<d>[English] Buy an Ozon cable now</d>'])
