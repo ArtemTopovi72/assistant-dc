@@ -297,7 +297,7 @@ class ResolveMixin:
         if standalone_video:
             for image_id in (sess.target_image, sess.turn_image):
                 entry = tg_bot._image_by_id(sess, image_id)
-                if entry and os.path.isfile(entry.get('path') or ''):
+                if entry and entry.get('src') != 'video' and os.path.isfile(entry.get('path') or ''):
                     selected_image = entry
                     break
         selected_id = selected_image['id'] if selected_image else ''
@@ -1871,7 +1871,7 @@ class ResolveMixin:
         # A DOCUMENT in the same message is the thing the instruction is about
         # («убери дубликаты» + DCIM.zip must not get «Какую картинку?»).
         if not any('_target_captured' in it for it in batch):
-            pressed_image_id = pressed_image_id or (selected_id if selected_image else sess.target_image)
+            pressed_image_id = pressed_image_id or (selected_id if standalone_video else sess.target_image)
         _queued_song = bool(_tg_songs.parse_song_payload(merged)[0])
         if (not standalone_video and not _queued_song and not img_bytes and not file_in_folder
                 and not pressed_image_id

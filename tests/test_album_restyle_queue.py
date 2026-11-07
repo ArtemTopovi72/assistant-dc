@@ -79,7 +79,7 @@ def test_followup_restyle_queues_each_previous_album_photo(tmp_path):
     assert called[0][4:6] == (b'first', [b'second'])
 
 
-@pytest.mark.parametrize('image_source', ['none', 'target', 'turn'])
+@pytest.mark.parametrize('image_source', ['none', 'target', 'turn', 'video'])
 def test_bare_video_link_in_draw_menu_keeps_selected_image(tmp_path, monkeypatch, image_source):
     monkeypatch.delenv('F5_TEST_RUN', raising=False)
     bot = make_bot(tmp_path)
@@ -88,7 +88,7 @@ def test_bare_video_link_in_draw_menu_keeps_selected_image(tmp_path, monkeypatch
     old = tmp_path / 'old.jpg'
     old.write_bytes(b'old')
     if image_source != 'none':
-        image_id = T._log_image(sess, str(old), src='user')
+        image_id = T._log_image(sess, str(old), src='video' if image_source == 'video' else 'user')
         setattr(sess, 'target_image' if image_source == 'target' else 'turn_image', image_id)
     bot._store.put(sess)
     bot._get_ctx = lambda: SimpleNamespace()
@@ -106,9 +106,10 @@ def test_bare_video_link_in_draw_menu_keeps_selected_image(tmp_path, monkeypatch
     url = 'https://youtu.be/K7QHpeEsNy4'
     bot._resolve_and_push(101, [{'type': 'text', 'text': url}])
     assert seen == [url]
-    assert tasks and bool(tasks[0].image_id) == (image_source != 'none') and not tasks[0].image_path
+    has_photo = image_source in ('target', 'turn')
+    assert tasks and bool(tasks[0].image_id) == has_photo and not tasks[0].image_path
     assert not tasks[0].user_text.startswith('generate an image of:')
-    assert ('вместе с выбранной картинкой' if image_source != 'none' else 'Кратко перескажи видео по ссылке:') in tasks[0].user_text
+    assert ('вместе с выбранной картинкой' if has_photo else 'Кратко перескажи видео по ссылке:') in tasks[0].user_text
 
 
 def test_video_link_in_photo_caption_is_read(tmp_path, monkeypatch):
