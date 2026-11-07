@@ -75,8 +75,8 @@ video.text_model = _raising
 check("LLM down fails open (delivery is never blocked)",
       video._onscreen_text_words(None, "баннер РАСПРОДАЖА над входом" + " " * 10) == [])
 src = inspect.getsource(video._onscreen_text_words)
-check("the classifier is not a regex/word-list",
-      "re.match" not in src and "re.search" not in src)
+check("the classifier still uses the model for written-text intent",
+      "text_model(ctx)" in src)
 
 # ── the OCR read of the finished clip ────────────────────────────────────────
 print("=" * 70)

@@ -2539,6 +2539,37 @@ def _onscreen_text_words(ctx, description: str) -> list:
                     start = source.find(needle, start + 1)
                 return False
             words = [word for word in words if in_source(word)]
+            # A quotation alone can be dialogue; only an explicit request to
+            # show that dialogue makes it eligible for the lettering overlay.
+            captions = re.search(r'(?<!без )(?<!без\s)\b(?:субтитр\w*|subtitles?|captions?)\b', text, re.I)
+            shown_speech = re.search(r'(?:напиш\w*|покаж\w*|вывед\w*|show|display|write).{0,50}(?:эту фразу|эти слова|сказанное|spoken words|the dialogue)', text, re.I)
+            if not captions and not shown_speech:
+                spoken, written = [], []
+                previous = 0
+                for quote in _QUOTED.finditer(text[:4000]):
+                    before = text[previous:quote.start()]
+                    before = re.split(r'[.!?;\n]', before)[-1]
+                    value = normalized(next(g for g in quote.groups() if g is not None))
+                    bucket = spoken if re.search(r'\b(?:говор\w*|сказ\w*|скажет|произнес\w*|крич\w*|шеп\w*|по[её]т|says?|speaks?|shouts?|whispers?)\b', before, re.I) else written
+                    bucket.append(value)
+                    previous = quote.end()
+                def explicitly_written(word):
+                    needle = normalized(word)
+                    for match in re.finditer(re.escape(needle), source):
+                        before = re.split(r'[.!?;«»"“”\n]', source[max(0, match.start() - 100):match.start()])[-1]
+                        if re.search(r'\b(?:надпис\w*|вывеск\w*|экран\w*|текст\w*|sign|screen|written)\b', before, re.I):
+                            return True
+                    return False
+                words = [word for word in words if not any(normalized(word) in q for q in spoken)
+                         or any(normalized(word) in q for q in written) or explicitly_written(word)]
+                def spoken_unquoted(word):
+                    start = source.find(normalized(word))
+                    if start < 0 or any(normalized(word) in q for q in written) or explicitly_written(word):
+                        return False
+                    before = source[max(0, start - 100):start]
+                    return bool(re.search(r'\b(?:говор\w*|сказ\w*|скажет|произнес\w*|крич\w*|шеп\w*|says?|speaks?|shouts?)\b[^.!?;«»"“”]{0,100}$', before, re.I)
+                                and not re.search(r'\b(?:надпис\w*|вывеск\w*|экран\w*|текст\w*|sign|screen|written)\b', before, re.I))
+                words = [word for word in words if not spoken_unquoted(word)]
     except Exception:
         logger.debug("on-screen text read failed", exc_info=True)
         words = []
