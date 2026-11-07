@@ -1818,7 +1818,8 @@ def _check_static_background(ctx, video_mod, path: str, request: str) -> str:
 def _check_inset_crossing(ctx, frames, references, script: str) -> str:
     if not references or len(frames) < 2:
         return ''
-    chosen = [frames[i] for i in sorted({0, len(frames) // 3, len(frames) - 1})]
+    indices = set(range(0, len(frames), max(1, len(frames) // 5))) | {len(frames) - 1}
+    chosen = [frames[i] for i in sorted(indices)]
     try:
         answer = (vision_model(ctx)(
             ctx, temperature=0.0, max_tokens=2048,

@@ -14,6 +14,15 @@ def test_inset_review_reports_positive_only():
     assert not handlers._check_inset_crossing(unknown, frames, ['source.jpg'], 'Take the cup')
 
 
+def test_inset_review_samples_across_full_continuation():
+    calls = []
+    ctx = SimpleNamespace(vision_model=lambda *a, **kw: calls.append(kw) or 'NO')
+    frames = [(i, f'{i}.jpg') for i in range(10)]
+    handlers._check_inset_crossing(ctx, frames, ['source.jpg'], 'Continue the video')
+    paths = [path for _, path in calls[0]['image_paths']]
+    assert {'source.jpg', '0.jpg', '4.jpg', '6.jpg', '9.jpg'} <= set(paths)
+
+
 def test_video_review_notice_does_not_report_uncertain_findings_as_facts():
     answer = _video_review_notice('Готово!', 'ball did not move', 'Оживи шар')
     assert 'возможные отличия' in answer
