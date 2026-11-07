@@ -61,3 +61,21 @@ def test_plan_warns_when_it_cannot_reach_requested_duration():
                                  video_plan_requested_seconds=25)
     text, _ = P.VideoPlanMixin()._video_plan_card(sess, 'ru')
     assert '25' in text and ('меньше' in text or 'не хватает' in text)
+
+
+def test_plan_does_not_hide_end_of_part_before_approval():
+    text = 'Мужчина говорит: ' + 'слово ' * 25 + 'важный конец фразы'
+    sess = types.SimpleNamespace(video_plan=[{'text': text, 'sec': 6.2}])
+    assert 'важный конец фразы' in P.VideoPlanMixin()._video_plan_script(sess, 'ru')
+
+
+def test_long_plan_is_sent_in_full_across_messages():
+    plan = P.VideoPlanMixin()
+    sent = []
+    plan._send_text = lambda chat_id, text, **kw: sent.append(text)
+    plan._state_kb = lambda sess, lang: None
+    plan._video_plan_card = lambda sess, lang: ('карточка', {})
+    sess = types.SimpleNamespace(video_plan=[{'text': 'слово ' * 1000 + 'ФИНАЛ', 'sec': 6.2}])
+    plan._send_video_plan(1, sess, 'ru')
+    assert len(sent) > 2 and all(len(s) <= 4096 for s in sent)
+    assert 'ФИНАЛ' in ''.join(sent[:-1])

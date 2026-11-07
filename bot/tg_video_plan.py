@@ -114,14 +114,15 @@ class VideoPlanMixin:
         return "\n".join(lines), {"inline_keyboard": rows}
 
     def _video_plan_script(self, sess, lang: str) -> str:
+        import video
         return "\n".join(tg_bot._t("vp_part", lang, i=i, sec=f"{float(p.get('sec') or 0):.1f}",
-                                   text=html.escape(_cut(p.get("say") or p.get("text", ""))))
+                                   text=html.escape(" ".join(video.strip_timing(p.get("say") or p.get("text", "")).split())))
                          for i, p in enumerate(sess.video_plan, 1))
 
     def _send_video_plan(self, chat_id: int, sess, lang: str) -> None:
         """Two messages: the script alone, so it copies clean, then the card with the buttons."""
-        self._send_text(chat_id, self._video_plan_script(sess, lang), parse_mode="HTML",
-                        keyboard=self._state_kb(sess, lang))
+        for part in tg_bot._split_html(self._video_plan_script(sess, lang)):
+            self._send_text(chat_id, part, parse_mode="HTML", keyboard=self._state_kb(sess, lang))
         text, kb = self._video_plan_card(sess, lang)
         self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
 
