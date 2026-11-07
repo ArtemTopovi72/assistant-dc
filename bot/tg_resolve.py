@@ -18,6 +18,7 @@ import re
 import tempfile
 import threading
 import time
+from types import SimpleNamespace
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -239,7 +240,12 @@ class ResolveMixin:
             for group in groups:
                 self._resolve_and_push(chat_id, group)
             return
-        with intent.turn_scope():
+        arrival = min((item.get('_arrival_ts', time.time()) for item in batch), default=time.time())
+        def cancelled():
+            with self._stop_lock:
+                return getattr(self, '_stopping', False) or arrival <= self._stop_requests.get(chat_id, 0)
+        with intent.turn_scope() as turn:
+            turn.cancel_context = SimpleNamespace(is_cancelled=cancelled)
             return self._resolve_scoped(chat_id, batch)
 
     def _resolve_scoped(self, chat_id: int, batch: list):

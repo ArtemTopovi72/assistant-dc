@@ -30,6 +30,15 @@ def test_cancelled_turn_does_not_wait_for_render_or_call_model(monkeypatch):
     assert waits and waits[0] <= 1
 
 
+def test_batch_classifier_uses_its_turn_cancellation(monkeypatch):
+    import intent
+    monkeypatch.setattr(llm, '_wait_for_free_card', lambda ctx: None)
+    monkeypatch.setattr(llm, '_stream_chat', lambda *args: {'role': 'assistant', 'content': 'unexpected'})
+    with intent.turn_scope() as turn:
+        turn.cancel_context = types.SimpleNamespace(is_cancelled=lambda: True)
+        assert llm.send_to_lm_studio(None, [{'role': 'user', 'content': 'test'}]) is None
+
+
 class Ctx:
     def __init__(self, model, stream=None):
         self.model_name, self.no_think = model, False

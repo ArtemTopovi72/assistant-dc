@@ -11,6 +11,23 @@ from fakes import reads
 from test_tg_incoming_durability import make_bot
 
 
+def test_batch_read_context_cancels_only_messages_before_stop():
+    import intent
+    import threading
+    seen = []
+    bot = SimpleNamespace(_stop_lock=threading.Lock(), _stop_requests={})
+    def resolve(chat_id, batch):
+        ctx = intent.current_turn().cancel_context
+        seen.append(ctx.is_cancelled())
+        bot._stop_requests[chat_id] = 20
+        seen.append(ctx.is_cancelled())
+    bot._resolve_scoped = resolve
+    R.ResolveMixin._resolve_and_push(bot, 1, [{'_arrival_ts': 10}])
+    R.ResolveMixin._resolve_and_push(bot, 2, [{'_arrival_ts': 30}])
+    assert seen == [False, True, False, False]
+    assert intent.current_turn() is None
+
+
 def test_all_photos_style_request_is_distinct_from_single_photo_and_description():
     assert R._wants_all_photos_restyled("все пять — в стиле киберпанк")
     assert R._wants_all_photos_restyled("перерисуй каждую фотографию в аниме стиле")

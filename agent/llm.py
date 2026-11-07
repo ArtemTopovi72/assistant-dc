@@ -575,6 +575,9 @@ def send_to_lm_studio(
     spends its token budget on the OUTPUT instead of burning it all on the analysis
     channel and returning empty content.
     """
+    if ctx is None:
+        import intent
+        ctx = getattr(intent.current_turn(), 'cancel_context', None)
     dep(ctx, "_wait_for_free_card", _wait_for_free_card)(ctx)
     if _is_cancelled(ctx):
         return None
