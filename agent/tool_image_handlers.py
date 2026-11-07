@@ -1815,6 +1815,27 @@ def _check_static_background(ctx, video_mod, path: str, request: str) -> str:
         return ''
 
 
+def _check_inset_crossing(ctx, frames, references, script: str) -> str:
+    if not references or len(frames) < 2:
+        return ''
+    chosen = [frames[i] for i in sorted({0, len(frames) // 3, len(frames) - 1})]
+    try:
+        answer = (vision_model(ctx)(
+            ctx, temperature=0.0, max_tokens=2048,
+            image_paths=[('Reference:', references[0])] + [(f'Frame {t:.1f}s:', str(p)) for t, p in chosen],
+            user_text=('Compare the reference with the generated video frames. Is any part of a '
+                       'person shown inside an inset or screen crossing outside its rectangle into '
+                       'the surrounding scene, without the user asking for that? If there is no '
+                       'such inset or the user requested the crossing, answer NO. If unsure, answer '
+                       'UNKNOWN. Reply exactly YES, NO, or UNKNOWN and a short explanation. '
+                       'User request: ' + script[:900]))) or ''
+    except Exception:
+        logger.warning('video inset review failed', exc_info=True)
+        return ''
+    logger.info('video inset review: %s', answer[:200] or 'no answer')
+    return 'A person may cross the boundary of an inset without being asked.' if re.match(r'^\s*YES\b', answer, re.I) else ''
+
+
 def _check_actions(ctx, path: str, parts: list, references=()) -> str:
     """The current request against the finished clip, in ONE vision call on frames spread over it.
     The reply said «Готово! швыряет шапку» over a clip where the hat stayed on (live 2026-10-18),
@@ -1872,6 +1893,9 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
         logger.warning("video actions: the check failed", exc_info=True)
         return ""
     logger.info("video actions: checked against the request -> %s", ans[:200] or "no answer")
+    inset = _check_inset_crossing(ctx, frames, references, script)
+    if inset:
+        return inset
     matches_requested = False
     if motion and duration and motion[-1][0] >= duration * 0.3:
         right = bool(re.search(r'\b(?:right(?:wards)?|вправо|направо)\b', script, re.I))

@@ -1,6 +1,17 @@
 from graph_personality import _video_review_notice
 from graph_personality import _approved_video_reply
 from types import SimpleNamespace
+import tool_image_handlers as handlers
+
+
+def test_inset_review_reports_positive_only():
+    frames = [(0, 'a.jpg'), (1, 'b.jpg'), (4, 'c.jpg')]
+    yes = SimpleNamespace(vision_model=lambda *a, **kw: 'YES: the arm crosses into the studio')
+    no = SimpleNamespace(vision_model=lambda *a, **kw: 'NO: inside the inset')
+    unknown = SimpleNamespace(vision_model=lambda *a, **kw: 'UNKNOWN')
+    assert handlers._check_inset_crossing(yes, frames, ['source.jpg'], 'Take the cup')
+    assert not handlers._check_inset_crossing(no, frames, ['source.jpg'], 'Take the cup')
+    assert not handlers._check_inset_crossing(unknown, frames, ['source.jpg'], 'Take the cup')
 
 
 def test_video_review_notice_does_not_report_uncertain_findings_as_facts():

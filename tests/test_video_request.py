@@ -96,7 +96,7 @@ def test_long_request_adds_visible_continuations_to_its_plan(tmp_path):
 def test_finished_video_is_checked_against_request_or_approved_plan(tmp_path, approved):
     still = tmp_path / "source.png"
     still.write_bytes(b"source")
-    seen = {}
+    seen = []
     look = SimpleNamespace(
         duration_seconds=lambda path: 5.17,
         sample_times=lambda *a, **kw: [0.0, 3.0],
@@ -104,7 +104,7 @@ def test_finished_video_is_checked_against_request_or_approved_plan(tmp_path, ap
     )
 
     def vision(ctx, **kw):
-        seen.update(kw)
+        seen.append(kw)
         return "The balloon is not green" if "green balloon" in kw["user_text"] else "NONE"
 
     rig = _Rig(tmp_path)
@@ -119,12 +119,13 @@ def test_finished_video_is_checked_against_request_or_approved_plan(tmp_path, ap
         ctx, {"image_path": str(still), "user_input_original": REQUEST},
         {"description": DRAFT, "seconds": 5.17, "use_current_images": True})
     expected = approved[0] if approved else REQUEST
-    assert expected in seen["user_text"]
-    assert "green balloon" not in seen["user_text"]
-    assert 'body parts' in seen['user_text'] and 'inset' in seen['user_text']
+    action_review = next(call for call in seen if 'body parts' in call['user_text'])
+    assert expected in action_review["user_text"]
+    assert "green balloon" not in action_review["user_text"]
+    assert 'inset' in action_review['user_text']
     assert ctx.video_action_note == ""
     assert "actions are NOT visible" not in result
-    assert any(path == str(still) for _, path in seen["image_paths"])
+    assert any(path == str(still) for _, path in action_review["image_paths"])
     assert ctx.last_video_prompt == expected
     assert remembered == [f"Video for: {expected}"]
 
