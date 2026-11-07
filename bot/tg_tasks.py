@@ -2536,6 +2536,10 @@ class TaskRunnerMixin:
                                 "-ar", "16000", "-ac", "1", wav],
                                capture_output=True, check=True, timeout=30)
                 src = wav
+            except subprocess.CalledProcessError as exc:
+                if media == "video" and b"does not contain any stream" in (exc.stderr or b""):
+                    return ""
+                src = src_file
             except Exception:
                 src = src_file
             label_lang = lang_hint or "ru"
