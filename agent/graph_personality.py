@@ -976,7 +976,12 @@ def _auto_pack_leftover(ctx, state, unpacked_all: dict, answer: str) -> str:
 def _video_review_notice(answer: str, note: str, user_input: str) -> str:
     if not note:
         return answer
-    message = ("⚠️ Проверка отдельных кадров заметила возможные отличия от запроса. "
+    if 'A person may cross the boundary of an inset without being asked.' in note:
+        message = ("⚠️ Возможно, человек выходит за рамку видеовставки. Проверь этот момент в ролике."
+                   if re.search(r'[А-Яа-яЁё]', user_input or '') else
+                   "⚠️ A person may cross the inset's boundary. Please check the video.")
+    else:
+        message = ("⚠️ Проверка отдельных кадров заметила возможные отличия от запроса. "
                "Посмотри видео: оценка движения может ошибаться."
                if re.search(r'[А-Яа-яЁё]', user_input or '') else
                "⚠️ A review of sampled frames found possible differences from the request. "

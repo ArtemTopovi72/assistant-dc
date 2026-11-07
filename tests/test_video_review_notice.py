@@ -22,6 +22,12 @@ def test_video_review_notice_does_not_report_uncertain_findings_as_facts():
     assert 'possible differences' in _video_review_notice('Done!', 'uncertain', 'Animate the balloon')
 
 
+def test_inset_review_identifies_the_possible_problem():
+    answer = _video_review_notice('Готово!', 'A person may cross the boundary of an inset without being asked.',
+                                  'Продолжи видео')
+    assert 'возможно' in answer.lower() and 'вставк' in answer.lower()
+
+
 def test_approved_video_reply_does_not_claim_removed_scenes_or_duration():
     ctx = SimpleNamespace(video_plan_approved_result=True, video_plan_warnings=['speech'])
     result = _approved_video_reply(ctx, 'Готово, 25 секунд и чашка!', 'Продолжи видео')
