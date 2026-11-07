@@ -2214,6 +2214,34 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
     if not out or not all(f in out for f in need) or "non_diegetic_music" not in out:
         logger.info("Context-IR rewrite rejected (missing fields); keeping the plain prompt")
         return description
+    if ref and images and n_videos:
+        def layout_check(candidate):
+            return (vision_model(ctx)(
+                ctx, image_paths=[('Source frame:', images[0])], temperature=0.0, max_tokens=120,
+                user_text=('CHECK THE LAYOUT: compare the source frame with this proposed continuation. '
+                           'Does it put a person or object in a different visual layer or location '
+                           'than the source, without the request asking for that change? A person '
+                           'inside a video inset is not physically in the surrounding scene. '
+                           'Respect changes explicitly requested. Reply OK, UNKNOWN, or MISMATCH: '
+                           'followed by the specific contradiction.\nRequest: ' + str(request)[:1200]
+                           + '\nProposed prompt: ' + candidate[:5000])) or '').strip()
+        try:
+            verdict = layout_check(out)
+            if not re.match(r'^(?:OK|MISMATCH)\b', verdict, re.I):
+                logger.info('Context-IR layout could not be verified: %s', verdict[:100] or 'no answer')
+            if re.match(r'^MISMATCH\b', verdict, re.I):
+                logger.warning('Context-IR layout contradicts source: %s', verdict[:250])
+                again = clean(ask(user + '\n\nThe previous prompt contradicted the source layout: '
+                                  + verdict[:500] + '\nCorrect this without adding actions or changing the request.'))
+                if again and all(f in again for f in need) and 'non_diegetic_music' in again \
+                        and not _lost_lines(speech_source, again) \
+                        and re.match(r'^OK\b', layout_check(again), re.I):
+                    out = again
+                else:
+                    logger.warning('Context-IR layout repair failed; using the current request')
+                    return str(request) + ' Preserve the source composition and its separate visual layers.'
+        except Exception:
+            logger.warning('Context-IR layout check unavailable', exc_info=True)
     lost = _lost_lines(speech_source, out)
     if lost:
         logger.info("Context-IR rewrite lost %d spoken line(s); put back", len(lost))

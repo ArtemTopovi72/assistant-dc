@@ -12,6 +12,47 @@ REQUEST = "Animate the red balloon with a slow camera push-in. Keep the blue box
 DRAFT = "The green balloon sways while the camera pushes in."
 
 
+def test_reference_continuation_rewrites_prompt_when_source_layout_is_wrong():
+    bad = ('subject_definitions: person outside\nretention_analysis: preserved\n'
+           'detailed_description: person leaves the inset\noverall_soundscape: room\nnon_diegetic_music: N/A')
+    good = bad.replace('person outside', 'person inside').replace('person leaves the inset', 'person stays in the inset')
+    calls = []
+    def vision(ctx, **kw):
+        calls.append(kw)
+        if 'CHECK THE LAYOUT' in kw.get('user_text', ''):
+            return 'MISMATCH: the person is inside the inset' if len(calls) == 2 else 'OK'
+        return bad if len(calls) == 1 else good
+    ctx = SimpleNamespace(vision_model=vision, video_part_request='The person reaches for a cup.')
+    out = video.to_context_ir(ctx, 'The person reaches for a cup.', mode='ref2va', seconds=6,
+                              images=['source.png'], n_videos=1)
+    assert 'person stays in the inset' in out
+    assert len(calls) == 4
+
+
+def test_reference_continuation_falls_back_when_layout_repair_fails():
+    bad = ('subject_definitions: person outside\nretention_analysis: preserved\n'
+           'detailed_description: wrong layout\noverall_soundscape: room\nnon_diegetic_music: N/A')
+    def vision(ctx, **kw):
+        return 'MISMATCH: person is inside the inset' if 'CHECK THE LAYOUT' in kw.get('user_text', '') else bad
+    ctx = SimpleNamespace(vision_model=vision, video_part_request='The person reaches for a cup.')
+    out = video.to_context_ir(ctx, 'The person reaches for a cup.', mode='ref2va', seconds=6,
+                              images=['source.png'], n_videos=1)
+    assert out.startswith('The person reaches for a cup.')
+    assert 'wrong layout' not in out
+
+
+def test_unconfirmed_layout_repair_is_not_used():
+    prompt = ('subject_definitions: person\nretention_analysis: preserved\n'
+              'detailed_description: rewritten scene\noverall_soundscape: room\nnon_diegetic_music: N/A')
+    checks = iter(['MISMATCH: wrong layer', 'UNKNOWN'])
+    def vision(ctx, **kw):
+        return next(checks) if 'CHECK THE LAYOUT' in kw.get('user_text', '') else prompt
+    ctx = SimpleNamespace(vision_model=vision, video_part_request='The person reaches for a cup.')
+    out = video.to_context_ir(ctx, 'The person reaches for a cup.', mode='ref2va', seconds=6,
+                              images=['source.png'], n_videos=1)
+    assert 'rewritten scene' not in out
+
+
 def test_approved_part_keeps_the_duration_shown_in_the_plan(tmp_path):
     still = tmp_path / 'source.png'
     still.write_bytes(b'source')
