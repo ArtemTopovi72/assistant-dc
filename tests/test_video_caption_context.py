@@ -28,6 +28,11 @@ def test_video_comparison_drops_unsupported_viewer_guess_but_keeps_observations(
     assert 'смотрит такое видео' not in result
 
 
+def test_video_comparison_does_not_repeat_existing_scope():
+    reply = 'По доступным кадрам связи не видно.'
+    assert tg_tasks._qualify_video_link_reply(reply, 'ru') == reply
+
+
 def test_absence_of_video_image_connection_is_limited_to_sampled_frames():
     text = 'Прямой визуальной связи между ними нет: фото и видео разные.'
     assert tg_tasks._qualify_video_link_reply(text, 'ru').startswith('По доступным кадрам: ')

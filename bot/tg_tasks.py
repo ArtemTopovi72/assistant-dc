@@ -50,8 +50,9 @@ def _qualify_video_link_reply(text: str, lang: str) -> str:
                 and _re.search(r'смотр\w*|watch\w*', sentence, _re.I)
                 and _re.search(r'видео|ролик|фильм|video|clip|film', sentence, _re.I)):
             text = text.replace(sentence, '', 1).strip()
-    if _re.search(r'(?:связ\w*[^.!?\n]{0,80}\b(?:нет|не видно)\b|\bнет\b[^.!?\n]{0,80}связ\w*|'
-                  r'\bno\s+(?:direct\s+|visual\s+)*connection\b)', text or '', _re.I):
+    if (_re.search(r'(?:связ\w*[^.!?\n]{0,80}\b(?:нет|не видно)\b|\bнет\b[^.!?\n]{0,80}связ\w*|'
+                   r'\bno\s+(?:direct\s+|visual\s+)*connection\b)', text, _re.I)
+            and not _re.match(r'\s*(?:по доступным кадрам|from the sampled frames)', text, _re.I)):
         return ('По доступным кадрам: ' if lang == 'ru' else 'From the sampled frames: ') + text
     return text
 
