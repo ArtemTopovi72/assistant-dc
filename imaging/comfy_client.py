@@ -990,11 +990,22 @@ def _submit_and_poll(ctx, workflow: dict, timeout: int = 1900, label: str = "",
         LAST_GPU_REFUSAL.update({"label": busy, "at": dep(ctx, "time", time).time()})
         _fail(f"the GPU is busy with {busy}")
         return None
+    already_exclusive = this_thread_holds_card()
     with dep(ctx, "_gpu_slot", _gpu_slot)(exclusive=exclusive, label=label, min_free_mb=min_free_mb,
                                           progress_ctx=ctx):
         if exclusive and min_free_mb:
             import lora_training
             free_mb = dep(ctx, "gpu_free_mb", lora_training.gpu_free_mb)()
+            if free_mb is not None and free_mb < min_free_mb and already_exclusive:
+                try:
+                    queue = dep(ctx, "requests", requests).get(f"{COMFY_URL}/queue", timeout=(3, 5))
+                    queue.raise_for_status()
+                    jobs = queue.json()
+                    if not jobs.get("queue_running") and not jobs.get("queue_pending"):
+                        dep(ctx, "lora_training", lora_training).free_gpu(log=logger.info, min_free_mb=min_free_mb, ctx=ctx)
+                        free_mb = dep(ctx, "gpu_free_mb", lora_training.gpu_free_mb)()
+                except Exception:
+                    logger.warning("could not release cached ComfyUI models for the next render", exc_info=True)
             if free_mb is not None and free_mb < min_free_mb:
                 reason = f"not enough free VRAM for {label or 'render'}: {free_mb} MiB, need {min_free_mb} MiB"
                 logger.error(reason)
