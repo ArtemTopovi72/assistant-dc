@@ -187,3 +187,25 @@ def test_a_rejected_edit_is_retried_from_the_picture_before_it():
     _TGF._run(ctx, llm, run, {"user_input": "одень его в доспехи", "messages": [],
                               "image_path": "/tmp/orig.png"}, fastpath=False)
     assert sources == ["/tmp/orig.png", "/tmp/orig.png"], sources
+
+
+def test_a_partial_requested_edit_is_kept_for_the_next_change():
+    import types
+    from fakes import reads
+    import tool_context
+    sources = []
+    llm = _TGF.LLM([
+        _TGF._asst("", [_TGF._tc("inpaint_image", {"region": "apron", "instructions": "add A"}, "e1")]),
+        _TGF._asst("", [_TGF._tc("inpaint_image", {"region": "barrel", "instructions": "add B"}, "e2")]),
+        _TGF._asst("Готово."),
+    ])
+    def run(ctx, state, name, args):
+        sources.append(tool_context._edit_source(ctx, state))
+        tool_context._set_current_image(ctx, state, f"/tmp/out{len(sources)}.png")
+        return "Image edited and saved"
+    verdict = types.SimpleNamespace(judge=lambda *a: {"verdict": "partial" if len(sources) == 1 else "done", "why": ""})
+    ctx = _TGF._ctx(**reads())
+    ctx.last_image_path = "/tmp/orig.png"
+    _TGF._run(ctx, llm, run, {"user_input": "надписи на фартуке и бочке", "messages": [],
+                              "image_path": "/tmp/orig.png"}, fastpath=False, edit_verdict=verdict)
+    assert sources == ["/tmp/orig.png", "/tmp/out1.png"]

@@ -39,6 +39,7 @@ def _W(fakes, ctx):
 class Sess:
     continue_state = "want_text"
     continue_people = []
+    target_image = ""
 
 
 class Bot(tg_continue.ContinueMixin):

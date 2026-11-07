@@ -2174,7 +2174,8 @@ class ResolveMixin:
         elif self._card_busy():
             text = tg_bot._t("card_busy", lang)
         else:
-            text = tg_bot._t("queue_next", lang)
+            key = "queue_next" if chat_id in self.__dict__.get("_queue_note_tasks", {}) else "queue_accepted"
+            text = tg_bot._t(key, lang)
         notes = self.__dict__.setdefault("_busy_notes", {})
         with self._task_lock:
             msg_id, shown = notes.get(chat_id, (None, ""))

@@ -33,3 +33,15 @@ def test_waiting_position_is_refreshed_and_removed_when_task_starts():
     pending.clear()
     bot._drop_busy_note(2, 'mine')
     assert edits[-1] == 'deleted'
+
+
+def test_unresolved_request_does_not_claim_queue_position():
+    edits = []
+    class Bot(ResolveMixin):
+        _task_lock = threading.Lock()
+        _running_task = {}
+        _chat_interruptible = {}
+        def _card_busy(self): return False
+        def _send_get_id(self, chat, text, **kw): edits.append(text); return 42
+    Bot()._busy_note(2, 'ru', (), True)
+    assert 'принят' in edits[-1] and 'следующий' not in edits[-1]

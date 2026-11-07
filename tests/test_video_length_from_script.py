@@ -233,7 +233,10 @@ def test_a_named_length_condenses_a_script_that_runs_longer():
     st = {}
     H._handle_generate_video(ctx, st, {"description": long_, "seconds": 30, "use_current_images": False})
     assert asked == [30.0]
-    assert not st.get("video_plan") or " ".join(p["text"] for p in st["video_plan"]) == short
+    if st.get("video_plan"):
+        assert st["video_plan"][0]["text"] == short
+        assert all("no new speech or repeated actions" in p["text"] for p in st["video_plan"][1:])
+        assert sum(p["sec"] for p in st["video_plan"]) == pytest.approx(30, abs=1)
 
 
 KITE = ("A boy runs across a field and launches a kite. The kite climbs high into the sky. "

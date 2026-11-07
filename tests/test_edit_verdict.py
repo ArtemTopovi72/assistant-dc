@@ -15,6 +15,39 @@ def test_facts_are_graded_by_code():
     assert E._verdict({"asked_change_visible": True, "something_else_instead": False, "defect": "a seam"}) == "partial"
     assert E._verdict({"asked_change_visible": True, "something_else_instead": True, "defect": ""}) == "not"
     assert E._verdict({"asked_change_visible": False, "something_else_instead": False, "defect": ""}) == "not"
+    assert E._verdict({"asked_change_visible": False, "some_requested_changes_visible": True,
+                       "something_else_instead": False, "defect": ""}) == "partial"
+    assert E._verdict({"asked_change_visible": False, "some_requested_changes_visible": True,
+                       "something_else_instead": True, "defect": ""}) == "not"
+
+
+def test_ambiguous_incomplete_edit_gets_a_second_read(monkeypatch):
+    import json
+    from types import SimpleNamespace
+    monkeypatch.setattr(E, "_unchanged", lambda *a: False)
+    monkeypatch.setattr(E, "_close_ups", lambda *a: [])
+    answers = iter([
+        {"asked_change_visible": False, "some_requested_changes_visible": False,
+         "something_else_instead": False, "changed": "apron changed", "defect": ""},
+        {"asked_change_visible": False, "some_requested_changes_visible": True,
+         "something_else_instead": False, "changed": "apron changed; barrel missing", "defect": ""},
+    ])
+    ctx = SimpleNamespace(vision_model=lambda **kw: json.dumps(next(answers)))
+    assert E.judge(ctx, "before", "after", "change apron and barrel")["verdict"] == "partial"
+
+
+def test_edit_with_unrequested_object_does_not_retry_judgement(monkeypatch):
+    import json
+    from types import SimpleNamespace
+    monkeypatch.setattr(E, "_unchanged", lambda *a: False)
+    monkeypatch.setattr(E, "_close_ups", lambda *a: [])
+    calls = []
+    def vision(**kw):
+        calls.append(1)
+        return json.dumps({"asked_change_visible": False, "some_requested_changes_visible": True,
+                           "something_else_instead": True, "changed": "added a person", "defect": ""})
+    assert E.judge(SimpleNamespace(vision_model=vision), "before", "after", "edit clothing")["verdict"] == "not"
+    assert len(calls) == 1
 
 
 def test_a_small_local_edit_is_a_change_and_a_copy_is_not(tmp_path):

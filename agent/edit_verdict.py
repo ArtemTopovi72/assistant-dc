@@ -21,15 +21,23 @@ SYSTEM = """You check a picture edit. You get two pictures, BEFORE and AFTER, an
 - "after_shows": look ONLY at AFTER and say in one sentence what is there now at the thing or place the request is about (which person wears what, whether the object is there, what the background shows). Do not let the request tell you what you see.
 - "changed": one sentence on what differs between BEFORE and AFTER, or "nothing".
 - "asked_change_visible": true when AFTER shows what the user asked for, also when BEFORE already did. For a removal the thing must be fully gone: a faint, blurred or ghostly version of it still there is not gone.
+- For text replacement, check whether the old text remains mixed with the replacement: if it does, the replacement is incomplete, even when the new words are legible.
+- "some_requested_changes_visible": true only when the request has multiple distinct changes and AFTER visibly satisfies at least one of them, even though another is still missing. Do not infer success from the request itself.
 - "something_else_instead": true when something other than the request was done: a new person or object drawn instead of changing the one there, a removed thing replaced by another of its kind (a new watch, a new strap), or a change nobody asked for to something the request did not name (another colour, material or person). When the request asks for a new scene or a whole new picture, drawing it is the change, not something else.
 - "defect": a visible flaw that came with the edit -- a seam, a patch of different colour or texture where the edit was, part of the thing left behind, a duplicate, an extra object or person nobody asked for -- in a few words; "" when there is none a viewer would notice.
 
-Answer with ONE JSON object and nothing else: {"after_shows": "...", "changed": "...", "asked_change_visible": true, "something_else_instead": false, "defect": ""}"""
+Answer with ONE JSON object and nothing else: {"after_shows": "...", "changed": "...", "asked_change_visible": true, "some_requested_changes_visible": false, "something_else_instead": false, "defect": ""}"""
 
 def _verdict(facts: dict) -> str:
     """The model states facts; the grading is fixed here (it graded a new strap «partial» and a
     skin patch it had just described «done», 2026-10-21)."""
-    if facts.get("asked_change_visible") is not True or facts.get("something_else_instead") is True:
+    if facts.get("something_else_instead") is True:
+        return "not"
+    if facts.get("asked_change_visible") is not True:
+        if (facts.get("some_requested_changes_visible") is True
+                and facts.get("something_else_instead") is False
+                and not str(facts.get("defect") or "").strip()):
+            return "partial"
         return "not"
     return "partial" if str(facts.get("defect") or "").strip() else "done"
 
@@ -85,17 +93,28 @@ def judge(ctx, before: str, after: str, request: str) -> dict:
         logger.warning("edit verdict: no close-ups: %s", exc)
         crops = []
     try:
-        for _ in range(2):
+        first_incomplete = None
+        for attempt in range(2):
             resp = vision_model(ctx)(ctx=ctx, image_paths=[("BEFORE:", before), ("AFTER:", after)] + crops,
                                      user_text=text, system_prompt=SYSTEM, temperature=0.0, max_tokens=400)
             got = safe_json_from_llm(resp or "", ["asked_change_visible"]) or {}
             if isinstance(got.get("asked_change_visible"), bool):
                 verdict = _verdict(got)
                 why = str(got.get("defect") or got.get("changed") or "").strip()
-                logger.info("edit verdict: %s (%d close-ups) -- %s", verdict, len(crops), why[:200])
-                return {"verdict": verdict, "why": why, "changed": str(got.get("changed") or "")}
+                logger.info("edit verdict: %s (%d close-ups, requested_part=%r, other=%r, defect=%r) -- %s",
+                            verdict, len(crops), got.get("some_requested_changes_visible"),
+                            got.get("something_else_instead"), got.get("defect"), why[:200])
+                result = {"verdict": verdict, "why": why, "changed": str(got.get("changed") or "")}
+                if first_incomplete is not None:
+                    return result if verdict == "partial" else first_incomplete
+                if (attempt == 0 and verdict == "not" and got.get("some_requested_changes_visible") is False
+                        and got.get("something_else_instead") is False and not got.get("defect")
+                        and result["changed"].strip().lower() not in ("", "nothing", "none")):
+                    first_incomplete = result
+                    continue
+                return result
         logger.warning("edit verdict: no usable answer (%r)", (resp or "")[:200])
-        return {"verdict": "", "why": ""}
+        return first_incomplete or {"verdict": "", "why": ""}
     finally:
         for _, p in crops:
             try:
