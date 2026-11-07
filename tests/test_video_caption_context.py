@@ -20,6 +20,14 @@ def test_video_description_and_retelling_do_not_guess_gender_from_appearance():
     assert 'reliable context' in tg_tasks.retell_system('ru', True)
 
 
+def test_video_comparison_drops_unsupported_viewer_guess_but_keeps_observations():
+    reply = ('Визуальной связи между ними нет: на фото человек, а в видео монтаж. '
+             'Как интерпретацию можно предположить, что это кадр человека, который смотрит такое видео во время отдыха.')
+    result = tg_tasks._qualify_video_link_reply(reply, 'ru')
+    assert 'на фото человек' in result
+    assert 'смотрит такое видео' not in result
+
+
 def test_absence_of_video_image_connection_is_limited_to_sampled_frames():
     text = 'Прямой визуальной связи между ними нет: фото и видео разные.'
     assert tg_tasks._qualify_video_link_reply(text, 'ru').startswith('По доступным кадрам: ')

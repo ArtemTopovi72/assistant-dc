@@ -43,6 +43,13 @@ def _fresh_finished_video(ctx, since: float) -> bool:
 
 
 def _qualify_video_link_reply(text: str, lang: str) -> str:
+    # shortcut: filter only the observed hedged viewer guess; broader claims need evidence checks.
+    text = text or ''
+    for sentence in _re.split(r'(?<=[.!?])\s+', text):
+        if (_re.search(r'предполож\w*|возможно|может быть|perhaps|may be|might be', sentence, _re.I)
+                and _re.search(r'смотр\w*|watch\w*', sentence, _re.I)
+                and _re.search(r'видео|ролик|фильм|video|clip|film', sentence, _re.I)):
+            text = text.replace(sentence, '', 1).strip()
     if _re.search(r'(?:связ\w*[^.!?\n]{0,80}\b(?:нет|не видно)\b|\bнет\b[^.!?\n]{0,80}связ\w*|'
                   r'\bno\s+(?:direct\s+|visual\s+)*connection\b)', text or '', _re.I):
         return ('По доступным кадрам: ' if lang == 'ru' else 'From the sampled frames: ') + text
