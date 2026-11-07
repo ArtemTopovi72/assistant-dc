@@ -27,6 +27,15 @@ def test_only_plain_video_summary_skips_storyboard_zoom():
     assert not tg_tasks._plain_video_summary('Как связаны видео и картинка?')
 
 
+def test_video_generation_request_is_not_a_picture_question(monkeypatch):
+    import graph
+    read = {'is_question': False, 'about_picture': True, 'wants': ['generate_video']}
+    monkeypatch.setattr(graph, '_picture_read', lambda ctx, state: read)
+    assert not graph.is_picture_question(None, {})
+    read['is_question'] = True
+    assert graph.is_picture_question(None, {})
+
+
 def test_storyboard_summary_keeps_overview_but_skips_extra_zoom(monkeypatch, tmp_path):
     import io
     from types import SimpleNamespace

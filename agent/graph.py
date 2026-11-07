@@ -390,6 +390,8 @@ def _changes_picture(read: dict) -> bool:
 def is_picture_question(ctx, state) -> bool:
     """A question ABOUT the picture, with no order to change it."""
     r = _picture_read(ctx, state)
+    if not r["is_question"] and "generate_video" in (r.get("wants") or ()):
+        return False
     return bool((r["is_question"] or r["about_picture"]) and not _changes_picture(r))
 
 
