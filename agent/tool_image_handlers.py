@@ -2502,7 +2502,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     if (not continuing and not audios and not videos and len(images) <= 1
             and video_mod.herrgott_on()):
         chain_id, chain_idx = video_mod.new_chain(), 1
-        if len(parts) > 1:
+        if len(parts) > 1 and not approved:
             parts = video_mod.bridge_script(ctx, parts)
     # Read the user's request once, before the video prompt is rewritten.  OCR
     # catches lettering already present on the start frame even when the user
@@ -2543,7 +2543,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             ctx.video_part_request = p
             prepped.append(video_mod.prepare_prompt(
                 ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, voices + " ".join(parts[:i])),
-                seconds=secs[i] if i < len(secs) else 0.0, mode="t2va"))
+                images=images, seconds=secs[i] if i < len(secs) else 0.0, mode="t2va"))
     # With voices the first picture rides every part too: each part starts from the last
     # frame of the one before, and the face drifted a little further every time.
     # ...and so do all of them: with two heroes on two pictures, parts 2+ saw only the first

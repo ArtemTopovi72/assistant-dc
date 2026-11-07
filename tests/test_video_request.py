@@ -80,6 +80,38 @@ def test_approved_plan_does_not_replan_the_original_script(tmp_path):
     assert rig.renders()[0][1]['seconds'] == 8.0
 
 
+def test_approved_plan_does_not_invent_a_new_setting_in_bridges(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    def bad_bridge(ctx, parts):
+        raise AssertionError('approved parts must not acquire invented transitions')
+    rig = _Rig(tmp_path, bridge_script=bad_bridge)
+    ctx = rig.ctx(video_plan_parts=['The person moves.', 'The person speaks.'],
+                  video_plan_seconds=[5.2, 5.2], text_model=lambda *a, **kw: '',
+                  vision_model=lambda *a, **kw: 'NONE',
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': 'Animate this picture.'},
+                                    {'description': 'The person moves.', 'use_current_images': True})
+    assert rig.stitched
+
+
+def test_chain_continuation_prompt_can_see_the_source_image(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    seen = []
+    def prepare(ctx, text, **kw):
+        seen.append(kw.get('images'))
+        return text, kw.get('seconds') or 5.2
+    rig = _Rig(tmp_path, prepare_prompt=prepare)
+    ctx = rig.ctx(video_plan_parts=['The person moves.', 'The person speaks.'],
+                  video_plan_seconds=[5.2, 5.2], text_model=lambda *a, **kw: '',
+                  vision_model=lambda *a, **kw: 'NONE',
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': 'Animate this picture.'},
+                                    {'description': 'The person moves.', 'use_current_images': True})
+    assert seen == [[str(still)], [str(still)]]
+
+
 def test_short_output_is_marked_for_honest_reply(tmp_path):
     rig = _Rig(tmp_path, herrgott_on=lambda: False, probe=lambda p: {'seconds': 6})
     ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
