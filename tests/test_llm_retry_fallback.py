@@ -30,7 +30,7 @@ import time
 import types
 from fakes import Over
 
-_REAL_STREAM = L._stream_chat
+_REAL_STREAM = L._stream_chat_raw
 # The suite's stand-ins: every Ctx carries them as `deps`, llm reads them through
 # dep(ctx, ...); `_T` holds the faked clock calls.
 _D = types.SimpleNamespace()
