@@ -532,9 +532,15 @@ def _wait_for_free_card(ctx) -> None:
         if ctx is not None and hasattr(ctx, "set_stage"):
             ctx.set_stage("Waiting for the graphics card")
         logger.info("chat turn waiting: the card is rendering %s", busy)
-        if not _cc.wait_for_card(LLM_CARD_WAIT_S):
-            logger.warning("waited %ds for the card and gave up - calling anyway",
-                           LLM_CARD_WAIT_S)
+        deadline = time.monotonic() + LLM_CARD_WAIT_S
+        while not _is_cancelled(ctx):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                logger.warning("waited %ds for the card and gave up - calling anyway",
+                               LLM_CARD_WAIT_S)
+                break
+            if _cc.wait_for_card(min(1.0, remaining)):
+                break
     except Exception:
         # Never let VRAM etiquette swallow a turn.
         logger.exception("card wait failed - proceeding with the call")
@@ -570,6 +576,8 @@ def send_to_lm_studio(
     channel and returning empty content.
     """
     dep(ctx, "_wait_for_free_card", _wait_for_free_card)(ctx)
+    if _is_cancelled(ctx):
+        return None
     model_name = getattr(ctx, "model_name", "") or MODEL_NAME
     no_think = True
     is_oss = _is_gpt_oss(model_name)
@@ -696,6 +704,8 @@ def send_to_lm_studio(
             # between two attempts, and the retry must wait like a fresh call.
             if attempt:
                 dep(ctx, "_wait_for_free_card", _wait_for_free_card)(ctx)
+                if _is_cancelled(ctx):
+                    return None
             _inflight_enter()
             try:
                 message = dep(ctx, "_stream_chat", _stream_chat)(ctx, payload)

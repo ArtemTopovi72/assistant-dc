@@ -12,6 +12,24 @@ os.environ.setdefault("F5_TEST_RUN", "1")
 import llm  # noqa: E402
 
 
+def test_cancelled_turn_does_not_wait_for_render_or_call_model(monkeypatch):
+    import comfy_client
+    cancelled = threading.Event()
+    waits = []
+    monkeypatch.setattr(comfy_client, 'this_thread_holds_card', lambda: False)
+    monkeypatch.setattr(comfy_client, 'card_is_exclusive', lambda: 'video')
+    def wait(timeout):
+        waits.append(timeout)
+        cancelled.set()
+        return False
+    monkeypatch.setattr(comfy_client, 'wait_for_card', wait)
+    ctx = Ctx('qwen3.8', lambda *args: (_ for _ in ()).throw(AssertionError('model called')))
+    ctx.deps._wait_for_free_card = llm._wait_for_free_card
+    ctx.is_cancelled = cancelled.is_set
+    assert llm.send_to_lm_studio(ctx, [{'role': 'user', 'content': 'test'}]) is None
+    assert waits and waits[0] <= 1
+
+
 class Ctx:
     def __init__(self, model, stream=None):
         self.model_name, self.no_think = model, False
