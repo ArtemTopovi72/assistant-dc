@@ -61,11 +61,13 @@ LINK_NOTE_HEADS = ("[The user's message links a ", "[The video at ")
 
 
 def without_link_notes(text: str) -> str:
-    """The message without the notes `_read_links` appends about a video link: a summary
-    is rewritten on every watch, so the same request never read the same twice."""
+    """Remove generated notes before comparing a pending request with its replay."""
     t = text or ""
     cuts = [i for i in (t.find("\n" + h) for h in LINK_NOTE_HEADS) if i >= 0]
-    return t[:min(cuts)] if cuts else t
+    t = t[:min(cuts)] if cuts else t
+    return re.sub(r'\n\[This message was written \d+ (?:min|h) ago; you were switched off and are only '
+                  r'answering it now\. Do not claim you were awake or online then; say briefly '
+                  r'that you were offline\.\]', '', t)
 
 
 _FETCHED: dict = {}      # url -> result, the last two: one animate request downloads its link three times

@@ -205,6 +205,17 @@ def test_plan_request_ignores_the_rewritten_link_notes():
     assert tg_links.without_link_notes("просто текст") == "просто текст"
 
 
+def test_approved_plan_and_voice_replay_ignore_added_offline_notices():
+    import tg_links
+    original = 'Анимируй фото и скажи «Привет»'
+    note = ('[This message was written 25 min ago; you were switched off and are only '
+            'answering it now. Do not claim you were awake or online then; say briefly '
+            'that you were offline.]')
+    later = note.replace('25 min', '1 h')
+    assert tg_links.without_link_notes(original + '\n' + note) == tg_links.without_link_notes(original + '\n' + note + '\n' + later)
+    assert tg_links.without_link_notes(original + '\n' + note) != tg_links.without_link_notes(original + ' изменено')
+
+
 def test_every_continuation_part_keeps_the_voice_and_the_first_picture(tmp_path):
     """Parts 2+ copied the sound of the part before: the voice at the end was another man's
     (live 2026-10-19). The voice sample and the original picture ride every part."""
