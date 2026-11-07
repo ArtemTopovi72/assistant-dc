@@ -240,7 +240,10 @@ class ResolveMixin:
             for group in groups:
                 self._resolve_and_push(chat_id, group)
             return
-        arrival = min((item.get('_arrival_ts', time.time()) for item in batch), default=time.time())
+        arrivals = [item.get('_arrival_ts', time.time()) for item in batch]
+        with self._stop_lock:
+            stopped_at = self._stop_requests.get(chat_id, 0)
+        arrival = min((ts for ts in arrivals if ts > stopped_at), default=min(arrivals, default=time.time()))
         def cancelled():
             with self._stop_lock:
                 return getattr(self, '_stopping', False) or arrival <= self._stop_requests.get(chat_id, 0)

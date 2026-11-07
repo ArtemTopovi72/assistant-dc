@@ -24,7 +24,8 @@ def test_batch_read_context_cancels_only_messages_before_stop():
     bot._resolve_scoped = resolve
     R.ResolveMixin._resolve_and_push(bot, 1, [{'_arrival_ts': 10}])
     R.ResolveMixin._resolve_and_push(bot, 2, [{'_arrival_ts': 30}])
-    assert seen == [False, True, False, False]
+    R.ResolveMixin._resolve_and_push(bot, 1, [{'_arrival_ts': 10}, {'_arrival_ts': 30}])
+    assert seen == [False, True, False, False, False, False]
     assert intent.current_turn() is None
 
 
