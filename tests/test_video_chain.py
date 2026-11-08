@@ -833,3 +833,17 @@ def test_short_explicit_continuation_duration_survives_intent_miss(tmp_path, mon
     result = H._handle_generate_video(ctx, state, {'description': 'The man sits. He says "Добрый вечер, друзья".'})
     assert '[NOT MADE YET]' not in result
     assert rig.renders() and rig.renders()[0][1]['seconds'] == 5
+
+def test_static_continuation_retries_camera_drift_and_keeps_better_take(tmp_path, monkeypatch):
+    src, tail, seed = (tmp_path / name for name in ('original.mp4', 'tail.mp4', 'seed.jpg'))
+    for p in (src, tail, seed): p.write_bytes(b'x')
+    rig = _Rig(tmp_path, herrgott_on=lambda: False, static_continuation=lambda *a: True,
+               voice_sample=lambda *a: '', new_bright_region=lambda *a: False,
+               overlay_drift=lambda p: 64 if p.endswith('part1.mp4') else 5,
+               OVERLAY_DRIFT_MAX=35, join_continuation=lambda *a, **kw: str(tail))
+    ctx = rig.ctx(continue_src=str(src), continue_tail=str(tail))
+    ctx.deps = types.SimpleNamespace(_current_image_paths=lambda c, s: [str(seed)], script_read=_fakes.script_model)
+    ctx.yes_no = lambda q, t, default=False, **kw: False
+    H._handle_generate_video(ctx, {'user_input_original': 'Камера неподвижна, человек машет.'},
+                             {'description': 'The person waves, camera stationary.', 'seconds': 5})
+    assert len(rig.renders()) == 2

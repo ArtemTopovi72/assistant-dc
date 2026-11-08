@@ -2651,7 +2651,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     r'камер\w*.{0,30}(?:неподвижн\w*|статичн\w*|не двигает\w*|без движен\w*)|'
                     r'без движен\w* камер\w*',
                     (state.get('user_input_original') or '') + '\n' + (ctx.video_request or ''), re.I)
-                drift = video_mod.overlay_drift(p) if look and fixed_frame else None
+                drift = video_mod.overlay_drift(p) if p and fixed_frame and (look or static_hold) else None
+                drift_bad = drift is not None and drift > video_mod.OVERLAY_DRIFT_MAX
                 eyes = video_mod.eye_drift(images[0], p, light=False) if head and not static_hold and p and os.path.exists(p) else None
                 # part 1 had no speech check: its last word, cut by the clip's end, went to the user
                 # in runs 17 and 18 (2026-10-20); a take that says it all ranks first
@@ -2662,12 +2663,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 flash = bool(check_unexpected_flash and p and os.path.exists(p) and images
                              and video_mod.new_bright_region(p, images[0]) is True)
                 if head and p and os.path.exists(p):
-                    rank = (unverified, flash, eyes is None, eyes or 0)
+                    rank = (unverified, flash, drift_bad, eyes is None, eyes or 0)
                     if best_eyes is None or rank < best_eyes[0]:
                         best_eyes = (rank, result)
-                if ((eyes is not None and eyes > 0) or missed or flash) and attempt < 3:
+                if ((eyes is not None and eyes > 0) or missed or flash or (static_hold and drift_bad)) and attempt < 3:
                     logger.warning("generate_video: part 1 eyes drift %s, speech missed %s, "
-                                   "possible flash %s; once more", eyes, missed, flash)
+                                   "possible flash %s, background drift %s; once more", eyes, missed, flash, drift)
                     continue
                 if (attempt == 3 and len(parts) > 1 and
                         ((drift is not None and drift > video_mod.OVERLAY_DRIFT_MAX) or
@@ -2682,7 +2683,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             if best_eyes:
                 result = best_eyes[1]
                 speech_unverified = best_eyes[0][0]
-                framing_unverified = not best_eyes[0][2] and best_eyes[0][3] > 0
+                framing_unverified = best_eyes[0][2] or (not best_eyes[0][3] and best_eyes[0][4] > 0)
             else:
                 speech_unverified = unverified
             if static_hold and result.get("path") and os.path.exists(result["path"]):
