@@ -22,15 +22,17 @@ def parse_record(text: str):
     """'<paragraph> [ {row}, ... ]' -> (paragraph, rows) or None when the table is missing/broken."""
     t = (text or "").strip().replace("\n", " ")
     t = re.sub(r"^```\w*|```$", "", t).strip()
-    i = t.find("[{")
-    if i < 1:
+    match = re.search(r"\[\s*\{", t)
+    if not match or match.start() < 1:
         return None
+    i = match.start()
     try:
         rows, _ = json.JSONDecoder().raw_decode(t[i:])
     except ValueError:
         return None
-    para = t[:i].strip()
-    if not para or not isinstance(rows, list) or not all(isinstance(r, dict) and r.get("id") for r in rows):
+    para = re.sub(r"\s*```(?:json)?\s*$", "", t[:i].strip(), flags=re.I).strip()
+    if (not para or para.endswith("[") or not isinstance(rows, list)
+            or not all(isinstance(r, dict) and isinstance(r.get("id"), str) and r["id"] for r in rows)):
         return None
     return para, rows
 

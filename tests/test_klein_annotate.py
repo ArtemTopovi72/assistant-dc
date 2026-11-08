@@ -10,6 +10,11 @@ para, rows = ka.parse_record(reply)
 assert para.startswith("Move the boat") and len(rows) == 2
 assert ka.edit_boxes(rows) == [[400, 150, 520, 350], [400, 600, 520, 800]]
 assert ka.parse_record("just words") is None and ka.parse_record("x [{bad") is None
+pretty = 'Move the boat <boat_1>.\n```json\n[\n  {"id":"boat_1","src_bbox":[1,2,3,4],"tgt_bbox":[5,6,7,8]}\n]\n```'
+pretty_para, pretty_rows = ka.parse_record(pretty)
+assert pretty_para == 'Move the boat <boat_1>.' and ka.edit_boxes(pretty_rows) == [[1,2,3,4], [5,6,7,8]]
+assert ka.parse_record('Move the boat <boat_1>. [[{"id":"boat_1"}]]') is None
+assert ka.parse_record('Move the boat. [{"id":1}]') is None
 
 
 class Ctx:
