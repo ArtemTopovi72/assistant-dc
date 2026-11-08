@@ -66,6 +66,18 @@ def test_qwen_native_reasoning_is_enabled():
     assert p.get('reasoning') != 'off'
 
 
+def test_qwen_thinking_off_prefills_only_unconstrained_text():
+    seen = []
+    ctx = Ctx('qwen-aggressive', lambda ctx, payload: seen.append(payload) or
+              {'role': 'assistant', 'content': 'done'})
+    ctx.no_think = True
+    llm.send_to_lm_studio(ctx, [{'role': 'user', 'content': 'translate'}], max_tokens=200)
+    assert seen[-1]['messages'][-1] == {'role': 'assistant', 'content': llm.QWEN_NO_THINK_PREFILL}
+    schema = {'type': 'object', 'properties': {'answer': {'type': 'string'}}}
+    llm.send_to_lm_studio(ctx, [{'role': 'user', 'content': 'classify'}], json_schema=schema)
+    assert seen[-1]['messages'][-1]['role'] == 'user'
+
+
 def test_qwen_alias_uses_reported_architecture(monkeypatch):
     monkeypatch.setattr(llm, '_model_architecture', lambda name: 'qwen35', raising=False)
     p = _payload('hauhaucs-aggressive@?')

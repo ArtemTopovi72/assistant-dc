@@ -593,8 +593,7 @@ def send_to_lm_studio(
     native_reasoning = not native_off or bool(is_gemma and (tools or json_schema) and not gemma_auto_single)
 
     if is_gemma or is_qwen:
-        # Let the model produce its own reasoning; a closed think block conflicts
-        # with constrained tool/JSON grammars and suppresses reasoning elsewhere.
+        # Closed think blocks conflict with constrained tool/JSON grammars.
         no_think = False
         if prefill and ('<think' in prefill.lower() or prefill == GEMMA_NO_THINK_PREFILL):
             prefill = None
@@ -602,6 +601,8 @@ def send_to_lm_studio(
             prefill = GEMMA_NO_THINK_PREFILL
         elif tools or json_schema:
             prefill = None
+        elif is_qwen and native_off:
+            prefill = QWEN_NO_THINK_PREFILL
         elif is_gemma and native_off:
             prefill = GEMMA_NO_THINK_PREFILL
         if native_reasoning:
