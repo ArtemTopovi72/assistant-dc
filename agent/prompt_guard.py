@@ -177,7 +177,7 @@ _QUOTE_BLOCK = re.compile(re.escape(QUOTE_OPEN) + r".*?(?:" + re.escape(QUOTE_CL
 # words: replayed by ▶ Render, its «picture 1» named the chat's FIRST picture and
 # the clip animated a hiker from the day before instead of the cat just sent.
 OCR_NOTE_HEAD = "[Text written on picture 1 (OCR, exact letters;"
-_OCR_NOTE = re.compile(re.escape(OCR_NOTE_HEAD) + r".*?so name it\.\]", re.S)
+_OCR_NOTE = re.compile(re.escape(OCR_NOTE_HEAD) + r".*?(?:so name it|End OCR note)\.\]", re.S)
 
 
 def wrap_quoted(note: str, text: str) -> str:

@@ -40,6 +40,9 @@ from prompt_guard import OCR_NOTE_HEAD
 _ocr = ("оживи фото: кот зевает\n" + OCR_NOTE_HEAD + " each «…» is a separate label: «Lenovo]». "
         "The lettering is part of what the picture says, so name it.]")
 assert user_words(_ocr) == "оживи фото: кот зевает", user_words(_ocr)
+_new_ocr = ("измени стиль\n" + OCR_NOTE_HEAD +
+            " separate labels; OCR may be inaccurate): «Lenovo]». End OCR note.]")
+assert user_words(_new_ocr) == "измени стиль", user_words(_new_ocr)
 assert OCR_NOTE_HEAD in inspect.getsource(tg_resolve) or "OCR_NOTE_HEAD" in inspect.getsource(tg_resolve)
 # one implementation: every reader goes through it
 assert "_ordinal_target(own_words" in inspect.getsource(tg_resolve)
