@@ -429,13 +429,25 @@ def add_text_verified(ctx, image_path: str, instruction: str,
             continue
         score, reading = 2.0, ""
         candidates = list(reads) + [f"{a} {b}" for a, b in zip(reads, reads[1:])]
+        if require_ocr:
+            boxes = dep(ctx, "ocr_boxes", ocr_reader.read_boxes)(out) or []
+            parts = []
+            for points, label, _confidence in boxes:
+                if label and points:
+                    xs, ys = zip(*points)
+                    parts.append((min(xs), min(ys), max(xs), max(ys), label))
+            for x0, y0, x1, y1, _ in parts:
+                w0, h0 = max(1, x1 - x0), max(1, y1 - y0)
+                nearby = [p for p in parts if abs((p[0] + p[2] - x0 - x1) / 2) <= 1.5 * max(w0, p[2] - p[0])
+                          and abs((p[1] + p[3] - y0 - y1) / 2) <= 2 * max(h0, p[3] - p[1])]
+                candidates.append(" ".join(p[4] for p in sorted(nearby, key=lambda p: (p[1], p[0]))))
         for w in wanted:
             s, r = max(((_similarity(w, c), c) for c in candidates), default=(0.0, ""))
             expected = [_visual_norm(t) for t in re.findall(r"[^\W_]+", w)]
             for c in candidates:
                 words = [_visual_norm(t) for t in re.findall(r"[^\W_]+", c)]
-                if expected and any(words[i:i + len(expected)] == expected
-                                    for i in range(len(words) - len(expected) + 1)):
+                if expected and any("".join(words[i:j]) == "".join(expected)
+                                    for i in range(len(words)) for j in range(i + 1, len(words) + 1)):
                     s, r = 1.0, c
                     break
             if s < score:

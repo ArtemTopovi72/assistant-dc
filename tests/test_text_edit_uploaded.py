@@ -89,3 +89,20 @@ def test_ocr_split_across_adjacent_lines_matches_label(tmp_path, monkeypatch):
     out, _, _ = image_router.add_text_verified(ctx, str(source),
         'write "Обед для всех" on the barrel and "ШЕФ 2026" on the apron', allow_overlay=False)
     assert out == str(source)
+
+
+def test_ocr_spatial_grouping_handles_interleaved_surfaces(tmp_path, monkeypatch):
+    source = tmp_path / 'source.png'
+    Image.new('RGB', (200, 100), 'white').save(source)
+    monkeypatch.setattr(image_router, 'TEXT_ADD_TRIES', 1)
+    def box(x1, y1, x2, y2, text):
+        return ([[x1,y1],[x2,y1],[x2,y2],[x1,y2]], text, .9)
+    boxes = [box(32,80,46,87,'Обед'), box(129,82,164,101,'ШЕФ2026'),
+             box(30,87,40,91,'ДЛЯ'), box(41,87,52,91,'Bcex')]
+    ctx = SimpleNamespace(vision_model=lambda *a, **k: 'YES', deps=SimpleNamespace(
+        image=SimpleNamespace(edit_image_with_firered=lambda *a, **k: str(source)),
+        ocr_boxes=lambda _: boxes, ocr_read=lambda _: ['Обед', 'ШЕФ2026', 'ДЛЯ', 'Bcex']))
+    instruction = 'write "Обед для всех" on the barrel and "ШЕФ 2026" on the apron'
+    out, _, _ = image_router.add_text_verified(ctx, str(source), instruction,
+                                               require_ocr=True, allow_overlay=False)
+    assert out == str(source)
