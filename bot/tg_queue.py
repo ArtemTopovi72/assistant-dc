@@ -728,7 +728,7 @@ class QueueMixin:
         with self._queue_claim_lock:
             if not self._running or self._stopping:
                 return None
-            task = self._backend.pop(timeout=5.0)
+            task = self._backend.pop(timeout=0)
             if task is None: return None
             if not self._running or self._stopping:
                 self._backend.requeue(task)

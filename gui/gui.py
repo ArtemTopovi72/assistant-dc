@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 
 # Before cv2/PyQt5: PyQt5 bundles MSVCP140 14.26 and whatever loads first wins;
 # torch & co. crash in the old copy (0xc0000005). Every way into the GUI goes
@@ -225,6 +226,10 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
 
         self.setAcceptDrops(True)
         self._build_ui()
+        self._model_switch_ready = threading.Event()
+        self._model_switch_ready.set()
+        self._api_old_no_think = None
+        self._api_model_error = ''
         try:
             import debug_user
             from gui_control import GuiControl
@@ -232,7 +237,8 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
                 'voice': self.voice_btn, 'pause_speech': self.pause_btn,
                 'ultra_search': self.ultra_btn, 'use_database': self.usedb_btn,
                 'stop': self.stop_btn, 'restart': self.restart_btn,
-            })
+            }, model_state=self._api_model_state, model_select=self._api_model_select,
+               model_lock=self._api_model_lock)
             if os.getenv('F5_TEST_RUN') != '1':
                 debug_user.register_gui_control(self._gui_control)
         except (ImportError, OSError):
@@ -837,7 +843,58 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
                 else:
                     self._set_status("Settings applied.")
 
-    def _start_model_switch(self, model_id):
+    def _api_model_state(self):
+        ctx = self.ctx
+        return {'ok': True, 'model': getattr(self, '_active_model_id', ''),
+                'requested': getattr(ctx, 'model_name', ''),
+                'thinking': not bool(getattr(ctx, 'no_think', True)),
+                'switching': self.model_switch_worker is not None,
+                'error': getattr(self, '_api_model_error', '')}
+
+    def _api_model_lock(self):
+        bot = getattr(getattr(self, 'telegram_tab', None), '_bot', None)
+        return bot._queue_claim_lock if bot is not None else None
+
+    def _api_model_select(self, model_id, thinking, held_lock=None):
+        import comfy_client
+        import llm
+        bot = getattr(getattr(self, 'telegram_tab', None), '_bot', None)
+        if (self.ctx is None or self.model_switch_worker is not None or self.worker is not None
+                or self._running_task is not None or any(x.get('status') == 'pending' for x in self._task_queue)
+                or llm.inflight() or comfy_client.card_in_use(grace=0)):
+            return {'error': 'application is busy'}
+        claim = bot._queue_claim_lock if bot is not None and bot._queue_claim_lock is not held_lock else None
+        if claim is not None and not claim.acquire(blocking=False):
+            return {'error': 'bot is busy'}
+        try:
+            if bot is not None:
+                with bot._task_lock:
+                    busy = bool(bot._chat_busy)
+                if busy or bot._backend.depth() or getattr(bot, '_debouncing', None):
+                    return {'error': 'bot is busy'}
+            if llm.inflight() or comfy_client.card_in_use(grace=0):
+                return {'error': 'application is busy'}
+            self._api_model_error = ''
+            if model_id == self._active_model_id:
+                self.ctx.no_think = not thinking
+                self._refresh_chip()
+                return {'ok': True, 'switching': False}
+            self._api_old_no_think = self.ctx.no_think
+            self._model_switch_ready.clear()
+        finally:
+            if claim is not None:
+                claim.release()
+        self.ctx.model_name, self.ctx.no_think = model_id, not thinking
+        try:
+            self._start_model_switch(model_id, restore_on_failure=True)
+        except Exception:
+            self.ctx.model_name, self.ctx.no_think = self._active_model_id, self._api_old_no_think
+            self._api_old_no_think = None
+            self._model_switch_ready.set()
+            raise
+        return {'ok': True, 'switching': True}
+
+    def _start_model_switch(self, model_id, restore_on_failure=False):
         """Actually load the newly chosen model in LM Studio (unloads the old one).
 
         Blocks chat input for the duration so a request can't hit LM Studio while
@@ -856,6 +913,8 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
             return
         self._add_system(f"Switching model to '{model_id}' — unloading the old one…")
         self.model_switch_worker = ModelSwitchWorker(LM_STUDIO_BASE, model_id)
+        if restore_on_failure:
+            self.model_switch_worker.restore_model = self._active_model_id
         self.model_switch_worker.done.connect(self._on_model_switch_done)
         self.model_switch_worker.finished.connect(self._on_model_switch_finished)
         self.model_switch_worker.start()
@@ -863,6 +922,11 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
         self.stage.set_stage("Switching model")
 
     def _on_model_switch_done(self, ok, msg):
+        if getattr(self, '_api_old_no_think', None) is not None:
+            if not ok and self.ctx is not None:
+                self.ctx.no_think = self._api_old_no_think
+                self._api_model_error = str(msg)
+            self._api_old_no_think = None
         if ok:
             # Commit the new model to the single source of truth only on success, so
             # a failed switch doesn't make a later reselect look like a no-op.
@@ -896,6 +960,9 @@ class AssistantWindow(LayoutMixin, DatabaseTabMixin, VoiceMixin, DropPasteMixin,
 
     def _on_model_switch_finished(self):
         self.model_switch_worker = None
+        ready = getattr(self, '_model_switch_ready', None)
+        if ready is not None:
+            ready.set()
         self._set_busy(False)
         self.stage.set_stage("Ready")
 

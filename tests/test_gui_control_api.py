@@ -151,3 +151,95 @@ def test_restart_acknowledges_before_slow_shutdown():
     worker.join(2)
     assert result == [{'ok': True}]
     assert acknowledged_while_running == [True]
+
+
+def test_model_control_runs_on_gui_thread():
+    app = QApplication.instance() or QApplication([])
+    calls = []
+    control = GuiControl({}, model_state=lambda: {'model': 'old', 'switching': False},
+                         model_select=lambda model, thinking, lock: calls.append(
+                             (threading.current_thread().name, model, thinking)) or {'ok': True})
+    result = []
+    worker = threading.Thread(target=lambda: result.append(control.model_select('new', True)))
+    worker.start()
+    end = time.monotonic() + 3
+    while worker.is_alive() and time.monotonic() < end:
+        app.processEvents()
+        time.sleep(.01)
+    worker.join(1)
+    assert result == [{'ok': True}]
+    assert calls == [(threading.current_thread().name, 'new', True)]
+    assert control.model_state() == {'model': 'old', 'switching': False}
+
+
+def test_model_http_api_requires_token_and_validates_installed_model(monkeypatch):
+    import json
+    import urllib.error
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+    from types import SimpleNamespace
+
+    calls = []
+    monkeypatch.setattr(debug_user, '_GUI_TOKEN', 'secret')
+    monkeypatch.setattr(debug_user, 'enabled', lambda: True)
+    monkeypatch.setattr(debug_user, '_available_gui_models', lambda: ['model-a'])
+    monkeypatch.setattr(debug_user, '_GUI_CONTROL', SimpleNamespace(
+        model_state=lambda: {'model': 'old', 'switching': False},
+        model_select=lambda model, thinking: calls.append((model, thinking)) or {'ok': True}))
+    server = ThreadingHTTPServer(('127.0.0.1', 0), debug_user._api_handler())
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f'http://127.0.0.1:{server.server_port}/gui/model'
+
+    def request(body=None, headers=None):
+        req = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode(),
+                                     headers=headers or {}, method='GET' if body is None else 'POST')
+        try:
+            with urllib.request.urlopen(req, timeout=3) as response:
+                return response.status, json.load(response)
+        except urllib.error.HTTPError as exc:
+            return exc.code, json.load(exc)
+    try:
+        assert request()[0] == 403
+        assert request(headers={'X-Assistant-Control': 'secret', 'Origin': 'https://example.com'})[0] == 403
+        assert request(headers={'X-Assistant-Control': 'secret'})[1]['model'] == 'old'
+        assert request({'model': 'missing', 'thinking': True}, {'X-Assistant-Control': 'secret'})[0] == 400
+        assert request({'model': 'model-a', 'thinking': 'yes'}, {'X-Assistant-Control': 'secret'})[0] == 400
+        assert request({'model': 'model-a', 'thinking': True}, {'X-Assistant-Control': 'secret'})[0] == 200
+        assert calls == [('model-a', True)]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_model_control_waits_for_queue_lock_without_blocking_gui():
+    app = QApplication.instance() or QApplication([])
+    lock = threading.Lock()
+    lock.acquire()
+    seen, result = [], []
+    control = GuiControl({}, model_lock=lambda: lock,
+                         model_select=lambda model, thinking, held: seen.append(held is lock) or {'ok': True})
+    worker = threading.Thread(target=lambda: result.append(control.model_select('new', False)))
+    worker.start()
+    app.processEvents()
+    assert worker.is_alive() and not seen
+    lock.release()
+    end = time.monotonic() + 3
+    while worker.is_alive() and time.monotonic() < end:
+        app.processEvents()
+        time.sleep(.01)
+    worker.join(1)
+    assert result == [{'ok': True}] and seen == [True]
+
+
+def test_idle_queue_claim_does_not_hold_lock_while_waiting():
+    from types import SimpleNamespace
+    from tg_queue import QueueMixin
+
+    timeouts = []
+    bot = SimpleNamespace(_queue_claim_lock=threading.Lock(), _running=True,
+                          _stopping=False,
+                          _backend=SimpleNamespace(pop=lambda timeout: timeouts.append(timeout)))
+    assert QueueMixin._claim_task(bot) is None
+    assert timeouts == [0]
+    assert bot._queue_claim_lock.acquire(blocking=False)
+    bot._queue_claim_lock.release()

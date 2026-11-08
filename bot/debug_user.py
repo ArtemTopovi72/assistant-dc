@@ -271,6 +271,13 @@ _GUI_CONTROL = None
 _GUI_TOKEN = ""
 
 
+def _available_gui_models():
+    import config
+    import model_selector
+    return sorted({m['id'] for m in model_selector.list_models(config.LM_STUDIO_BASE)
+                   if isinstance(m.get('id'), str) and m['id']})
+
+
 def register_gui_control(control):
     """Enable authenticated, allowlisted GUI actions through the existing local API."""
     import secrets
@@ -310,12 +317,17 @@ def _api_handler():
 
         def do_GET(self):
             u = urlparse(self.path)
-            if u.path == '/gui/actions':
+            if u.path in ('/gui/actions', '/gui/model', '/gui/models'):
                 if not self._gui_authorized():
                     return self._send(403, {'error': 'forbidden'})
                 if not enabled() or _GUI_CONTROL is None:
                     return self._send(503, {'error': 'GUI control unavailable'})
-                return self._send(200, {'actions': sorted(_GUI_CONTROL.buttons)})
+                if u.path == '/gui/actions':
+                    return self._send(200, {'actions': sorted(_GUI_CONTROL.buttons)})
+                if u.path == '/gui/models':
+                    return self._send(200, {'models': _available_gui_models()})
+                result = _GUI_CONTROL.model_state()
+                return self._send(503 if result.get('error') and not result.get('ok') else 200, result)
             if u.path == "/messages":
                 q = parse_qs(u.query)
                 since = float((q.get("since") or ["0"])[0])
@@ -329,7 +341,7 @@ def _api_handler():
             try:
                 path = urlparse(self.path).path
                 n = int(self.headers.get("Content-Length") or 0)
-                if path == '/gui/press':
+                if path in ('/gui/press', '/gui/model'):
                     if not self._gui_authorized():
                         return self._send(403, {'error': 'forbidden'})
                     if n < 0 or n > 4096:
@@ -339,8 +351,16 @@ def _api_handler():
                     body = json.loads(self.rfile.read(n) or b'{}')
                     if not isinstance(body, dict):
                         return self._send(400, {'error': 'expected an object'})
-                    result = _GUI_CONTROL.press(str(body.get('action') or ''))
-                    return self._send(200 if result.get('ok') else 400, result)
+                    if path == '/gui/press':
+                        result = _GUI_CONTROL.press(str(body.get('action') or ''))
+                        return self._send(200 if result.get('ok') else 400, result)
+                    model, thinking = body.get('model'), body.get('thinking')
+                    if not isinstance(model, str) or not model or not isinstance(thinking, bool):
+                        return self._send(400, {'error': 'expected model and boolean thinking'})
+                    if model not in _available_gui_models():
+                        return self._send(400, {'error': 'unknown model'})
+                    result = _GUI_CONTROL.model_select(model, thinking)
+                    return self._send(200 if result.get('ok') else 409, result)
                 body = json.loads(self.rfile.read(n) or b"{}")
                 user = int(body.get("user") or 0)
                 if path == "/say":

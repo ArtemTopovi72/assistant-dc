@@ -86,6 +86,20 @@ def test_model_loader_success_and_failure():
 
 # ------------------------------------------------------------ ModelSwitchWorker
 
+def test_model_switch_restores_previous_model_after_failure(monkeypatch):
+    from types import SimpleNamespace
+    calls, results = [], []
+    def ensure(base, model):
+        calls.append(model)
+        return (False, 'load failed') if model == 'new' else (True, 'ready')
+    monkeypatch.setattr(gui.gui_workers, 'worker_module', lambda worker, name: SimpleNamespace(ensure_exclusive=ensure))
+    worker = gui.ModelSwitchWorker('http://x', 'new')
+    worker.restore_model = 'old'
+    worker.done.connect(lambda ok, msg: results.append((ok, msg)))
+    worker.run()
+    assert calls == ['new', 'old']
+    assert results and results[0][0] is False and 'previous model restored' in results[0][1]
+
 def test_model_switch_success_and_failure():
     w = gui.ModelSwitchWorker("http://x", "id")
     rec = cap(w, "done")

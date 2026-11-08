@@ -59,14 +59,22 @@ class ModelSwitchWorker(QThread):
     def __init__(self, base_url, model_id):
         super().__init__()
         self.base_url, self.model_id = base_url, model_id
+        self.restore_model = ''
 
     def run(self):
         try:
             ok, msg = worker_module(self, "lmstudio").ensure_exclusive(self.base_url, self.model_id)
-            self.done.emit(ok, msg)
         except Exception as exc:
             logger.exception("Model switch failed")
-            self.done.emit(False, str(exc))
+            ok, msg = False, str(exc)
+        if not ok and self.restore_model:
+            try:
+                restored, why = worker_module(self, "lmstudio").ensure_exclusive(self.base_url, self.restore_model)
+                msg = f"{msg}; previous model {'restored' if restored else 'restore failed: ' + str(why)}"
+            except Exception as exc:
+                logger.exception("Previous model restoration failed")
+                msg = f"{msg}; previous model restore failed: {exc}"
+        self.done.emit(ok, msg)
 
 
 class RedrawWorker(QThread):

@@ -456,6 +456,9 @@ class TelegramTab(QWidget):
         Every other tab that runs long jobs already takes a scoped view; the bot
         was the one that did not.
         """
+        ready = getattr(self.host, '_model_switch_ready', None)
+        if ready is not None:
+            ready.wait()
         ctx = getattr(self.host, "ctx", None)
         if ctx is None:
             return None

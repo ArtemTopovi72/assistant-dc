@@ -13,6 +13,52 @@ from gui_busy_state import BusyStateMixin
 from models import _atomic_write_json
 
 
+def test_api_model_select_rejects_busy_and_switches_when_idle(monkeypatch):
+    import llm
+    import comfy_client
+    monkeypatch.setattr(llm, 'inflight', lambda: 0)
+    monkeypatch.setattr(comfy_client, 'card_in_use', lambda *a, **kw: False)
+    gate = threading.Event()
+    gate.set()
+    bot = types.SimpleNamespace(_chat_busy={1: 1}, _task_lock=threading.Lock(),
+                                _queue_claim_lock=threading.Lock(),
+                                _backend=types.SimpleNamespace(depth=lambda: 0))
+    calls = []
+    host = types.SimpleNamespace(ctx=types.SimpleNamespace(model_name='old', no_think=True),
+        _active_model_id='old', model_switch_worker=None, worker=None, _running_task=None,
+        _task_queue=[], telegram_tab=types.SimpleNamespace(_bot=bot),
+        _model_switch_ready=gate, _api_old_no_think=None,
+        _start_model_switch=lambda model, **kw: calls.append((model, kw)))
+    assert 'error' in AssistantWindow._api_model_select(host, 'new', True)
+    assert gate.is_set() and host.ctx.model_name == 'old'
+    bot._chat_busy.clear()
+    bot._queue_claim_lock.acquire()
+    try:
+        assert 'error' in AssistantWindow._api_model_select(host, 'new', True)
+        assert gate.is_set() and not calls
+    finally:
+        bot._queue_claim_lock.release()
+    assert AssistantWindow._api_model_select(host, 'new', True)['ok']
+    assert not gate.is_set() and host.ctx.model_name == 'new' and not host.ctx.no_think
+    assert calls == [('new', {'restore_on_failure': True})]
+
+
+def test_telegram_context_waits_until_api_model_switch_finishes():
+    import time
+    from gui_telegram_tab import TelegramTab
+    gate = threading.Event()
+    host = types.SimpleNamespace(ctx=types.SimpleNamespace(model_name='new'), _model_switch_ready=gate)
+    tab = types.SimpleNamespace(host=host, _bot_ctx_view=None, _bot_cancel=threading.Event())
+    results = []
+    worker = threading.Thread(target=lambda: results.append(TelegramTab._bot_ctx(tab)))
+    worker.start()
+    time.sleep(.05)
+    assert worker.is_alive() and not results
+    gate.set()
+    worker.join(2)
+    assert results and results[0].model_name == 'new'
+
+
 def test_stop_cancels_database_build_worker():
     worker = LibraryBuildWorker([])
     host = types.SimpleNamespace(
