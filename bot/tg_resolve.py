@@ -265,6 +265,10 @@ class ResolveMixin:
                 tg_bot.logger.debug('batch status update failed', exc_info=True)
         with intent.turn_scope() as turn:
             turn.cancel_context = SimpleNamespace(is_cancelled=cancelled, set_stage=set_stage)
+            shared = getattr(self, '_get_ctx', lambda: None)()
+            for name in ('model_name', 'no_think', 'reasoning_effort'):
+                if hasattr(shared, name):
+                    setattr(turn.cancel_context, name, getattr(shared, name))
             try:
                 return self._resolve_scoped(chat_id, batch)
             finally:

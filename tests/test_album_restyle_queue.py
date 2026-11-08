@@ -46,6 +46,20 @@ def test_batch_shows_and_clears_real_model_wait_status():
     assert events[-1] == ('delete', 42)
 
 
+def test_batch_reads_use_selected_model_and_reasoning():
+    import intent
+    import threading
+    shared = SimpleNamespace(model_name='selected@q5_k_m', no_think=False, reasoning_effort='low')
+    seen = []
+    bot = SimpleNamespace(_stop_lock=threading.Lock(), _stop_requests={}, _get_ctx=lambda: shared)
+    def resolve(chat, batch):
+        ctx = intent.current_turn().cancel_context
+        seen.append((ctx.model_name, ctx.no_think, ctx.reasoning_effort, ctx.is_cancelled()))
+    bot._resolve_scoped = resolve
+    R.ResolveMixin._resolve_and_push(bot, 1, [{'_arrival_ts': 10}])
+    assert seen == [('selected@q5_k_m', False, 'low', False)]
+
+
 def test_all_photos_style_request_is_distinct_from_single_photo_and_description():
     assert R._wants_all_photos_restyled("все пять — в стиле киберпанк")
     assert R._wants_all_photos_restyled("перерисуй каждую фотографию в аниме стиле")

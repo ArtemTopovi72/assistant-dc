@@ -89,6 +89,8 @@ seen_ctx = []
 class Graph:
     def __init__(self, ctx=None): self.ctx = ctx
     def invoke(self, base):
+        import intent
+        assert intent.current_turn().cancel_context is self.ctx
         seen_ctx.append(self.ctx)
         # what a tool does: write a fact into the context it was given
         if self.ctx is not None:
