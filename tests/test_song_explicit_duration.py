@@ -9,11 +9,24 @@ import tg_songs as S
 from seams import Over
 
 
+def test_duration_notice_skips_unknown_and_small_difference(monkeypatch):
+    import video_look
+    monkeypatch.setattr(video_look, 'duration_seconds', lambda path: 0)
+    assert S._duration_notice('song.mp3', 20, 'ru') == ''
+    monkeypatch.setattr(video_look, 'duration_seconds', lambda path: 23)
+    assert S._duration_notice('song.mp3', 20, 'ru') == ''
+    monkeypatch.setattr(video_look, 'duration_seconds', lambda path: 31)
+    assert '31' in S._duration_notice('song.mp3', 20, 'ru')
+    assert S._duration_notice('song.mp3', 0, 'ru') == ''
+
+
 @pytest.mark.parametrize('asked,session_duration,expected', [(30, '', 30), (0, '30', 30), (0, '', 90)])
-def test_song_delivery_resolves_auto_from_the_effective_duration(asked, session_duration, expected):
+def test_song_delivery_resolves_auto_from_the_effective_duration(asked, session_duration, expected, monkeypatch):
     long = '[verse]\n' + '\n'.join(f'Story line {n}' for n in range(14))
     compact = '[verse]\nCat found the key.\nOpened the door with glee.\n[outro]\nHome to his owner he ran.\nShe hugged the little man.'
-    choices, rendered, written = [], [], []
+    import video_look
+    monkeypatch.setattr(video_look, 'duration_seconds', lambda path: 41.0)
+    choices, rendered, written, sent = [], [], [], []
     def choose(ctx, topic, lang, **kw):
         choices.append(kw)
         # A noisy model may return seconds even when only sound fields were requested.
@@ -35,7 +48,7 @@ def test_song_delivery_resolves_auto_from_the_effective_duration(asked, session_
                 build_structured_caption=lambda *a, **k: {'lyrics': long, 'style': 'pop'},
                 generate_music=lambda ctx, lyrics, style, **kw: rendered.append((lyrics, kw)) or 'song.mp3')
         def _get_session(self, chat): return self.sess
-        def _send_audio(self, *a, **k): return True
+        def _send_audio(self, *a, **k): sent.append((a, k)); return True
         def _send_text(self, *a, **k): pass
     bot = Bot()
     assert bot._generate_song(7, 'Cat finds key, opens door and returns home to owner', 'en', asked, ctx=ctx)
@@ -43,6 +56,8 @@ def test_song_delivery_resolves_auto_from_the_effective_duration(asked, session_
     assert choices[0]['duration'] == (expected == 90)
     assert M.count_sung_lines(rendered[0][0]) <= M.line_budget(expected)[2]
     assert S.LAST_SONG[7] == rendered[0][0]
+    caption = sent[0][1].get('caption', sent[0][0][2] if len(sent[0][0]) > 2 else '')
+    assert ('41' in caption and '30' in caption) if expected == 30 else not caption
     if expected == 30:
         assert all(event in rendered[0][0] for event in ('found the key', 'Opened the door', 'Home to his owner'))
         assert 'AT MOST 6 sung lines' in written[0]

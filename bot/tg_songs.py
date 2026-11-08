@@ -20,6 +20,22 @@ import re as _re
 import music as _music_mod
 
 
+def _duration_notice(path: str, requested: int, lang: str) -> str:
+    if not requested:
+        return ""
+    import math
+    try:
+        from video_look import duration_seconds
+        actual = duration_seconds(path)
+    except Exception:
+        return ""
+    if not math.isfinite(actual) or actual <= 0 or abs(actual - requested) <= max(5, requested * .15):
+        return ""
+    if lang == "ru":
+        return f"⏱ Получилось примерно {actual:.0f} с вместо запрошенных {requested} с."
+    return f"⏱ The track is about {actual:.0f}s, instead of the requested {requested}s."
+
+
 def _read(text: str, after_song: bool = False, ctx=None) -> dict:
     """The model's read of a chat message (agent/intent.py): song request, seconds,
     «на него», redo, rewrite. A request that names a song and a making verb is the
@@ -350,6 +366,7 @@ class SongsMixin:
             # while a topic was being typed still applies to this song.
             sess = self._get_session(chat_id)
             duration = duration or tg_bot._music_duration(sess)
+            requested_duration = duration
             prefs = tg_bot._music_prefs(sess)
             # Whatever is on Auto, the bot picks itself BEFORE writing -- one
             # short call -- so the choice is explicit in the brief and can be
@@ -461,7 +478,8 @@ class SongsMixin:
             if t:                                   # the file is named after the song
                 import nice_names
                 nice_names.TITLES[chat_id] = t
-            ok = self._send_audio(chat_id, wav_path)
+            notice = _duration_notice(wav_path, requested_duration, lang)
+            ok = self._send_audio(chat_id, wav_path, caption=notice) if notice else self._send_audio(chat_id, wav_path)
             if ok:
                 LAST_SONG[chat_id] = caption.get("lyrics", "")
             if not ok:
