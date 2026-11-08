@@ -146,6 +146,7 @@ check("the task carries the clip's start frame, not the chat's stale picture",
 
 # ---- the tool: the tail becomes <Video 1>, the result is the joined clip ----
 import tool_image_handlers as H
+H._check_joins = lambda ctx, pairs: ""
 import types
 from fakes import Over
 # What the handler is handed on each TCtx: the video engine's fakes (_E), the handlers'
@@ -183,6 +184,27 @@ check("the delivered clip is the joined one (longer than the new part)",
       st.get("video_path") and V.probe(st["video_path"])["seconds"] > 5.5, st)
 check("the delivered duration describes the joined clip",
       abs(st.get("video_seconds", 0) - V.probe(st["video_path"])["seconds"]) < 0.1, st)
+
+_original_check_joins = H._check_joins
+_original_seed_frame, _original_first_frame = C.seed_frame, C.first_frame
+C.seed_frame = lambda src, out: (Image.new('RGB', (16, 16), 'red').save(out) or True)
+_join_skips = []
+def _first_for_join(src, out, skip=0):
+    _join_skips.append(skip)
+    Image.new('RGB', (16, 16), 'blue').save(out)
+    return True
+C.first_frame = _first_for_join
+_seen_joins = []
+def _check_external(ctx, pairs):
+    _seen_joins.extend((os.path.exists(a), os.path.exists(b)) for a, b in pairs)
+    return 'possible framing jump'
+H._check_joins = _check_external
+_external_reply = H._handle_generate_video(TCtx(), {}, {"description": "they leave"})
+check("external continuation checks and reports its join",
+      _seen_joins == [(True, True)] and _join_skips == [2]
+      and 'possible framing jump' in _external_reply, (_seen_joins, _join_skips))
+H._check_joins = _original_check_joins
+C.seed_frame, C.first_frame = _original_seed_frame, _original_first_frame
 
 # «…орёт э, это уже есть на видео, а потом…»: a plan part the user says is already in
 # the clip is not rendered again (owner, 2026-10-12: 6 minutes for a repeat).

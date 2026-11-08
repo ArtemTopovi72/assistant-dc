@@ -1789,7 +1789,9 @@ def _check_joins(ctx, joins: list) -> str:
             user_text="These are the frames on both sides of each join of one continuous "
                       "video. For each join where the camera framing jumps, the place changes "
                       "or a person becomes someone else, say which join and what jumps, in a "
-                      "few words. Answer NONE when every join is continuous.") or "").split())
+                      "few words. Natural changes in gaze, facial expression, posture or hand "
+                      "position are not a framing jump or identity change. "
+                      "Answer NONE when every join is continuous.") or "").split())
     except Exception:
         logger.warning("video joins: the check failed", exc_info=True)
         return ""
@@ -2775,6 +2777,17 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         joined = (video_mod.join_pinned(cont_src, path) if pinned_tail
                   else video_mod.join_continuation(cont_src, path))
         if joined:
+            try:
+                import tg_continue
+                import tempfile as _tempfile
+                with _tempfile.TemporaryDirectory(prefix='video_join_review_') as review_dir:
+                    before = os.path.join(review_dir, 'before.jpg')
+                    after = os.path.join(review_dir, 'after.jpg')
+                    skip = video_mod.MOTION_CONTEXT_FRAMES if pinned_tail else 2
+                    if tg_continue.seed_frame(cont_src, before) and tg_continue.first_frame(path, after, skip):
+                        ctx.video_join_note = _check_joins(ctx, [(before, after)])
+            except Exception:
+                logger.warning('continuation join review failed', exc_info=True)
             path = video_mod._adopt_output(joined, video_mod.OUTPUT_DIR)       # the whole thing: original + what comes next
             result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
             try:
@@ -2787,8 +2800,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             ctx.video_parts_incomplete = True
 
     if len(parts) > 1 and not chain_id:
+        prior_join_note = ctx.video_join_note
         path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios,
                                        fresh_from=anchor[0] if head else "", seconds=secs if approved else ())
+        ctx.video_join_note = ' '.join(note for note in (prior_join_note, ctx.video_join_note) if note)
         if getattr(ctx, "continue_voice_error", False):
             state["video_status"] = "error"
             return "[TOOL ERROR] Could not apply the original speaker's voice to every segment; no finished video was delivered."
@@ -2860,8 +2875,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         + ("A review of a few sampled frames suggests possible issues: " + ctx.video_action_note
            + ". This review can misread motion between frames. Tell the user these are possible issues, "
            "not confirmed failures, and let them judge the clip.\n" if getattr(ctx, "video_action_note", "") else "")
-        + ("The joins between the parts were checked: " + ctx.video_join_note + ". Tell the "
-           "user plainly which join is rough; do NOT call the clip seamless.\n"
+        + ("A visual check suggests possible issues at a join: " + ctx.video_join_note + ". Tell the "
+           "user these are possible issues, not confirmed failures; do NOT call the clip seamless.\n"
            if getattr(ctx, "video_join_note", "") else "") +
         ("Speech recognition could not confirm the requested line cleanly; warn the user that "
          "words may be wrong or extra speech may be present, and do not claim exact speech.\n"
