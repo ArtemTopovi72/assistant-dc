@@ -150,10 +150,17 @@ def free_gpu(log=None, min_free_mb: int = None, ctx=None) -> None:
     def say(m):
         if log:
             log(m)
+    def unload_lms():
+        result = dep(ctx, "subprocess", subprocess).run(
+            ["lms", "unload", "--all"], capture_output=True,
+            text=True, timeout=60, shell=(os.name == "nt"))
+        if getattr(result, "returncode", 0) != 0:
+            say("LM Studio: не удалось выгрузить модель (код %s)" % result.returncode)
+            return False
+        return True
     try:
-        dep(ctx, "subprocess", subprocess).run(["lms", "unload", "--all"], capture_output=True,
-                       text=True, timeout=60, shell=(os.name == "nt"))
-        say("LM Studio: выгружено")
+        if unload_lms():
+            say("LM Studio: выгружено")
     except Exception as exc:
         say("LM Studio не отвечает (%s) — продолжаю" % exc)
     try:
@@ -194,19 +201,18 @@ def free_gpu(log=None, min_free_mb: int = None, ctx=None) -> None:
     # started 0.2 s later loaded its weights beside the not-yet-released chat
     # model and ran 296 s instead of 48 s (the
     # 6x tax of sharing the card). Wait for the free counter to say so.
-    freed = dep(ctx, "wait_vram_free", wait_vram_free)(min_free_mb or FREE_GPU_MIN_MB, timeout=FREE_GPU_WAIT_S)
-    if min_free_mb and freed is not None and freed < min_free_mb:
+    required = min_free_mb or FREE_GPU_MIN_MB
+    freed = dep(ctx, "wait_vram_free", wait_vram_free)(required, timeout=FREE_GPU_WAIT_S)
+    if freed is not None and freed < required:
         # LM Studio may spawn a fresh llama-server just after the first unload
         # when another request was already in flight. One more unload after the
         # drain catches that race; the caller checks the final counter before submit.
         say("VRAM занята после выгрузки — повторяю освобождение")
         try:
-            dep(ctx, "subprocess", subprocess).run(
-                ["lms", "unload", "--all"], capture_output=True, text=True,
-                timeout=60, shell=(os.name == "nt"))
+            unload_lms()
         except Exception as exc:
             say("Повторная выгрузка LM Studio не удалась (%s)" % exc)
-        freed = dep(ctx, "wait_vram_free", wait_vram_free)(min_free_mb, timeout=FREE_GPU_WAIT_S)
+        freed = dep(ctx, "wait_vram_free", wait_vram_free)(required, timeout=FREE_GPU_WAIT_S)
     if freed is not None:
         say("VRAM свободно: %d MiB" % freed)
 

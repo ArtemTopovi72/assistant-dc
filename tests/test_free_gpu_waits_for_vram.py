@@ -59,5 +59,20 @@ race = NS(deps=NS(wait_vram_free=lambda *a, **k: readings.pop(0),
 LT.free_gpu(min_free_mb=20000, ctx=race)
 check("a reloaded chat model triggers a second unload", len(unloads) == 2, unloads)
 
+readings = [3000, 21000]
+unloads = []
+default_race = NS(deps=NS(wait_vram_free=lambda *a, **k: readings.pop(0),
+                          subprocess=NS(run=lambda *a, **k: unloads.append(a[0]) or NS(returncode=0)),
+                          urlopen=lambda *a, **k: (_ for _ in ()).throw(OSError("no comfy"))))
+LT.free_gpu(ctx=default_race)
+check("default image render also retries an unsuccessful eviction", len(unloads) == 2, unloads)
+
+said = []
+failed = NS(deps=NS(wait_vram_free=lambda *a, **k: 21000,
+                    subprocess=NS(run=lambda *a, **k: NS(returncode=1, stderr="unload failed")),
+                    urlopen=lambda *a, **k: (_ for _ in ()).throw(OSError("no comfy"))))
+LT.free_gpu(log=said.append, ctx=failed)
+check("failed LM Studio unload is not logged as successful", not any(m == "LM Studio: выгружено" for m in said), said)
+
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)
