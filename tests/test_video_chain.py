@@ -728,3 +728,24 @@ def test_a_talking_head_keeps_the_camera_still_whatever_the_agent_wrote():
     assert not any("camera to move" in q for q in asked)
     shot, _ = V.prepare_prompt(ctx, said, images=["still.jpg"], seconds=5.0)
     assert V._FRAMING_LOCK_SUFFIX not in shot           # an animated photo still gets the zoom it asked for
+
+def test_failed_chain_stitch_reports_partial_and_does_not_remember_full_chain(tmp_path):
+    rig = _Rig(tmp_path, stitch_chain=lambda *args: None)
+    ctx = rig.ctx()
+    state = {}
+    answer = H._handle_generate_video(ctx, state, {"description": LONG, "use_current_images": False})
+    assert ctx.video_parts_incomplete
+    assert "incomplete" in answer.lower()
+    assert not rig.kept
+
+
+def test_failed_continuation_join_reports_original_missing(tmp_path):
+    src = tmp_path / 'original.mp4'
+    tail = tmp_path / 'tail.mp4'
+    src.write_bytes(b'source')
+    tail.write_bytes(b'tail')
+    rig = _Rig(tmp_path, herrgott_on=lambda: False, join_continuation=lambda *a, **kw: None)
+    ctx = rig.ctx(continue_src=str(src), continue_tail=str(tail))
+    answer = H._handle_generate_video(ctx, {}, {'description': 'The person waves.'})
+    assert ctx.video_parts_incomplete
+    assert 'incomplete' in answer.lower()

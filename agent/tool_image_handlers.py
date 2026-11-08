@@ -1749,7 +1749,7 @@ def _render_remaining_parts(ctx, path: str, parts: list, args: dict, people=(), 
         path = video_mod._adopt_output(joined, video_mod.OUTPUT_DIR)
         completed = i
         logger.info("video parts: %d/%d joined -> %s", i, len(parts), os.path.basename(path))
-    ctx.video_parts_incomplete = completed < len(parts)
+    ctx.video_parts_incomplete = getattr(ctx, "video_parts_incomplete", False) or completed < len(parts)
     ctx.video_join_note = _check_joins(ctx, joins)
     return path
 
@@ -2730,7 +2730,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     path = joined
                 else:
                     logger.warning("video chain: the join failed, delivering the last part alone")
-            video_mod.remember_chain(path, chain_id, chain_idx, ctx)
+                    ctx.video_parts_incomplete = True
+            if not ctx.video_parts_incomplete:
+                video_mod.remember_chain(path, chain_id, chain_idx, ctx)
             if len(parts) > 1 or chain_idx > 1:
                 result["seconds"] = video_mod.probe(path).get("seconds") or result.get("seconds")
     ctx.video_join_note = ""
@@ -2750,6 +2752,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 logger.debug('could not locate continuation start for review', exc_info=True)
         else:
             logger.warning("continue video: the join failed, delivering the new part alone")
+            ctx.video_parts_incomplete = True
 
     if len(parts) > 1 and not chain_id:
         path = _render_remaining_parts(ctx, path, parts, args, people=[*people, *anchor], voices=audios,
