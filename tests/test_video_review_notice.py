@@ -66,6 +66,13 @@ def test_unapproved_video_with_drift_does_not_claim_scene_is_unchanged():
     assert 'кадре' in result
 
 
+def test_video_with_unverified_audio_does_not_claim_sound_was_heard():
+    ctx = SimpleNamespace(video_plan_approved_result=False, video_plan_warnings=[],
+                          video_audio_unverified=True)
+    result = _approved_video_reply(ctx, 'Готово, слышен шум комнаты.', 'Оживи фото')
+    assert 'слышен' not in result and 'шум комнаты' not in result
+
+
 def test_approved_video_reply_reports_incomplete_result():
     ctx = SimpleNamespace(video_plan_approved_result=True, video_plan_warnings=['incomplete'])
     result = _approved_video_reply(ctx, 'Всё готово!', 'Продолжи видео')

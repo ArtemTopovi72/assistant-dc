@@ -1976,6 +1976,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     ctx.video_speech_unverified = False
     ctx.video_plan_approved_result = False
     ctx.video_plan_warnings = []
+    ctx.video_audio_unverified = False
     ctx.video_parts_incomplete = False
     ctx.video_duration_short = False
     ctx.video_part_request = ""
@@ -2869,6 +2870,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         used = f" References used: {', '.join(tags)}."
     speech_unverified = speech_unverified or getattr(ctx, "video_speech_unverified", False)
     ctx.video_plan_approved_result = bool(approved or ctx.video_duration_short)
+    ctx.video_audio_unverified = not audio_removed
     ctx.video_plan_warnings = [name for name, present in (
         ("speech", speech_unverified), ("framing", framing_unverified),
         ("flash", possible_flash), ("join", getattr(ctx, "video_join_note", "")),
@@ -2878,6 +2880,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         f"Mode: {video_mod.MODE_LABELS.get(display_mode, display_mode)}; "
         f"{result.get('seconds')}s at {result.get('width')}x{result.get('height')}, "
         f"{'without audio' if audio_removed else 'with generated audio'}.{used}\n"
+        + ("An audio track alone does not verify its contents. Do not claim specific audio content "
+           "was heard unless independently verified.\n" if not audio_removed else "")
         + ("Only part of the planned video was rendered; tell the user it is incomplete.\n"
            if ctx.video_parts_incomplete else "")
         # The reply told of a grandma's scream from a part the user had dropped

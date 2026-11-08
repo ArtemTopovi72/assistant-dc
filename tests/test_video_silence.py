@@ -40,6 +40,16 @@ def test_silent_video_tool_result_does_not_claim_generated_audio(tmp_path):
     assert 'with generated audio' not in result
 
 
+def test_generated_audio_is_not_treated_as_verified_content(tmp_path):
+    from tests.test_video_chain import _Rig
+    import tool_image_handlers as handlers
+    rig = _Rig(tmp_path)
+    state = {'user_input_original': 'Сделай видео со звуком дождя'}
+    result = handlers._handle_generate_video(rig.ctx(), state,
+                                             {'description': 'A scene with rain sounds.', 'seconds': 5})
+    assert 'do not claim' in result.lower() and 'audio content' in result.lower()
+
+
 def test_explicitly_silent_finished_continuation_is_muted_after_join(tmp_path):
     from tests.test_video_chain import _continued
     import tool_image_handlers as handlers

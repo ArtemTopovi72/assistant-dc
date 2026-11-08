@@ -1004,7 +1004,8 @@ def _video_review_notice(answer: str, note: str, user_input: str) -> str:
 
 def _approved_video_reply(ctx, answer: str, user_input: str) -> str:
     warnings = set(getattr(ctx, 'video_plan_warnings', ()) or ())
-    if not getattr(ctx, 'video_plan_approved_result', False) and not warnings:
+    if (not getattr(ctx, 'video_plan_approved_result', False) and not warnings
+            and not getattr(ctx, 'video_audio_unverified', False)):
         return answer
     ru = bool(re.search(r'[А-Яа-яЁё]', user_input or ''))
     result = 'Видео готово, отправляю.' if ru else 'The video is ready.'
