@@ -457,7 +457,7 @@ def test_framing_lock_freezes_the_camera_not_the_scene():
     assert "the described action" in video._FRAMING_LOCK_SUFFIX
     assert "breathing" not in video._FRAMING_LOCK_SUFFIX
     assert "hands and face" not in video._FRAMING_LOCK_SUFFIX
-    assert "never to a frozen pose" in video._STYLE_LOCK_SUFFIX
+    assert "move or stay still as requested" in video._STYLE_LOCK_SUFFIX
 
 
 def test_lock_framing_keeps_scene_alive_in_output():

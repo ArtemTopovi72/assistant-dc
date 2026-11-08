@@ -1406,7 +1406,7 @@ _STYLE_LOCK_SUFFIX = (
     # Consistent identity is not a frozen pose: a clip that may change nothing
     # renders ambient smoke instead of the action (grandpa clip, 2026-10-29).
     " Consistency applies to WHO they are -- identity, clothing, colors, style -- "
-    "never to a frozen pose: the subjects move and act throughout the clip.")
+    "the subjects move or stay still as requested above.")
 
 
 def _asks_new_style(description: str, ctx=None) -> bool:
