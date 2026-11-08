@@ -44,6 +44,15 @@ def test_menu_button_disarms():
     assert bot._get_session(CID).restyle_state == ""
 
 
+def test_restyle_button_does_not_wait_for_the_chat_queue():
+    bot = _bot()
+    bot._enqueue_item = lambda *a, **k: (_ for _ in ()).throw(AssertionError("button queued"))
+    bot._user_store.put(T._User(chat_id=CID, name="Test", status="approved"))
+    bot._dispatch({"message": {"message_id": 1, "chat": {"id": CID, "type": "private"},
+                               "from": {"id": CID}, "text": S._BTN["restyle_btn"]["ru"]}})
+    assert bot._get_session(CID).restyle_state == "want_video"
+
+
 def test_run_restyle_delivers():
     bot = _bot()
     s = bot._get_session(CID)
