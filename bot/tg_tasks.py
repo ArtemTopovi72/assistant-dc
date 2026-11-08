@@ -2154,11 +2154,7 @@ class TaskRunnerMixin:
             # Unless the user picked voice only: then code and non-Russian still go as text.
             if reply and not (voice_sent and sess.reply_mode == "voice" and "```" not in reply
                               and lang == "ru" and len(_re.findall(r"[A-Za-z]", reply)) < len(reply) // 4):
-                _shown = reply
-                if not reply_is_failure and getattr(ctx, "turn_products", None):
-                    import tg_product_cards as _cards
-                    _shown = _cards.condense(reply, list(ctx.turn_products))
-                reply_html = tg_bot._md_to_html(_shown)
+                reply_html = tg_bot._md_to_html(reply)
                 # A searched answer gets its shape: what was searched, [n]
                 # marks instead of "(source: domain)", the sources underneath.
                 if not reply_is_failure and (getattr(ctx, "turn_queries", None)

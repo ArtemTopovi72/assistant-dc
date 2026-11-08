@@ -84,15 +84,14 @@ def test_turn_context_starts_with_an_empty_product_list():
     assert "_cards.send_cards(" in tasks
 
 
-def test_condense_drops_the_lines_the_cards_repeat():
-    reply = ("Вот что нашёл:\n\n1. Чайник A — 512 ₽: ссылка (https://www.ozon.ru/product/a-111/)\n"
-             "2. Чайник B — 174 ₽: ссылка (https://www.ozon.ru/product/b-222/)\n\nБерите A.")
-    out = C.condense(reply, P)
-    assert "ozon.ru" not in out and "Берите A." in out and out.startswith("Вот что нашёл 👇")
-    assert C.condense("без ссылок", P) == "без ссылок"
-    assert C.condense("https://www.ozon.ru/product/a-111/", P).startswith("Нашёл на Ozon")
-
-
 def test_reviews_plural():
     assert [C._reviews_ru(n) for n in (1, 2, 5, 11, 21, 333, 4822)] == \
         ["отзыв", "отзыва", "отзывов", "отзывов", "отзыв", "отзыва", "отзыва"]
+
+
+def test_product_link_and_explanation_survive_telegram_formatting():
+    import tg_bot
+    reply = 'Выбираю [чайник](https://www.ozon.ru/product/a-111/): у него лучше отзывы.'
+    formatted = tg_bot._md_to_html(reply)
+    assert 'https://www.ozon.ru/product/a-111/' in formatted
+    assert 'у него лучше отзывы' in formatted

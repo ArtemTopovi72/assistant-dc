@@ -34,38 +34,6 @@ def _reviews_ru(n) -> str:
     return "отзывов"
 
 
-def _heading(line: str) -> bool:
-    return line.rstrip().rstrip("*").rstrip().endswith(":")
-
-
-def condense(reply: str, products: list) -> str:
-    """The reply without the lines the cards repeat (a line that links to a
-    carded product only restates its card). Keeps the lead-in and anything the
-    model said about its choice; empty lead-in gets a short one."""
-    picked = pick(reply, products)
-    if not picked:
-        return reply
-    skus = [str(p["sku"]) for p in picked]
-    keep = []
-    for line in (reply or "").splitlines():
-        if any(re.search(r"ozon\.ru/\S*?(?<!\d)" + re.escape(s) + r"(?!\d)", line) for s in skus):
-            last = next((j for j in range(len(keep) - 1, -1, -1) if keep[j].strip()), None)
-            if last is not None and _heading(keep[last]):
-                # Its section went into the cards: a sub-heading («Мелочёвка и
-                # запчасти:») would stand over nothing; the first lead-in points at the cards.
-                if any(k.strip() for k in keep[:last]):
-                    del keep[last]
-                else:
-                    keep[last] = re.sub(r":(\**)\s*$", r"\1 👇", keep[last].rstrip())
-            continue
-        keep.append(line)
-    first = next((j for j, k in enumerate(keep) if k.strip()), None)
-    if first is not None and _heading(keep[first]):
-        keep[first] = re.sub(r":(\**)\s*$", r"\1 👇", keep[first].rstrip())
-    text = re.sub(r"\n{3,}", "\n\n", "\n".join(keep)).strip()
-    return text or f"Нашёл на Ozon — {len(picked)} 👇"
-
-
 def _photo_bytes(url: str) -> bytes | None:
     """Fetch the photo ourselves. Handing Telegram the URL made the LOCAL Bot
     API server fetch it through this machine's VPN, which Ozon's CDN answers
