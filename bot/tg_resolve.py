@@ -1346,7 +1346,7 @@ class ResolveMixin:
                         from prompt_guard import wrap_quoted
                         _seen_note = wrap_quoted("visual description of the attached video, for context", _seen_note)
                     scaffold.append(_seen_note)
-                    if _seen.get("sheet"):
+                    if _seen.get("sheet") and not _photo_upload:
                         try:
                             img_bytes = Path(_seen["sheet"]).read_bytes()
                             video_sheet_path = _seen["sheet"]

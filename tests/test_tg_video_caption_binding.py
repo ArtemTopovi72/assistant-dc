@@ -64,3 +64,37 @@ def test_language_detection_ignores_attached_video_description():
     content = caption + '\n' + wrap_quoted('visual description of the attached video',
                                             'The video shows a speaker on stage.')
     assert _typed_part(content) == caption
+
+
+@pytest.mark.parametrize('photo_first', [True, False])
+def test_photo_and_video_remain_distinct_in_either_order(tmp_path, monkeypatch, photo_first):
+    import sys
+    T.redirect_data_dir(str(tmp_path / 'data'))
+    bot = T.TelegramBot('123:TEST', lambda: SimpleNamespace(), lambda: None,
+                        lambda: {}, silent_mode=True)
+    chat = 999997
+    bot._user_store.put(T._User(chat_id=chat, name='test', status='approved'))
+    bot._send_text = lambda *a, **k: 1
+    bot._api_post = lambda *a, **k: {}
+    bot._activity.log = lambda *a, **k: None
+    bot._dl_bytes = lambda fid: b'photo bytes' if fid == 'photo' else b'video bytes'
+    bot._transcribe = lambda *a, **k: ''
+    sheet = tmp_path / 'sheet.jpg'; sheet.write_bytes(b'video sheet')
+    (tmp_path / 'clip.mp4').write_bytes(b'video bytes')
+    bot._look_video = lambda *a, **k: {'sheet': str(sheet), 'description': 'A video.'}
+    monkeypatch.setitem(sys.modules, 'ocr_reader', SimpleNamespace(read_pieces=lambda path: []))
+    pushed = []
+    bot._backend.push = pushed.append
+    photo = {'type': 'photo', 'file_id': 'photo'}
+    video = {'type': 'voice', 'media': 'video', 'file_id': 'video',
+             'caption': 'Compare the photo and video.'}
+    bot._resolve_and_push(chat, [photo, video] if photo_first else [video, photo])
+    assert len(pushed) == 1
+    paths = [pushed[0].image_path, *pushed[0].album_paths]
+    assert b'photo bytes' in [open(path, 'rb').read() for path in paths]
+    if photo_first:
+        assert open(pushed[0].image_path, 'rb').read() == b'photo bytes'
+        assert pushed[0].image_is_photo
+    else:
+        assert pushed[0].image_path == str(sheet)
+    assert T._image_by_path(bot._get_session(chat), str(sheet))['src'] == 'video'
