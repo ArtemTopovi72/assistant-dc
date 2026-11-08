@@ -459,7 +459,10 @@ def followup_query(ctx, query: str, found: str) -> str:
     except Exception:
         logger.exception("search follow-up check failed")
         return ""
-    q = ((out or "").strip().splitlines() or [""])[0].strip().strip("\"'«»`")
+    lines = [line.strip() for line in (out or "").splitlines() if line.strip()]
+    if len(lines) != 1:
+        return ""
+    q = lines[0].strip("\"'«»`")
     # A year the model adds from memory ("последний чемпионат" -> 2022) sends the
     # round to the past; only the user's own years stay (same rule as tools.search).
     q = re.sub(r"\s*\b(?:19|20)\d\d\b", lambda m: m.group(0) if m.group(0).strip() in (query or "") else "",

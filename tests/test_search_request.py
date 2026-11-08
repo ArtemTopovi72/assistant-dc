@@ -46,3 +46,12 @@ def test_followup_checks_original_requirements_after_keyword_rewrite():
     )
     assert search.followup_query(ctx, "Widget 4 features", "third party facts") == ""
     assert REQUEST in seen[0]
+
+
+def test_followup_does_not_search_a_fragment_of_a_multiline_answer():
+    ctx = SimpleNamespace(text_model=lambda *a, **kw:
+                          'оллера Phison обеспечивает скорость чтения.\n\n'
+                          'Для завершения поиска нужно найти модель:\nкупить Kingston NV3 цена')
+    assert search.followup_query(ctx, 'Kingston NV3 review', 'facts') == ''
+    ctx.text_model = lambda *a, **kw: 'Kingston NV3 1TB review'
+    assert search.followup_query(ctx, 'Kingston NV3', 'facts') == 'Kingston NV3 1TB review'
