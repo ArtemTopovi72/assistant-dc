@@ -2476,8 +2476,8 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
 
 
 # ── on-screen lettering: the model draws it, our OCR checks it ────────────────
-# A public "text LoRA" for H3 does not exist (the ecosystem is speed/style
-# adapters only, checked 2026-11-02), so the lettering path is: the SCRIPT's
+# No specialized H3 text LoRA was confirmed in the available search (2026-11-08),
+# so the lettering path is: the SCRIPT's
 # own words, the model's native text rendering, and this gate. Whether the
 # clip needs visible written text is the LLM's read, not a word list — the
 # same seams.ask/no-regex rule the rest of the project runs on.
