@@ -157,6 +157,14 @@ def test_web_reviews_then_ozon_rejects_unresearched_shop(monkeypatch):
     assert '[TOOL ERROR]' in result
 
 
+def test_failed_shop_resets_previous_review_status(monkeypatch):
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: pytest.fail('research was skipped'))
+    ctx = SimpleNamespace(_ozon_shop_review_checked=True)
+    state = {'user_input_original': 'Сначала найди обзоры, затем проверь на Ozon'}
+    assert '[TOOL ERROR]' in handler._handle_ozon_shop(ctx, state, {'request': 'рюкзак'})
+    assert ctx._ozon_shop_review_checked is False
+
+
 def test_research_request_cannot_bypass_matching_with_generic_search(monkeypatch):
     monkeypatch.setattr(handler._oz, 'call', lambda *a, **kw: pytest.fail('unvetted search ran'))
     state = {'user_input_original': 'Сначала найди модели по обзорам в интернете, затем проверь на Ozon',

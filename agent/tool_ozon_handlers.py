@@ -505,6 +505,7 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
     """The shopper: plan -> search several wordings -> LLM screens -> cards and
     reviews -> LLM decides -> vision checks the photo -> optional basket."""
     import ozon_shopper as S
+    ctx._ozon_shop_review_checked = False
     shortlist, shortlist_words = _shop_shortlist(state)
     if shortlist:
         from prompt_guard import user_words
@@ -629,7 +630,6 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
             logger.warning("ozon_shop same-seller check failed: %s", exc)
             results[0]["same_offer_unchecked"] = True
     chosen = [r["choice"] for r in results if r.get("choice")]
-    ctx._ozon_shop_review_checked = False
     family_review_only = False
     if research_then_ozon(original):
         model_words = normalize(selected_model).split()
