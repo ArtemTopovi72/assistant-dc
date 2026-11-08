@@ -552,3 +552,14 @@ def test_video_prompt_distinguishes_no_speech_from_silence():
     video.to_context_ir(ctx, 'A square moves.', mode='t2va', seconds=5)
     assert 'no speech does not mean no background sound' in seen['user'].lower()
     assert 'when the user explicitly requests silence' in seen['user'].lower()
+
+
+def test_video_prompt_allows_requested_or_existing_text_without_unasked_subtitles():
+    seen = {}
+    good = ('integrated_multimodal_description: [Shot 1] A sign.\n'
+            'overall_soundscape: wind.\nnon_diegetic_music: N/A')
+    ctx = SimpleNamespace(video_request='Сохрани надпись SOL, без субтитров.',
+                          text_model=lambda ctx, guide, user, **kw: seen.update(user=user) or good)
+    video.to_context_ir(ctx, 'The sign remains in view.', mode='t2va', seconds=5)
+    assert 'preserve requested or existing lettering' in seen['user'].lower()
+    assert 'do not add unrequested subtitles' in seen['user'].lower()
