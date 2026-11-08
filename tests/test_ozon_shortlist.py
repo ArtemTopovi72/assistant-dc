@@ -130,6 +130,26 @@ def test_researched_product_can_be_an_inspected_alternative(monkeypatch):
     assert ctx._ozon_shop_review_checked
 
 
+@pytest.mark.parametrize('card_name,confirmed', [
+    ('Kingston SSD SNV3S/1000G', True), ('Kingston NV3 SSD SNV3S/2000G', False),
+    ('OtherBrand SSD SNV3S/1000G', False)])
+def test_family_review_and_explicit_sku_match_exact_card(monkeypatch, card_name, confirmed):
+    monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda *a: None)
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: (
+        {'mode': 'one'}, [{'choice': {'sku': '123', 'name': card_name,
+                                     'url': 'https://www.ozon.ru/product/item-123/'},
+                           'item': {'need': 'SSD'}}]))
+    monkeypatch.setattr(ozon_shopper, 'report', lambda *a: 'CONFIRMED')
+    state = {'user_input_original': 'Найди обзор Kingston NV3 SNV3S/1000G, затем поищи на Ozon',
+             'research_shop_evidence': 'Independent review: Kingston NV3',
+             'research_shop_candidates': [{'model': 'Kingston NV3'}]}
+    result = handler._handle_ozon_shop(SimpleNamespace(turn_products=[]), state,
+                                       {'request': 'Kingston NV3 SNV3S/1000G'})
+    assert ('CONFIRMED' in result) is confirmed
+    if confirmed:
+        assert 'семейств' in result.lower()
+
+
 def test_web_reviews_then_ozon_rejects_unresearched_shop(monkeypatch):
     monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: pytest.fail('research was skipped'))
     state = {'user_input_original': 'Сначала найди модели по обзорам в интернете, затем проверь на Ozon'}

@@ -630,17 +630,23 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
             results[0]["same_offer_unchecked"] = True
     chosen = [r["choice"] for r in results if r.get("choice")]
     ctx._ozon_shop_review_checked = False
+    family_review_only = False
     if research_then_ozon(original):
         model_words = normalize(selected_model).split()
+        from prompt_guard import user_words
+        explicit = ' ' + normalize(user_words(original)) + ' '
         codes = [code for code in _re.findall(
             r'\b(?=[A-Za-z0-9/-]{6,}\b)(?=[A-Za-z0-9/-]*\d)'
             r'[A-Za-z0-9]+(?:[-/][A-Za-z0-9]+)+\b', requested)
-            if ' ' + normalize(code) + ' ' in ' ' + normalize(selected_model) + ' ']
+            if (' ' + normalize(code) + ' ' in ' ' + normalize(selected_model) + ' '
+                or (len(model_words) >= 2 and ' ' + normalize(code) + ' ' in explicit))]
+        family_review_only = bool(codes and not any(' ' + normalize(code) + ' ' in evidence_words for code in codes))
         def matches_model(candidate):
             name = ' ' + normalize(str(candidate.get('name') or '')) + ' '
-            return (all(' ' + word + ' ' in name for word in model_words)
-                    or bool(codes and model_words and ' ' + model_words[0] + ' ' in name
-                            and any(' ' + normalize(code) + ' ' in name for code in codes)))
+            if codes:
+                return bool(model_words and ' ' + model_words[0] + ' ' in name
+                            and any(' ' + normalize(code) + ' ' in name for code in codes))
+            return all(' ' + word + ' ' in name for word in model_words)
         for row in results:
             if row.get('choice') and not matches_model(row['choice']):
                 match = next((item for item in row.get('others') or []
@@ -682,7 +688,11 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
                               "url": c.get("url"), "qty": qty})
         _cart_save(ctx, items)
         basket = "\nAdded to the user's shopping list.\n" + _cart_text(items)
-    return S.report(results, p["mode"], _oz.LAST_LOCATION.get("text") or "", basket)
+    report = S.report(results, p["mode"], _oz.LAST_LOCATION.get("text") or "", basket)
+    if family_review_only:
+        report += ("\n\n⚠️ Независимый обзор относится к семейству товара; "
+                   "не подтверждено, что в нём проверили именно этот артикул.")
+    return report
 
 
 def _same_line(x: dict) -> str:
