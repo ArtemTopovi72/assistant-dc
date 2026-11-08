@@ -195,8 +195,20 @@ def _research_shop_index_fallback(ctx, state, shopper):
                 len(rows), sum(bool(row['url']) for row in rows))
 
 
+def _research_model_hint(state):
+    names = [str(row.get('model') or '') for row in (state.get('research_shop_candidates') or [])
+             if isinstance(row, dict)]
+    names = [n for n in names if _re.fullmatch(r'[\w .+\-/]{3,100}', n)
+             and n.casefold() in str(state.get('research_shop_evidence') or '').casefold()]
+    return ' Models found in the research: ' + '; '.join(names[:3]) + '.' if names else ''
+
+
 @_owned
 def _handle_ozon_search(ctx, state, args: dict) -> str:
+    from intent import research_then_ozon
+    if research_then_ozon(str((state or {}).get('user_input_original') or '')):
+        return ('[TOOL ERROR] Use ozon_shop with a specific model named in the web research; '
+                'a generic Ozon search cannot verify the researched model.')
     q = (args.get("query") or "").strip()
     try:
         ctx.set_stage("Searching Ozon")
@@ -526,12 +538,23 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
               and (' ' + normalize(named.group()) + ' ') in evidence_words):
             selected_model = named.group()
         else:
+            selected_model = ''
+        candidates = [row.get('model', '') for row in (state.get('research_shop_candidates') or [])
+                      if isinstance(row, dict) and row.get('model')]
+        if candidates:
+            selected_model = next((name for name in candidates
+                                   if (' ' + normalize(name) + ' ') in (' ' + normalize(requested) + ' ')
+                                   and (' ' + normalize(name) + ' ') in evidence_words), '')
+        elif len(normalize(selected_model).split()) < 3:
+            selected_model = ''
+        if not selected_model:
             if not state.get('research_shop_index_attempted'):
                 state['research_shop_index_attempted'] = True
                 _research_shop_index_fallback(ctx, state, S)
             return ("[TOOL ERROR] This brand and model was not established by the web research. "
                     "Choose a different specific model actually named in the search results, "
-                    "then check it on Ozon. Do not use an old Ozon card from chat history.")
+                    "then check it on Ozon. Do not use an old Ozon card from chat history."
+                    + _research_model_hint(state))
     strategy = args.get("strategy") or "balanced"
     if args.get("by_photo"):
         img = getattr(ctx, "last_image_path", None)
@@ -616,7 +639,8 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
                 _research_shop_index_fallback(ctx, state, S)
             return ("[TOOL ERROR] No confirmed Ozon listing for this exact researched model. "
                     "Research or check the next specific model from the reviews; do not recommend "
-                    "a generic substitute or claim the model is absent from Ozon.")
+                    "a generic substitute or claim the model is absent from Ozon."
+                    + _research_model_hint(state))
         state["research_shop_verified"] = True
     _remember(ctx, chosen)
     for r in results:

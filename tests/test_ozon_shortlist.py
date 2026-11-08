@@ -93,6 +93,39 @@ def test_web_reviews_then_ozon_rejects_unresearched_shop(monkeypatch):
     assert '[TOOL ERROR]' in result
 
 
+def test_research_request_cannot_bypass_matching_with_generic_search(monkeypatch):
+    monkeypatch.setattr(handler._oz, 'call', lambda *a, **kw: pytest.fail('unvetted search ran'))
+    state = {'user_input_original': 'Сначала найди модели по обзорам в интернете, затем проверь на Ozon',
+             'research_shop_evidence': 'Review: Timbuk2 Authority Deluxe'}
+    result = handler._handle_ozon_search(SimpleNamespace(), state, {'query': 'рюкзак Thule'})
+    assert '[TOOL ERROR]' in result and 'ozon_shop' in result
+
+
+def test_research_failure_gives_exact_reviewed_names(monkeypatch):
+    monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda *a: None)
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: pytest.fail('unresearched model searched'))
+    state = {'user_input_original': 'Сначала обзоры в интернете, затем проверь на Ozon',
+             'research_shop_evidence': 'Review: Timbuk2 Authority Deluxe',
+             'research_shop_index_attempted': True,
+             'research_shop_candidates': [{'model': 'Timbuk2 Authority Deluxe'}]}
+    result = handler._handle_ozon_shop(SimpleNamespace(), state, {'request': 'Thule EnRoute'})
+    assert 'Timbuk2 Authority Deluxe' in result
+
+
+def test_research_brand_prefix_cannot_replace_reviewed_model(monkeypatch):
+    monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda *a: None)
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: pytest.fail('generic brand was accepted'))
+    state = {'user_input_original': 'Сначала обзоры в интернете, затем проверь на Ozon',
+             'research_shop_evidence': 'Review: Peak Design Everyday Backpack V2 30L',
+             'research_shop_index_attempted': True,
+             'research_shop_candidates': [{'model': 'Peak Design Everyday Backpack V2 30L'}]}
+    result = handler._handle_ozon_shop(SimpleNamespace(), state, {'request': 'Peak Design backpack'})
+    assert '[TOOL ERROR]' in result
+    result = handler._handle_ozon_shop(SimpleNamespace(), state,
+                                       {'request': 'Peak Design Everyday Backpack V2 20L'})
+    assert '[TOOL ERROR]' in result
+
+
 def test_empty_backpack_review_search_retries_with_shorter_query():
     queries = []
     def search(_ctx, query):
