@@ -226,12 +226,9 @@ def classify_edit_intent(instruction: str, ctx=None) -> str:
 
 
 _NO_LAYOUT_NOTE = (
-    "[TOOL ERROR] The lettering in this picture cannot be edited: it was not "
-    "composed from a layout (an uploaded photo, or drawn by another engine), so "
-    "there are no text boxes to correct. Re-drawing the whole frame does not fix "
-    "spelling — it produces different wrong letters. Tell the user plainly that "
-    "the lettering cannot be corrected on this image, and offer to draw a NEW "
-    "picture with the correct wording instead. Do not call another edit tool.")
+    "[TOOL ERROR] The lettering edit could not be verified. No corrected image "
+    "was delivered. Explain the failure honestly; do not claim success or "
+    "repeat the same edit blindly. Do not call another edit tool.")
 
 
 # Edits that a LAYOUT can express: they change what is in the picture, which is
@@ -392,7 +389,8 @@ TEXT_ADD_FAILED_NOTE = (
 
 
 def add_text_verified(ctx, image_path: str, instruction: str,
-                      seed: Optional[int] = None) -> tuple:
+                      seed: Optional[int] = None, *, require_ocr: bool = False,
+                      allow_overlay: bool = True) -> tuple:
     """Add NEW lettering with FireRed, then read it back and reseed until the
     words match. Returns (path | None, best_reading, wanted).
 
@@ -423,7 +421,7 @@ def add_text_verified(ctx, image_path: str, instruction: str,
             continue
         reads = dep(ctx, "ocr_read", ocr_reader.read)(out)
         if reads is None:             # no OCR: placement can still be checked
-            if not text_position_failure(ctx, out, "", instruction):
+            if not require_ocr and not text_position_failure(ctx, out, "", instruction):
                 return out, "", " / ".join(wanted)
             continue
         score, reading = 2.0, ""
@@ -441,6 +439,8 @@ def add_text_verified(ctx, image_path: str, instruction: str,
     # FireRed could not spell it (a year prior: "2026" -> "2025" in 21/21
     # renders on the bench). Lay the exact words onto the ORIGINAL --
     # the misspelt render is not a base to fix, its letters are already wrong.
+    if not allow_overlay:
+        return None, best, " / ".join(wanted)
     if yes_no(ctx)(
             "Does this request require the lettering to appear ON a specific object or "
             "surface in the picture (such as a barrel, shirt, sign or vehicle), rather "
@@ -534,10 +534,9 @@ def _route_edit_request(
                 logger.debug("could not record the text-add failure on ctx: %s", exc)
         return category, out
     elif category == "text_edit":
-        # No layout at all: nothing here can change what a sign says.
-        logger.warning("text_edit on an image with no layout record (%s) — refusing "
-                       "rather than re-rendering it blind", image_path)
-        return category, None
+        out, _read, _want = add_text_verified(ctx, image_path, text, seed=seed,
+                                               require_ocr=True, allow_overlay=False)
+        return category, out
 
     if category == "colour_convert":
         return category, convert_colour(image_path, text, ctx=ctx)
