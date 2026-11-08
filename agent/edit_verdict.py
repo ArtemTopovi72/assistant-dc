@@ -35,7 +35,10 @@ def _preserved_text_unconfirmed(ctx, before: str, after: str, request: str) -> b
     """An OCR miss is uncertainty, not proof that preserved lettering was removed."""
     text = (request or "").lower()
     preserve = r"(?:keep|preserve|retain|сохрани\w*|остав\w*)[^.!?\n]{0,100}(?:text|lettering|inscription|надпис\w*|текст\w*|букв\w*)"
-    if not re.search(preserve, text) or re.search(r"\b(?:remove|erase|replace|delete|убер\w*|удал\w*|замен\w*|стери\w*)\b", text):
+    change_text = (r"\b(?:remove|erase|replace|delete|убер\w*|удал\w*|замен\w*|стери\w*)\b"
+                   r"(?:(?!\b(?:and|but|и|но|keep|preserve|сохрани\w*|остав\w*)\b)[^.!?\n]){0,80}"
+                   r"\b(?:text|lettering|inscription|надпис\w*|текст\w*|букв\w*)\b")
+    if not re.search(preserve, text) or re.search(change_text, text):
         return False
     try:
         import ocr_reader

@@ -81,6 +81,8 @@ def test_explicitly_preserved_text_missing_from_ocr_cannot_be_reported_done(monk
     ctx.deps.ocr_boxes = lambda path: None
     assert E.judge(ctx, "before", "after", "Change the apron to blue and keep all text.")["verdict"] == "done"
     ctx.deps.ocr_boxes = lambda path: before if path == "before" else []
+    assert E.judge(ctx, "before", "after", "Replace the person and keep all text.")["verdict"] == "partial"
+    assert E.judge(ctx, "before", "after", "Замени человека и сохрани надписи.")["verdict"] == "partial"
     assert E.judge(ctx, "before", "after", "Remove the text from the apron and keep the other text.")["verdict"] == "done"
     assert E.judge(ctx, "before", "after", "Удали одну надпись, остальные надписи сохрани.")["verdict"] == "done"
 
