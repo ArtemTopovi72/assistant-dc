@@ -1449,7 +1449,8 @@ def _builds_on_chat_picture(ctx, state) -> bool:
     """A clip asked for with no photo in this message animates an earlier picture only
     when the words say so. A photo sent with the request, a ▶ plan or ▶️ Continue
     always does."""
-    if state.get("image_data") or getattr(ctx, "video_plan_parts", None) or getattr(ctx, "continue_tail", ""):
+    if (state.get("image_data") or state.get("image_path") or getattr(ctx, "image_pointed_at", False)
+            or getattr(ctx, "video_plan_parts", None) or getattr(ctx, "continue_tail", "")):
         return True
     from prompt_guard import user_words
     said = user_words(str(state.get("user_input_original") or state.get("user_input") or "")).strip()
@@ -2007,7 +2008,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     images, videos = [], []
     if args.get("use_current_images", True) or re.search(r"<Picture \d+>", description):
         images = dep(ctx, "_current_image_paths", _current_image_paths)(ctx, state)
-    if images and "use_current_images" not in args and not _builds_on_chat_picture(ctx, state):
+    if images and not _builds_on_chat_picture(ctx, state):
         # «сделай видео: лиса бежит по лесу» opened on the man with the shovel from three
         # turns back and morphed into the forest (2026-10-17): the default took every
         # picture in the chat, whatever the words were about.

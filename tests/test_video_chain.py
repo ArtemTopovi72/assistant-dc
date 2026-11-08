@@ -53,6 +53,19 @@ def test_part_one_starts_the_chain_and_keeps_its_latent():
     assert not _by(wf, "H3ContinuousContinueV14") and not _by(wf, "MiniMaxH3ImageToVideo")
 
 
+def test_text_only_chain_starts_with_text_adapter(monkeypatch):
+    monkeypatch.setattr(V, 'HERRGOTT_STEPS', 3)
+    monkeypatch.setattr(V, 'VIDEO_T2VA_LORA_3STEP', 'text.safetensors')
+    monkeypatch.setattr(V, 'VIDEO_FL2VA_LORA_3STEP', 'frame.safetensors')
+    wf = V.build_chain_part('A plant sways', chain='h3_continuous/chX', idx=1,
+                            width=1024, height=576, seconds=5, seed=5)
+    assert wf[V.N_LORA]['inputs']['lora_name'] == 'text.safetensors'
+    with_frame = V.build_chain_part('A plant sways', chain='h3_continuous/chX', idx=1,
+                                    width=1024, height=576, seconds=5, seed=5,
+                                    first_frame='plant.png', ctx=_uploads('plant.png'))
+    assert with_frame[V.N_LORA]['inputs']['lora_name'] == 'frame.safetensors'
+
+
 def test_part_three_continues_part_two():
     wf = V.build_chain_part("he stirs", chain="h3_continuous/chX", idx=3, width=768, height=1024,
                             seconds=6.0, seed=5)
@@ -164,6 +177,18 @@ LONG = ("The man puts on a formal suit, takes a broom and begins sweeping the fl
 
 def _no_vision(*a, **k):
     raise AssertionError("no model call between the parts of a chain (it reloads the LLM)")
+
+
+def test_new_video_does_not_use_old_image_when_tool_defaults_true(tmp_path):
+    old = tmp_path / "old.png"
+    old.write_bytes(b"old image")
+    rig = _Rig(tmp_path, drawn_over=lambda *a: False)
+    ctx = rig.ctx(last_image_path=str(old), text_model=lambda *a, **k: "")
+    ctx.yes_no = lambda q, t, default=False, **kw: False if "picture already in the chat" in q else default
+    state = {"user_input_original": "Сгенерируй видео: цветок колышется на столе"}
+    H._handle_generate_video(ctx, state, {"description": "A plant sways on a table", "seconds": 5,
+                                          "use_current_images": True})
+    assert rig.renders() and not rig.renders()[0][1].get("images")
 
 
 def test_chain_continuations_use_the_previous_state_not_the_original_picture(tmp_path):
@@ -472,7 +497,9 @@ def test_a_chain_part_runs_taomates_frame_adapter_at_its_three_steps():
     assert plain[V.N_LORA]["inputs"]["lora_name"] == V.VIDEO_T2VA_LORA_3STEP     # text only: T2AV
     for idx in (1, 2):
         part = V.build_chain_part("a chef", chain="h3_continuous/chX", idx=idx, width=1344,
-                                  height=768, seconds=9.4, seed=1)
+                                  height=768, seconds=9.4, seed=1,
+                                  first_frame="photo.png" if idx == 1 else "",
+                                  ctx=_uploads("photo.png"))
         assert part[V.N_LORA]["inputs"]["lora_name"] == V.VIDEO_FL2VA_LORA_3STEP
         assert "fl2va" in V.VIDEO_FL2VA_LORA_3STEP
         assert part[V.N_SAMPLER]["inputs"]["steps"] == plain[V.N_SAMPLER]["inputs"]["steps"] == 3

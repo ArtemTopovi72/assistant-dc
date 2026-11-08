@@ -1149,9 +1149,10 @@ def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: i
     wf = {k: base[k] for k in (N_UNET, N_SHIFT, N_CLIP, N_VAE_VIDEO, N_VAE_AUDIO, N_LORA)}
     wf[N_SHIFT]["inputs"].update(shift_video=float(VIDEO_SHIFT_VIDEO), shift_audio=float(VIDEO_SHIFT_AUDIO))
     if HERRGOTT_STEPS == 3 and VIDEO_T2VA_LORA_3STEP:
-        # every part past the first leans on the previous part's frames, and the first
-        # usually on a photo: the frame-conditioned adapter (config.VIDEO_FL2VA_LORA_3STEP)
-        wf[N_LORA]["inputs"]["lora_name"] = VIDEO_FL2VA_LORA_3STEP or VIDEO_T2VA_LORA_3STEP
+        # Continuations and starts from a photo use frame conditioning; a text-only
+        # first part uses the text adapter.
+        wf[N_LORA]["inputs"]["lora_name"] = ((VIDEO_FL2VA_LORA_3STEP or VIDEO_T2VA_LORA_3STEP)
+                                             if idx > 1 or first_frame else VIDEO_T2VA_LORA_3STEP)
     common = {"clip": [N_CLIP, 0], "vae": [N_VAE_VIDEO, 0], "prompt": prompt, "width": int(width),
               "height": int(height), "duration": float(seconds), "ref_image_size": "match"}
     if idx <= 1:
