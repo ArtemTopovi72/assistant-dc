@@ -2115,7 +2115,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             # hits» in the soundscape and a whisper of accordion. The guide's own
             # rules: a synchronized sound sits next to its action, the mix is stated.
             "SOUND RULES -- H3 places a sound on the frame by the words beside it. "
-            "(1) EVERY visible thing that makes a sound gets that sound in the SAME sentence "
+            "(1) Unless the user requests silence, EVERY visible thing that makes a sound gets that sound in the SAME sentence "
             "as its action, with a timing word, whether or not the user mentioned it: 'as "
             "the boots hit the cobbles in step, a heavy rhythmic stomp', 'as she tips the "
             "jug, water splashes loudly into the basin', 'as the fist lands, a loud wet "
@@ -2127,7 +2127,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             "into 'muffled' or move them to the soundscape. "
             "(2) An instrument someone plays ON SCREEN is that person's action: hands, "
             "strings or bellows and its sound written in the shot, never non_diegetic_music. "
-            "(3) overall_soundscape always names the scene's own continuous background "
+            "(3) Unless the user requests silence, overall_soundscape names the scene's own continuous background "
             "sources even when the user said nothing -- wind in the grass, a crowd's murmur, "
             "rain on a roof, traffic, room tone -- because H3 fills silence with mumbling; "
             # «the rhythmic buzz of flickering lights» for a dim corridor: H3 drew the flicker,
@@ -3670,6 +3670,32 @@ def revoice(ctx, clip: str, voice: str) -> Optional[str]:
         logger.warning("revoice failed", exc_info=True)
         return None
     return _adopt_output(out, OUTPUT_DIR)
+
+
+def explicit_silence(ctx, request: str) -> bool:
+    return bool(request and yes_no(ctx)(
+        "Does the user explicitly require ALL sound removed from the finished video, "
+        "not just no speech or no music? Background ambience requested means NO. {text}",
+        request, default=False))
+
+
+def mute_video(path: str) -> Optional[str]:
+    """Copy the video without audio, leaving the original untouched."""
+    ff = shutil.which("ffmpeg")
+    if not ff or not os.path.isfile(path):
+        return None
+    fh = tempfile.NamedTemporaryFile(prefix="silent_video_", suffix=".mp4", delete=False)
+    fh.close()
+    try:
+        result = subprocess.run([ff, "-y", "-v", "error", "-i", path, "-map", "0:v:0",
+                                 "-c:v", "copy", "-an", fh.name], capture_output=True, timeout=120,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if result.returncode == 0 and os.path.getsize(fh.name) and not probe(fh.name).get("has_audio"):
+            return fh.name
+    except (OSError, subprocess.SubprocessError):
+        logger.warning("could not mute generated video", exc_info=True)
+    _discard(fh.name)
+    return None
 
 
 def join_continuation(src: str, new: str, fade: float = 0.25, drop_frames: int = 2) -> Optional[str]:

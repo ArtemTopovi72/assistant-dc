@@ -2838,6 +2838,12 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         objects_note = ('The video may contain added objects or effects.'
                         if watch and drawn is not None and drawn > video_mod.DRAWN_OVER_MAX else '')
         ctx.video_action_note = ' '.join(note for note in (ctx.video_action_note, background_note, objects_note) if note)
+    if not continuing and video_mod.explicit_silence(ctx, ctx.video_request):
+        muted = video_mod.mute_video(path)
+        if not muted:
+            state["video_status"] = "error"
+            return "[TOOL ERROR] Could not remove the audio requested by the user; no finished video was delivered."
+        path = muted
     state["video_path"] = path
     state["video_status"] = "success"
     state["video_seconds"] = result.get("seconds")
