@@ -1780,6 +1780,8 @@ def _check_joins(ctx, joins: list) -> str:
     if not joins:
         return ""
     try:
+        if callable(getattr(ctx, 'set_stage', None)):
+            ctx.set_stage('Checking the video')
         analyze_image_with_llm = vision_model(ctx)
         pics = []
         for n, (a, b) in enumerate(joins, 1):
@@ -1867,6 +1869,8 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
     import tempfile
     from pathlib import Path
     try:
+        if callable(getattr(ctx, 'set_stage', None)):
+            ctx.set_stage('Checking the video')
         motion = None
         try:
             tracker = getattr(_video(ctx), 'track_simple_motion', None)
