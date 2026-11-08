@@ -29,3 +29,12 @@ def test_static_cache_uses_full_text_sent_to_classifier(monkeypatch):
     common = 'Keep the background unchanged. ' * 20
     assert video.static_continuation(ctx, common + 'The man speaks in place.')
     assert not video.static_continuation(ctx, common + 'A square moves right.')
+
+
+def test_long_request_does_not_select_static_when_end_would_be_truncated(monkeypatch):
+    monkeypatch.setattr(video, '_STATIC_CONT_CACHE', {})
+    ctx = SimpleNamespace(yes_no=lambda q, *args, **kwargs: 'DIFFERENT LOCATION' not in q)
+    request = 'Keep the background unchanged. ' * 55 + 'The square moves right.'
+    assert len(request) > 1500
+    assert not video.static_continuation(ctx, request)
+

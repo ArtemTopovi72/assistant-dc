@@ -1876,6 +1876,9 @@ def static_continuation(ctx, description: str) -> bool:
     text = (description or "").strip()
     if len(text) < 8:
         return False
+    # shortcut: ask_yes only sees 1500 characters; use the moving-tail path for longer requests.
+    if len(text) > 1500:
+        return False
     key = text[:2000]
     if key in _STATIC_CONT_CACHE:
         return _STATIC_CONT_CACHE[key]
