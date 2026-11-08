@@ -1876,7 +1876,7 @@ def static_continuation(ctx, description: str) -> bool:
     text = (description or "").strip()
     if len(text) < 8:
         return False
-    key = text[:400]
+    key = text[:2000]
     if key in _STATIC_CONT_CACHE:
         return _STATIC_CONT_CACHE[key]
     out = False

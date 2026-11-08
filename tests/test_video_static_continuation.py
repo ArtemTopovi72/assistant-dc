@@ -19,3 +19,13 @@ def test_speaking_or_waving_in_place_keeps_static_mode(monkeypatch):
     answers = iter((True, False))
     ctx = SimpleNamespace(yes_no=lambda *args, **kwargs: next(answers))
     assert video.static_continuation(ctx, 'The man waves in place; the camera stays still.')
+
+
+def test_static_cache_uses_full_text_sent_to_classifier(monkeypatch):
+    monkeypatch.setattr(video, '_STATIC_CONT_CACHE', {})
+    def yes(q, text, **kwargs):
+        return 'DIFFERENT LOCATION' not in q or 'moves right' in text
+    ctx = SimpleNamespace(yes_no=yes)
+    common = 'Keep the background unchanged. ' * 20
+    assert video.static_continuation(ctx, common + 'The man speaks in place.')
+    assert not video.static_continuation(ctx, common + 'A square moves right.')
