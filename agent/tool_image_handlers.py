@@ -2158,7 +2158,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         _said_now = str((state or {}).get("user_input_original")
                         or (state or {}).get("user_input") or "")
         if len(_faces) >= 2 and (video_mod.quoted_lines(description)
-                                 or video_mod.quoted_lines(_said_now)):
+                                 or video_mod.quoted_lines(_said_now)) and yes_no(ctx)(
+                "Does this request include spoken dialogue for a person to say aloud? "
+                "Words only written on signs, screens, or clothing are not spoken dialogue. {text}",
+                f"User request: {_said_now}\nVideo description: {description}", default=True):
             _speaker = video_mod.clip_speaker(ctx, cont_src, cont_tail)
             if _speaker:
                 logger.info("generate_video: the clip's own speaker says the line: %s",

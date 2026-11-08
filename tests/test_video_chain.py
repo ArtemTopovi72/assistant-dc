@@ -758,3 +758,16 @@ def test_failed_later_chain_render_is_reported_incomplete(tmp_path, monkeypatch)
     assert ctx.video_parts_incomplete
     assert 'incomplete' in answer.lower()
     assert not rig.kept
+
+@pytest.mark.parametrize('spoken', [False, True])
+def test_clip_speaker_is_checked_for_dialogue_not_quoted_sign(tmp_path, monkeypatch, spoken):
+    monkeypatch.setitem(sys.modules, 'identity_metrics', types.SimpleNamespace(face_boxes=lambda _: [(0, 0, 1, 1)] * 2))
+    seen = []
+    rig, ctx, _ = _continued(tmp_path, rig_kw={'clip_speaker': lambda *a: seen.append(True) or 'the man'})
+    seed = tmp_path / 'seed.jpg'
+    seed.write_bytes(b'image')
+    ctx.deps = types.SimpleNamespace(_current_image_paths=lambda c, s: [str(seed)], script_read=_fakes.script_model)
+    ctx.yes_no = lambda q, t, default=False, **kw: spoken if 'spoken dialogue' in q else default
+    text = 'He says "Hello".' if spoken else 'Keep the sign "GOOD TALKS" unchanged.'
+    H._handle_generate_video(ctx, {'user_input_original': text}, {'description': text})
+    assert bool(seen) is spoken
