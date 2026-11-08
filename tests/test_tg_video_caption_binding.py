@@ -3,7 +3,8 @@ from types import SimpleNamespace
 
 import tg_bot as T
 import pytest
-from prompt_guard import user_words
+from prompt_guard import user_words, wrap_quoted
+from tg_tasks import _typed_part
 
 
 @pytest.mark.parametrize('description', ['A speaker and a sign saying "wrong words".', ''])
@@ -56,3 +57,10 @@ def test_legacy_video_sheet_copy_is_not_a_user_photo(tmp_path):
     actual = T._image_by_id(sess, T._log_image(sess, str(photo), src="user", msg_id=5))
     assert T._is_video_image(sess, legacy)
     assert not T._is_video_image(sess, actual)
+
+
+def test_language_detection_ignores_attached_video_description():
+    caption = 'Кратко перескажи видео.'
+    content = caption + '\n' + wrap_quoted('visual description of the attached video',
+                                            'The video shows a speaker on stage.')
+    assert _typed_part(content) == caption

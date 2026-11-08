@@ -115,8 +115,8 @@ def _is_button_payload(text: str) -> bool:
 def _typed_part(text: str) -> str:
     """The user's own words after a button's English prefix: «animate this photo:
     Танцует» read as Latin and switched a Russian chat's replies to English."""
-    from prompt_guard import OCR_NOTE_HEAD
-    t = (text or "").split("\n" + OCR_NOTE_HEAD)[0]    # the OCR of the photo is not the user's alphabet
+    from prompt_guard import OCR_NOTE_HEAD, user_words
+    t = user_words((text or "").split("\n" + OCR_NOTE_HEAD)[0])
     for p in ("animate this photo: ", "continue this video: ", *tg_bot._PROMPT_KB.values()):
         if t.startswith(p):
             return t[len(p):]
@@ -799,16 +799,17 @@ class TaskRunnerMixin:
         # stale/newly-set turn_lang="en" leaks English into the interim note and
         # the final reply for a plain button press in a Russian session.
         is_internal = bool(task.translation) or _is_button_payload(task.user_text)
-        _tl = "" if is_internal else _message_script(_typed_part(task.user_text), ctx=self.reads)
+        _typed = _typed_part(task.user_text)
+        _tl = "" if is_internal else _message_script(_typed, ctx=self.reads)
         from graph_language import asks_for_english as _ask_en
-        _asks_en = not is_internal and _ask_en(task.user_text, ctx=self.reads)
+        _asks_en = not is_internal and _ask_en(_typed, ctx=self.reads)
         # «can you answer in English from now on?» sets a pin that outlives the
         # turn (the model's read).
-        _read_language = not is_internal and bool((task.user_text or "").strip())
+        _read_language = not is_internal and bool(_typed.strip())
         if _read_language:
             from graph_language import names_english as _names_en
-            _mode = intent_read(ctx)(None, task.user_text)["language_mode"]
-            _named_en = _mode == "en" and _names_en(task.user_text, ctx=self.reads)
+            _mode = intent_read(ctx)(None, _typed)["language_mode"]
+            _named_en = _mode == "en" and _names_en(_typed, ctx=self.reads)
         with sess._lock:
             stale = token[0] != sess.context_generation
             if not stale:
