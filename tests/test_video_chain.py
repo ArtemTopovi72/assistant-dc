@@ -806,3 +806,22 @@ def test_static_continuation_keeps_keyframes_without_freezing_face():
                                  seconds=5, keyframe=True)
     assert V._FRAMING_LOCK_SUFFIX in prompt
     assert V._HEAD_LOCK_SUFFIX not in prompt
+
+def test_preserving_existing_text_does_not_add_an_overlay(tmp_path, monkeypatch):
+    clip = tmp_path / 'clip.mp4'
+    clip.write_bytes(b'video')
+    monkeypatch.setattr(V, '_onscreen_text_words', lambda *a: ['GOOD TALKS'])
+    monkeypatch.setattr(V, '_overlay_text', lambda *a: pytest.fail('must not add a caption'))
+    ctx = types.SimpleNamespace(video_request='Сохрани вывеску «GOOD TALKS».', video_text_overlay_allowed=False)
+    assert V._ensure_onscreen_text(ctx, str(clip), ctx.video_request) == str(clip)
+
+def test_preserving_source_text_still_uses_typography_adapter(tmp_path):
+    old = tmp_path / 'old.png'
+    old.write_bytes(b'image')
+    rig = _Rig(tmp_path, drawn_over=lambda *a: False)
+    ctx = rig.ctx(last_image_path=str(old))
+    ctx.yes_no = lambda q, t, default=False, **kw: False if 'adding NEW visible text' in q else True
+    H._handle_generate_video(ctx, {'user_input_original': 'Оживи и сохрани вывеску «GOOD TALKS».'},
+                             {'description': 'Animate this image; keep the sign.', 'use_current_images': True})
+    assert ctx.video_text_required and ctx.video_text_source
+    assert ctx.video_text_overlay_allowed is False

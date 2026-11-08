@@ -2660,7 +2660,7 @@ def _ensure_onscreen_text(ctx, path: str, description: str, source: str = "") ->
     """The lettering contract: if the script demanded readable on-screen text,
     the delivered clip READS it — checked with our own OCR, fixed with a
     deterministic overlay when the model garbled its lettering."""
-    if not path or not os.path.exists(path):
+    if not path or not os.path.exists(path) or getattr(ctx, "video_text_overlay_allowed", True) is False:
         return path
     # The gate reads the USER'S OWN words, not the agent's script: the script
     # describes what the camera sees (a player's heading) and that is not a

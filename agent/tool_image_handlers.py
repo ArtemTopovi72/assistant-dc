@@ -1973,6 +1973,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     ctx.video_duration_short = False
     ctx.video_part_request = ""
     ctx.video_text_required = ctx.video_text_source = False
+    ctx.video_text_overlay_allowed = True
     ctx.video_static_continuation = False
     ctx.video_untrusted_ocr = ()
 
@@ -2525,6 +2526,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         "Answer no for spoken dialogue, subtitles to be added outside the video, "
         "or a request that merely mentions a title: {text}",
         ctx.video_request, default=False) if ctx.video_request else False
+    if text_asked and (images or continuing):
+        ctx.video_text_overlay_allowed = yes_no(ctx)(
+            "Does the user request adding NEW visible text, replacing existing text, "
+            "or adding subtitles to the generated video? Merely preserving existing "
+            "lettering is NO. {text}", ctx.video_request, default=True)
     source_text = False
     if images and not text_asked:
         try:
