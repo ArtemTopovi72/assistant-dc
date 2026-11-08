@@ -2839,7 +2839,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                         if watch and drawn is not None and drawn > video_mod.DRAWN_OVER_MAX else '')
         ctx.video_action_note = ' '.join(note for note in (ctx.video_action_note, background_note, objects_note) if note)
     audio_removed = False
-    if not continuing and video_mod.explicit_silence(ctx, ctx.video_request):
+    if video_mod.explicit_silence(ctx, ctx.video_request):
         muted = video_mod.mute_video(path)
         if not muted:
             state["video_status"] = "error"

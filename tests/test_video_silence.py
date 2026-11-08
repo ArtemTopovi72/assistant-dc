@@ -38,3 +38,25 @@ def test_silent_video_tool_result_does_not_claim_generated_audio(tmp_path):
     assert state['video_path'] == str(silent)
     assert 'without audio' in result
     assert 'with generated audio' not in result
+
+
+def test_explicitly_silent_finished_continuation_is_muted_after_join(tmp_path):
+    from tests.test_video_chain import _continued
+    import tool_image_handlers as handlers
+    joined = tmp_path / 'joined.mp4'
+    joined.write_bytes(b'joined')
+    silent = tmp_path / 'silent.mp4'
+    silent.write_bytes(b'silent')
+    seen = []
+    rig, ctx, src = _continued(tmp_path, rig_kw={
+        'join_continuation': lambda *a: str(joined),
+        '_adopt_output': lambda path, *a: path,
+        'explicit_silence': lambda ctx, text: True,
+        'mute_video': lambda path: seen.append(path) or str(silent),
+    })
+    state = {'user_input_original': 'Продолжи видео и убери звук из всего итогового ролика'}
+    result = handlers._handle_generate_video(ctx, state, {'description': 'Continue silently.', 'seconds': 5})
+    assert seen == [str(joined)]
+    assert state['video_path'] == str(silent)
+    assert src.exists()
+    assert 'without audio' in result
