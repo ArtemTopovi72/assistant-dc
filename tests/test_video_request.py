@@ -541,3 +541,14 @@ def test_latent_continuation_accepts_its_existing_original_reference(tmp_path, m
     result = video.generate_video(ctx, '<Picture 1> continues', chain=('chain', 2),
                                   reference=str(tmp_path / 'missing.png'), prepared=True, seconds=5.2)
     assert result['status'] == 'fail' and 'reference' in result['reason'].lower()
+
+
+def test_video_prompt_distinguishes_no_speech_from_silence():
+    seen = {}
+    good = ('integrated_multimodal_description: [Shot 1] A square moves.\n'
+            'overall_soundscape: room tone.\nnon_diegetic_music: N/A')
+    ctx = SimpleNamespace(video_request='Двигай квадрат без речи, оставь фоновый звук.',
+                          text_model=lambda ctx, guide, user, **kw: seen.update(user=user) or good)
+    video.to_context_ir(ctx, 'A square moves.', mode='t2va', seconds=5)
+    assert 'no speech does not mean no background sound' in seen['user'].lower()
+    assert 'when the user explicitly requests silence' in seen['user'].lower()
