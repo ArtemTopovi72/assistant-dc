@@ -18,6 +18,10 @@ class GuiControl(QObject):
         button = self.buttons[request['action']]
         try:
             if button.isEnabled():
+                if request['action'] == 'restart':
+                    # Acknowledge acceptance before shutdown blocks the GUI thread.
+                    request['result'] = {'ok': True}
+                    request['done'].set()
                 button.click()
                 request['result'] = {'ok': True}
             else:
@@ -28,6 +32,7 @@ class GuiControl(QObject):
             request['done'].set()
 
     def press(self, action):
+        """For restart, ok means accepted; callers check health for readiness."""
         if action not in self.buttons:
             return {'error': 'unknown action'}
         request = {'action': action, 'done': threading.Event(), 'cancelled': threading.Event()}

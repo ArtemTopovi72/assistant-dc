@@ -132,3 +132,22 @@ def test_http_press_activates_qt_button_while_window_is_hidden(monkeypatch, acti
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_restart_acknowledges_before_slow_shutdown():
+    app = QApplication.instance() or QApplication([])
+    button = QPushButton('Restart')
+    done = threading.Event()
+    acknowledged_while_running = []
+    button.clicked.connect(lambda: acknowledged_while_running.append(done.wait(1)))
+    control = GuiControl({'restart': button})
+    result = []
+    worker = threading.Thread(target=lambda: (result.append(control.press('restart')), done.set()))
+    worker.start()
+    end = time.monotonic() + 3
+    while worker.is_alive() and time.monotonic() < end:
+        app.processEvents()
+        time.sleep(.01)
+    worker.join(2)
+    assert result == [{'ok': True}]
+    assert acknowledged_while_running == [True]
