@@ -107,6 +107,13 @@ def test_identical_sign_and_dialogue_are_not_counted_twice():
     assert V.estimate_seconds(script, capped=False, reads=reads) == 5.78
 
 
+def test_mismatched_classifier_quote_does_not_shorten_real_dialogue():
+    script = 'He says "one two three four five six seven eight".'
+    def reads(sentences):
+        return {'sentences': [{'kind': 'action', 'beats': 1, 'spoken': ['paraphrased']} for _ in sentences]}
+    assert V.estimate_seconds(script, capped=False, reads=reads) == 5.78
+
+
 def test_continue_template_does_not_count():
     assert _est(V.CONTINUE_PREFIX + "he waves.") == _est("he waves.")
 

@@ -312,8 +312,12 @@ def estimate_seconds(description: str, capped: bool = True, reads=None) -> float
     for s, row in acts:
         selected = row.get('spoken')
         selected = list(selected) if selected is not None else None
-        for m in _QUOTED.finditer(s):
-            line = next(g for g in m.groups() if g is not None)
+        lines = [next(g for g in m.groups() if g is not None) for m in _QUOTED.finditer(s)]
+        if selected is not None:
+            from collections import Counter
+            if Counter(selected) - Counter(lines):
+                selected = None
+        for line in lines:
             if selected is None or line in selected:
                 spoken.append(line)
                 if selected is not None:
