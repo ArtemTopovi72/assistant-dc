@@ -652,9 +652,10 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
                 match = next((item for item in row.get('others') or []
                               if item.get('sku') and item.get('url') and matches_model(item)), None)
                 if match:
-                    row['others'] = [item for item in row['others'] if item is not match and matches_model(item)]
+                    row['others'] = [item for item in row['others'] if item is not match]
                     row['choice'] = match
                     row['decision'] = {}
+            row['others'] = [item for item in row.get('others') or [] if matches_model(item)]
         results = [row for row in results if row.get("choice") and matches_model(row['choice'])]
         chosen = [row["choice"] for row in results]
         if not chosen:

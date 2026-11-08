@@ -130,6 +130,19 @@ def test_researched_product_can_be_an_inspected_alternative(monkeypatch):
     assert ctx._ozon_shop_review_checked
 
 
+def test_researched_product_excludes_other_sku_from_alternatives(monkeypatch):
+    correct = {'sku': '1', 'name': 'Kingston SSD SNV3S/1000G', 'url': 'https://www.ozon.ru/product/item-1/'}
+    wrong = {'sku': '2', 'name': 'Kingston SSD SNV3S/1000GCN', 'url': 'https://www.ozon.ru/product/item-2/'}
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: (
+        {'mode': 'one'}, [{'choice': correct, 'others': [wrong], 'decision': {}, 'item': {'need': 'SSD'}}]))
+    monkeypatch.setattr(ozon_shopper, 'report', lambda rows, *a: str(rows[0]['others']))
+    state = {'user_input_original': 'Найди обзор Kingston NV3 SNV3S/1000G, затем поищи на Ozon',
+             'research_shop_evidence': 'Review: Kingston NV3 1TB SNV3S/1000G'}
+    result = handler._handle_ozon_shop(SimpleNamespace(turn_products=[]), state,
+                                       {'request': 'Kingston NV3 1TB SNV3S/1000G'})
+    assert result == '[]'
+
+
 @pytest.mark.parametrize('card_name,confirmed', [
     ('Kingston SSD SNV3S/1000G', True), ('Kingston NV3 SSD SNV3S/2000G', False),
     ('OtherBrand SSD SNV3S/1000G', False)])
