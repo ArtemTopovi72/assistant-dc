@@ -3,8 +3,8 @@ from types import SimpleNamespace
 import video
 
 
-def test_moving_object_overrides_mistaken_static_classification():
-    video._STATIC_CONT_CACHE.clear()
+def test_moving_object_overrides_mistaken_static_classification(monkeypatch):
+    monkeypatch.setattr(video, '_STATIC_CONT_CACHE', {})
     questions = []
     def yes(q, text, **kwargs):
         questions.append(q)
@@ -14,8 +14,8 @@ def test_moving_object_overrides_mistaken_static_classification():
     assert len(questions) == 2
 
 
-def test_speaking_or_waving_in_place_keeps_static_mode():
-    video._STATIC_CONT_CACHE.clear()
+def test_speaking_or_waving_in_place_keeps_static_mode(monkeypatch):
+    monkeypatch.setattr(video, '_STATIC_CONT_CACHE', {})
     answers = iter((True, False))
     ctx = SimpleNamespace(yes_no=lambda *args, **kwargs: next(answers))
     assert video.static_continuation(ctx, 'The man waves in place; the camera stays still.')
