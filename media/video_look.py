@@ -34,6 +34,7 @@ GRID_COLS, CELL = 4, 320
 _SHEET_SYSTEM = (
     "You are looking at frames sampled from ONE video, in time order, each "
     "labelled with its timestamp. Write a STORYBOARD: "
+    "The timestamp labels are added for analysis and are not part of the original video. "
     "one line per frame, strictly in this form and nothing else on the line:\n"
     "  0:05 — what this frame shows (setting, people/objects, action)\n"
     "Text written on a frame (captions, signs, meme text) is often the whole "

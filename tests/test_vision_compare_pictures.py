@@ -38,6 +38,19 @@ def test_earlier_picture_is_read_when_the_user_relates_pictures(tmp_path, monkey
     assert len(calls) == 1 and [p for _, p in calls[0]["image_paths"]] == [a, b]
 
 
+def test_video_sheet_timestamps_are_not_presented_as_video_content(tmp_path):
+    video = tmp_path / 'video_123'
+    video.mkdir()
+    sheet = video / 'sheet.jpg'; sheet.write_bytes(b'frames')
+    photo = tmp_path / 'photo.jpg'; photo.write_bytes(b'photo')
+    calls = []
+    ctx = _Ctx([str(sheet)], str(photo), yes=lambda q, t: True,
+               look=lambda **kw: (calls.append(kw), 'comparison')[1])
+    graph._add_earlier_pictures(ctx, {'user_input': 'Compare the photo and video.'}, 'photo')
+    label = calls[0]['image_paths'][0][0].lower()
+    assert 'timestamp' in label and 'not part' in label
+
+
 def test_single_picture_question_reads_only_the_current_one(tmp_path, monkeypatch):
     a, b = _files(tmp_path)
     calls = []

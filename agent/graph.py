@@ -129,7 +129,9 @@ def _add_earlier_pictures(ctx, state, summary: str) -> str:
     # One call with every picture labelled: read one at a time, each answer said "only one
     # image was provided, there is no second picture" (2026-10-13).
     cur = getattr(ctx, "last_image_path", None)
-    pics = [(f"Picture {i} (sent earlier):", p) for i, p in enumerate(earlier, 1)]
+    pics = [(f"Picture {i} (sent earlier): " +
+             ("Video frame sheet; yellow timestamp labels were added for analysis and are not part of the video."
+              if is_video_sheet(p) else ""), p) for i, p in enumerate(earlier, 1)]
     if cur and Path(cur).exists():
         pics.append((f"Picture {len(pics) + 1} (the latest):", cur))
     try:
@@ -162,7 +164,8 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
                               else "Looking at the image")
                 if is_video_sheet(last_path):
                     user_text = ("This sheet holds the timestamped keyframes of the video the "
-                                 "user sent. Look at the frames closely for what the request "
+                                 "user sent. Yellow timestamp labels were added for analysis and are not part of the video. "
+                                 "Look at the frames closely for what the request "
                                  "needs (surfaces, joints, defects, details), citing timestamps. "
                                  "Request: " + user_text)
                 response = vision_model(ctx)(
