@@ -445,6 +445,7 @@ def test_context_ir_ask_carries_the_style_anchor_and_one_action_arc():
     assert "STYLE AND ACTION RULES" in seen["user_text"]
     assert "never write 'Live-action'" in seen["user_text"]
     assert "ONE action arc" in seen["user_text"]
+    assert "do not invent an ending" in seen["user_text"]
 
 
 def test_framing_lock_freezes_the_camera_not_the_scene():

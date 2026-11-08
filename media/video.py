@@ -2097,7 +2097,8 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
              "that same inset; do not place them physically in its surrounding background. "
              "If no inset exists, do not invent one.\n" if images and n_videos else "") +
             "ACTION RULES -- ONE action arc per shot: the "
-            "subject starts one action, it develops, one result -- do not stack several "
+            "subject starts one action and it develops; do not invent an ending "
+            "or a new event unless the user asked for it -- do not stack several "
             "independent actions (strains AND tenses AND furrows AND something lands AND "
             "a sigh); pick the single through-line of the request and let face, hands and "
             "sound serve it. (3) CAMERA: describe only a move the request asks for; a "
