@@ -416,6 +416,8 @@ def add_text_verified(ctx, image_path: str, instruction: str,
     best, best_score = "", -1.0
     base = seed if seed and seed > 0 else random.randint(1, 2**31 - 1)
     for k in range(max(1, TEXT_ADD_TRIES)):
+        if getattr(ctx, "is_cancelled", None) and ctx.is_cancelled():
+            return None, best, " / ".join(wanted)
         out = _img.edit_image_with_firered(ctx, image_path, instr, seed=base + k * 7919)
         if not out:
             continue

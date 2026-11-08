@@ -41,3 +41,16 @@ def test_combined_ocr_line_matches_each_label_without_accepting_wrong_year(tmp_p
     out, _, _ = image_router.add_text_verified(ctx, str(source), instruction, allow_overlay=False)
     assert out is None
 
+
+
+def test_cancel_during_text_edit_does_not_start_more_renders(tmp_path, monkeypatch):
+    source = tmp_path / 'source.png'
+    Image.new('RGB', (200, 100), 'white').save(source)
+    monkeypatch.setattr(image_router, 'TEXT_ADD_TRIES', 3)
+    calls = []
+    ctx = SimpleNamespace(is_cancelled=lambda: bool(calls), deps=SimpleNamespace(
+        image=SimpleNamespace(edit_image_with_firered=lambda *a, **k: calls.append(1) or None)))
+    out, _, _ = image_router.add_text_verified(ctx, str(source), 'replace text with "NEW"',
+                                               require_ocr=True, allow_overlay=False)
+    assert out is None
+    assert len(calls) == 1
