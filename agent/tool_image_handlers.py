@@ -2619,6 +2619,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         framing_unverified = False
         possible_flash = False
         said_first = video_mod.quoted_lines(parts[0]) if head and parts and not silent else []
+        requested_lines = video_mod.quoted_lines(ctx.video_request)
+        if said_first and requested_lines:
+            requested = {video_mod._flat_line(line) for line in requested_lines}
+            said_first = list(dict.fromkeys(line for line in said_first
+                                           if video_mod._flat_line(line) in requested))
         speech_ok = getattr(ctx, "speech_ok", None) or _speech_ok
         try:
             for attempt in (1, 2, 3):

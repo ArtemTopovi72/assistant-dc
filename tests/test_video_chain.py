@@ -847,3 +847,18 @@ def test_static_continuation_retries_camera_drift_and_keeps_better_take(tmp_path
     H._handle_generate_video(ctx, {'user_input_original': 'Камера неподвижна, человек машет.'},
                              {'description': 'The person waves, camera stationary.', 'seconds': 5})
     assert len(rig.renders()) == 2
+
+def test_static_speech_check_ignores_quoted_source_text_not_requested(tmp_path):
+    src, tail, seed = (tmp_path / name for name in ('original.mp4', 'tail.mp4', 'seed.jpg'))
+    for p in (src, tail, seed): p.write_bytes(b'x')
+    heard = []
+    rig = _Rig(tmp_path, herrgott_on=lambda: False, static_continuation=lambda *a: True,
+               voice_sample=lambda *a: '', new_bright_region=lambda *a: False,
+               overlay_drift=lambda p: 0, join_continuation=lambda *a, **kw: str(tail))
+    ctx = rig.ctx(continue_src=str(src), continue_tail=str(tail))
+    ctx.deps = types.SimpleNamespace(_current_image_paths=lambda c, s: [str(seed)], script_read=_fakes.script_model)
+    ctx.speech_ok = lambda c, p, lines: heard.append(lines) or True
+    ctx.yes_no = lambda q, t, default=False, **kw: False
+    H._handle_generate_video(ctx, {'user_input_original': 'Продолжи: он говорит «Добрый вечер, друзья».'},
+                             {'description': 'The sign "СТРИМ НА ПАУЗЕ" stays. He says "Добрый вечер, друзья".', 'seconds': 5})
+    assert heard and heard[0] == ['Добрый вечер, друзья']
