@@ -2549,7 +2549,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             "or adding subtitles to the generated video? Merely preserving existing "
             "lettering is NO. {text}", ctx.video_request, default=True)
     source_text = False
-    if images and not text_asked:
+    if images:
         try:
             import ocr_reader
             pieces = [str(piece).strip()

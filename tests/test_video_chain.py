@@ -827,6 +827,19 @@ def test_preserving_source_text_still_uses_typography_adapter(tmp_path):
     assert ctx.video_text_required and ctx.video_text_source
     assert ctx.video_text_overlay_allowed is False
 
+
+def test_preserve_request_collects_ocr_guesses_for_prompt_guard(tmp_path, monkeypatch):
+    import ocr_reader
+    monkeypatch.setattr(ocr_reader, 'read_boxes', lambda path: [([], 'S0Z', 0.75), ([], 'ERRA', 0.98)])
+    old = tmp_path / 'old.png'
+    old.write_bytes(b'image')
+    rig = _Rig(tmp_path, drawn_over=lambda *a: False)
+    ctx = rig.ctx(last_image_path=str(old))
+    ctx.yes_no = lambda q, t, default=False, **kw: 'adding NEW visible text' not in q
+    H._handle_generate_video(ctx, {'user_input_original': 'Оживи и сохрани надписи.'},
+                             {'description': 'Keep SOZ and ERRA.', 'use_current_images': True})
+    assert ctx.video_untrusted_ocr == ('S0Z', 'ERRA')
+
 def test_short_explicit_continuation_duration_survives_intent_miss(tmp_path, monkeypatch):
     monkeypatch.setattr(H, 'intent_read', lambda ctx: lambda *a: {'song_seconds': 0})
     rig, ctx, _ = _continued(tmp_path, video_plan_ask=True)

@@ -1484,6 +1484,17 @@ def mark_speech_stress(ctx, prompt: str) -> str:
         # Only the spoken words go through the accentor: RUAccent normalizes
         # punctuation away and turned the closing "</d>" into "d>",
         # leaving the line unterminated for H3.
+        if not m.group(0).lower().startswith('<d>'):
+            prefix = prompt[max(0, m.start() - 120):m.start()]
+            cues = list(re.finditer(r'\b(?:sign|inscription|lettering|text|reads(?:\s+aloud)?|written|printed|'
+                                    r'says?|speaks?|shouts?|yells?|whispers?|'
+                                    r'вывеск\w*|надпис\w*|написан\w*|говор\w*|сказ\w*|крич\w*|шепч\w*)\b', prefix, re.I))
+            visual = {'sign', 'inscription', 'lettering', 'text', 'reads', 'written', 'printed'}
+            suffix = prompt[m.end():m.end() + 40]
+            if ((cues and (cues[-1].group(0).lower() in visual or
+                           cues[-1].group(0).lower().startswith(('вывеск', 'надпис', 'написан'))))
+                    or re.match(r'\s+(?:is|was)\s+(?:written|printed|displayed)\b', suffix, re.I)):
+                return m.group(0)
         head, line, tail = re.match(r"(«|\"|<d>(?:\[[^\]]*\]\s*)?)(.*?)(»|\"|</d>)$", m.group(0), re.S).groups()
         try:
             plus = acc(line)
@@ -2469,15 +2480,34 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
     # authority when the user did not specify the lettering themselves.
     untrusted = getattr(ctx, "video_untrusted_ocr", ())
     if untrusted:
+        from difflib import SequenceMatcher
+        user_request = getattr(ctx, 'video_request', '') or ''
+        def scrub_quoted_guess(match):
+            word = match.group(2)
+            if not word.isupper() or re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", user_request, re.I):
+                return match.group(0)
+            start = max(description.rfind('.', 0, match.start()), description.rfind('\n', 0, match.start())) + 1
+            end = re.search(r'[.\n]', description[match.end():])
+            clause = description[start:match.end() + end.start()] if end else description[start:]
+            if not re.search(r'letter|text|inscription|shirt|sign|print|logo|caption|written', clause, re.I):
+                return match.group(0)
+            normalized = word.replace('0', 'O')
+            for guess in untrusted:
+                candidate = guess.replace('0', 'O')
+                if (len(normalized) >= 3 and len(normalized) == len(candidate)
+                        and SequenceMatcher(None, normalized, candidate).ratio() >= (len(normalized) - 1) / len(normalized)):
+                    return "the exact original lettering in the reference image"
+            return match.group(0)
+        description = re.sub(r'''(["'])([A-Z0-9]{3,})\1''', scrub_quoted_guess, description)
         for piece in sorted(set(untrusted), key=len, reverse=True):
             if len(piece) >= 3:
-                # Match the OCR spelling exactly: case-insensitive replacement of
-                # e.g. THE would also destroy ordinary prompt prose ("the").
-                pattern = r"(?<!\w)" + re.escape(piece) + r"(?!\w)"
+                # Keep prose case-sensitive; OCR often confuses the digit 0 and O.
+                token = ''.join('[O0]' if c in 'O0' else re.escape(c) for c in piece)
+                pattern = r'''(?<!\w)(?:(["'])(%s)\1|(%s))(?!\w)''' % (token, token)
                 if piece.isupper() or any(ch.isdigit() for ch in piece):
-                    description = re.sub(pattern,
-                                         "the exact original lettering in the reference image",
-                                         description)
+                    description = re.sub(pattern, lambda match: match.group(0) if re.search(
+                        r"(?<!\w)" + re.escape(match.group(2) or match.group(3)) + r"(?!\w)", user_request, re.I)
+                        else "the exact original lettering in the reference image", description)
         guard = ("Preserve any visible lettering by copying its exact shapes from "
                  "the reference image; OCR transcriptions may be wrong. Do not invent "
                  "or respell letters.")
