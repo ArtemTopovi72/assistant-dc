@@ -38,3 +38,11 @@ def test_a_no_wait_check_answers_at_once_while_a_render_holds_the_card():
 def test_a_flow_check_still_waits_for_the_model():
     import intent
     assert intent.ask_yes("Is {text} a cat?", "a tabby cat on a sofa", ctx=_busy_card("yes")) is True
+
+def test_unknown_answer_uses_default_and_is_not_cached():
+    import intent
+    answers = iter(['', 'no'])
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(live=True, call_llm_simple=lambda *a, **k: next(answers)))
+    q = 'Is {text} an unusual test item?'
+    assert intent.ask_yes(q, 'unique fallback test', default=True, ctx=ctx) is True
+    assert intent.ask_yes(q, 'unique fallback test', default=True, ctx=ctx) is False

@@ -295,7 +295,10 @@ def ask_yes(question: str, text: str, default: bool = False, wait: bool = True, 
                                   # is it lettering? Yes)
                                   question.replace("{text}", "«%s»" % text[:1500]),
                                   temperature=0.0, max_tokens=5) or ""
-        got = ans.strip().lower().startswith(("yes", "да"))
+        answer = re.match(r"^(yes|no|да|нет)\b", ans.strip(), re.I)
+        if not answer:
+            return default
+        got = answer.group(1).lower() in ("yes", "да")
     except Exception:
         logger.warning("ask_yes: model read failed", exc_info=True)
         return default
