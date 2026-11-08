@@ -5,6 +5,7 @@ import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PIL import Image, ImageDraw
 import compositing
+import klein_annotate
 
 d = tempfile.mkdtemp()
 o, r = os.path.join(d, "o.png"), os.path.join(d, "r.png")
@@ -29,4 +30,21 @@ im = Image.open(r)
 assert im.getpixel((330, 212))[0] < 140, "the temple drawn past the box was cut"
 assert im.getpixel((150, 205)) == (20, 20, 25), "the lens was lost"
 assert im.getpixel((50, 350)) == skin, "faint drift away from the edit must be the original"
+
+# A second, in-place recolor must survive even when another object moves.
+Image.new("RGB", (400, 400), skin).save(o)
+res = Image.new("RGB", (400, 400), skin)
+dr = ImageDraw.Draw(res)
+dr.rectangle([40, 40, 80, 80], fill=(40, 40, 40))
+dr.rectangle([280, 280, 320, 320], fill=(60, 60, 60))
+res.save(r)
+boxes = klein_annotate.edit_boxes([
+    {"src_bbox": [700, 100, 800, 200], "tgt_bbox": [700, 700, 800, 800]},
+    {"src_bbox": [100, 100, 200, 200], "tgt_bbox": [100, 100, 200, 200]},
+])
+assert compositing.lock_outside_boxes(o, r, boxes, pad=0)
+im = Image.open(r)
+assert im.getpixel((60, 60)) == (40, 40, 40), "in-place recolor was lost"
+assert im.getpixel((300, 300)) == (60, 60, 60), "moved object was lost"
+assert im.getpixel((200, 200)) == skin, "unrelated background changed"
 print("ok")

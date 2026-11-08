@@ -38,15 +38,15 @@ def parse_record(text: str):
 
 
 def edit_boxes(rows) -> list:
-    """Boxes the edit actually touches: every src/tgt box of a row that moves, appears or goes away."""
+    """Keep every annotated region: unchanged coordinates can still contain an in-place edit."""
     out = []
     for r in rows:
         s, t = r.get("src_bbox"), r.get("tgt_bbox")
-        if s is not None and s == t:
-            continue
         for b in (s, t):
             if isinstance(b, list) and len(b) == 4 and all(isinstance(v, (int, float)) for v in b):
-                out.append([int(v) for v in b])
+                box = [int(v) for v in b]
+                if box not in out:
+                    out.append(box)
     return out
 
 

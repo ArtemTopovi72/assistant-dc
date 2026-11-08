@@ -1,4 +1,4 @@
-"""The annotator's reply becomes Klein's prompt; only rows that really change feed the pixel lock."""
+"""The annotator's reply becomes Klein's prompt; its regions feed the pixel lock."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import klein_annotate as ka
@@ -8,7 +8,12 @@ reply = ('Move the boat <boat_1> to the right. Everything else stays identical. 
          '{"id":"buoy_1","from":"ref_image_0","src_bbox":[600,400,680,440],"tgt_bbox":[600,400,680,440],"desc":"buoy"}]')
 para, rows = ka.parse_record(reply)
 assert para.startswith("Move the boat") and len(rows) == 2
-assert ka.edit_boxes(rows) == [[400, 150, 520, 350], [400, 600, 520, 800]]
+assert ka.edit_boxes(rows) == [[400, 150, 520, 350], [400, 600, 520, 800], [600, 400, 680, 440]]
+mixed_rows = [
+    {"id": "boat_1", "src_bbox": [400, 150, 520, 350], "tgt_bbox": [400, 600, 520, 800]},
+    {"id": "shirt_1", "src_bbox": [100, 100, 200, 200], "tgt_bbox": [100, 100, 200, 200]},
+]
+assert [100, 100, 200, 200] in ka.edit_boxes(mixed_rows), "an in-place recolor must not be locked out"
 assert ka.parse_record("just words") is None and ka.parse_record("x [{bad") is None
 pretty = 'Move the boat <boat_1>.\n```json\n[\n  {"id":"boat_1","src_bbox":[1,2,3,4],"tgt_bbox":[5,6,7,8]}\n]\n```'
 pretty_para, pretty_rows = ka.parse_record(pretty)
@@ -22,7 +27,7 @@ class Ctx:
 
 
 r = ka.annotate_edit(Ctx(), "x.png", "move the boat right")
-assert r and r["prompt"].startswith("Move the boat") and len(r["boxes"]) == 2
+assert r and r["prompt"].startswith("Move the boat") and len(r["boxes"]) == 3
 
 
 Ctx.vision_model = staticmethod(lambda **kw: "no table")
