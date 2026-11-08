@@ -157,8 +157,8 @@ def _target_id_of(task, sess) -> str:
 
 
 def _message_script(text: str, ctx=None) -> str:
-    """'en' for a message written wholly in Latin letters, 'ru' for one wholly
-    in Cyrillic, '' when it is neither (mixed text, a button payload, an emoji,
+    """'en' for Latin text, 'ru' for Cyrillic or mostly Russian text with product
+    names, '' when neither is clear (mixed text, a button payload, an emoji,
     a bare link, a one-word command). At least three words are needed: 'ok' or
     'upscale' says nothing about what language the user wants back."""
     t = (text or "").strip()
@@ -178,7 +178,7 @@ def _message_script(text: str, ctx=None) -> str:
     cyr = sum(1 for w in words if all("\u0400" <= ch <= "\u04ff" for ch in w))
     if latin == len(words):
         return "en"
-    if cyr == len(words):
+    if cyr == len(words) or (cyr >= 6 and cyr / len(words) >= 0.65):
         return "ru"
     return ""
 

@@ -30,6 +30,10 @@ ms = lambda t: T._message_script(t, ctx=_R)  # noqa: E731
 check("English question -> en", ms("hi! what's the capital of Australia? one line") == "en")
 check("English draw -> en", ms("draw a lighthouse on a cliff during a storm") == "en")
 check("Russian question -> ru", ms("за сколько дней надо предупредить о выезде?") == "ru")
+check("Russian request with product names -> ru",
+      ms("Найди независимый обзор SSD Kingston NV3 SNV3S/1000G, затем поищи именно эту модель на Ozon. Проверь актуальную цену и реальные отзывы, дай ссылку на подтверждённую карточку; если не получится — честно скажи, что не удалось проверить.") == "ru")
+check("short Russian request with product names -> ru",
+      ms("Найди независимый обзор SSD Kingston NV3 SNV3S/1000G, затем поищи именно эту модель на Ozon. Проверь цену и отзывы.") == "ru")
 check("button payload inherits", ms("[upscale]") == "")
 check("one-word command inherits", ms("upscale") == "")
 check("emoji inherits", ms("👍") == "")

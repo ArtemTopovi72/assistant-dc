@@ -708,7 +708,7 @@ def digest(r: dict) -> str:
     c, dec = r.get("choice"), r.get("decision") or {}
     if not c:
         return ""
-    out = [f"🎒 **Предварительный выбор: {_short(c.get('name'))}**" + (" — из твоего списка" if c.get("pinned") else ""),
+    out = [f"🛒 **Предварительный выбор: {_short(c.get('name'))}**" + (" — из твоего списка" if c.get("pinned") else ""),
            _stats(c), f"[{_short(c.get('name'))}]({c.get('url')})"]
     if dec.get("why"):
         out.append(f"\n{dec['why']}")
@@ -753,7 +753,7 @@ def digest(r: dict) -> str:
                 + (f"\n   {o['verdict']}" if o.get("verdict") else "") for o in found]
     mine = [o for o in r.get("others") or [] if o.get("pinned")]
     if mine:
-        out.append("\n🎒 **Твои варианты**")
+        out.append("\n🛒 **Твои варианты**")
         for o in sorted(mine, key=lambda o: o["pinned"]):
             line = f"{o['pinned']}. [{_short(o.get('name'))}]({o.get('link') or o.get('url')}) — {_stats(o, quiet=True)}"
             if o.get("verdict"):

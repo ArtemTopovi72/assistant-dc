@@ -414,7 +414,7 @@ def test_the_answer_is_laid_out_by_the_program():
     mine = {"sku": "6", "pinned": 2, "link": "https://ozon.ru/t/LCabAMR", "name": "Carlo Gattini Рюкзак",
             "price": 15475, "rating": 5.0, "reviews": 73, "verdict": "вдвое дороже"}
     out = S.digest({"choice": pick, "others": [mine], "decision": {"why": "кожа", "concerns": "жёсткий"}})
-    assert out.startswith("🎒 **Предварительный выбор: Рюкзак BOPAI**") and "★4.9, 248 отзывов · 🚚 30 октября" in out
+    assert out.startswith("🛒 **Предварительный выбор: Рюкзак BOPAI**") and "★4.9, 248 отзывов · 🚚 30 октября" in out
     assert "2. [Carlo Gattini Рюкзак](https://ozon.ru/t/LCabAMR) — 15 475 ₽ · ★5.0, 73 отзыва\n   вдвое дороже" in out
     assert "доставка не указана" not in out          # unknown for every linked card: no noise
     assert "⚠️ Минусы: жёсткий" in out

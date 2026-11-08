@@ -429,7 +429,7 @@ _OZON_CARD = re.compile(r"ozon\.ru/(?:product|t)/", re.I)
 def research_then_ozon(text: str) -> bool:
     text = text or ''
     return bool(re.search(r'погугл[а-яё]*.*(?:озон|ozon)', text, re.I | re.S)
-                or re.search(r'(?:сначала|first).*?(?:интернет|обзор|web|reviews?).*?'
+                or re.search(r'(?:сначала|first|найди|найти|изучи|прочитай|find|read).*?(?:интернет|обзор|web|reviews?).*?'
                              r'(?:затем|потом|then).*?(?:озон|ozon)', text, re.I | re.S))
 
 

@@ -86,6 +86,16 @@ def test_web_reviews_then_ozon_does_not_skip_research(monkeypatch):
     assert out['wants'][:2] == ['search', 'ozon_shop']
 
 
+def test_find_review_then_ozon_does_not_skip_research(monkeypatch):
+    monkeypatch.setenv('INTENT_LIVE', '1')
+    ctx = SimpleNamespace(text_model=lambda *a, **kw: (
+        '{"needs_tool":true,"wants":["ozon_shop"],"must_call":""}'))
+    text = ('Найди независимый обзор SSD Kingston NV3 SNV3S/1000G, затем поищи '
+            'именно эту модель на Ozon. Проверь актуальную цену и реальные отзывы.')
+    out = intent._read(ctx, text, '', '', {})
+    assert out['must_call'] == 'search'
+
+
 def test_web_reviews_then_ozon_rejects_unresearched_shop(monkeypatch):
     monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: pytest.fail('research was skipped'))
     state = {'user_input_original': 'Сначала найди модели по обзорам в интернете, затем проверь на Ozon'}
