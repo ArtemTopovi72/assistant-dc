@@ -583,7 +583,8 @@ class ResolveMixin:
 
         texts: list[str]   = []
         media_transcripts: list[str] = []
-        source_video_path = ""
+        source_video_path = next((it.get('_source_video_path', '') for it in batch
+                                  if str(it.get('text') or '').startswith('[restyle] ')), '')
         # Text WE wrote for the model, not words the user said. Kept apart so a
         # pending prompt prefix cannot attach itself to our own scaffolding --
         # see where the prefix is applied, below.

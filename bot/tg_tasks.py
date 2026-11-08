@@ -1589,7 +1589,7 @@ class TaskRunnerMixin:
             ctx.set_stage("Restyling the video")
             self._mark_interruptible(chat_id)
             try:
-                sent = self._run_restyle(chat_id, lang, _look, ctx)
+                sent = self._run_restyle(chat_id, lang, _look, ctx, source=task.source_video_path)
             finally:
                 ctx.stage_callback = _old_cb
                 with self._stages_lock:

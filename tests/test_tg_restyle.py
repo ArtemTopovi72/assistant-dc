@@ -32,7 +32,8 @@ def test_button_video_text_queues_a_restyle_task():
     s = bot._get_session(CID)
     assert s.restyle_state == "want_text" and os.path.exists(s.restyle_src)
     bot._resolve_and_push(CID, [{"type": "text", "text": "аниме"}])
-    assert bot.queued == [{"type": "text", "text": "[restyle] аниме", "_context_generation": s.context_generation}]
+    assert bot.queued == [{"type": "text", "text": "[restyle] аниме", "_context_generation": s.context_generation,
+                           "_source_video_path": s.restyle_src}]
     assert bot._get_session(CID).restyle_state == ""
 
 
@@ -53,6 +54,39 @@ def test_run_restyle_delivers():
         restyle=lambda ctx, src, prompt: seen.append(prompt) or "out.mp4"))
     assert bot._run_restyle(CID, "ru", "anime", ctx)
     assert seen == ["anime"] and bot.videos == [("out.mp4", "🎨 Перерисовал")]
+
+
+def test_queued_video_is_not_replaced_by_later_upload():
+    bot = _bot()
+    sess = bot._get_session(CID)
+    bot._dl_bytes = lambda fid: fid.encode()
+    bot._start_restyle_flow(CID, sess, "ru")
+    assert bot._restyle_take_media(CID, sess, "ru", {"video": {"file_id": "first"}})
+    first = sess.restyle_src
+    assert bot._restyle_take_text(CID, sess, "ru", "anime")
+    saved = bot.queued[-1]["_source_video_path"]
+    bot._start_restyle_flow(CID, sess, "ru")
+    assert bot._restyle_take_media(CID, sess, "ru", {"video": {"file_id": "second"}})
+    assert first != sess.restyle_src and open(first, "rb").read() == b"first"
+    seen = []
+    ctx = types.SimpleNamespace(is_cancelled=lambda: False, deps=types.SimpleNamespace(
+        restyle=lambda ctx, src, prompt: seen.append(open(src, "rb").read()) or "out.mp4"))
+    assert bot._run_restyle(CID, "ru", "anime", ctx, source=saved)
+    assert seen == [b"first"]
+
+
+def test_video_path_survives_resolution_and_task_serialization(tmp_path):
+    from test_tg_incoming_durability import make_bot
+    bot = make_bot(tmp_path)
+    bot._backend = T.InMemoryBackend()
+    tasks = []
+    bot._persist_task = lambda task: tasks.append(task) or True
+    bot._queue_note = lambda *a, **kw: None
+    source = str(tmp_path / "first.mp4")
+    bot._resolve_and_push(101, [{"type": "text", "text": "[restyle] anime",
+                                 "_source_video_path": source}])
+    assert tasks and tasks[0].source_video_path == source
+    assert T._Task.from_dict(tasks[0].to_dict()).source_video_path == source
 
 
 def test_control_server_swaps_and_restores_url():

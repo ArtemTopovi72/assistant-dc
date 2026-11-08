@@ -10,6 +10,7 @@ The render (video_control.restyle, ~15 min for 5 s) runs as a queued task, so it
 gets the status line, ⛔ Stop and the admin console like every other long job.
 """
 import os
+import uuid
 from seams import dep
 
 
@@ -59,7 +60,7 @@ class RestyleMixin:
         if not data:
             self._send_text(chat_id, tg_bot._t("restyle_fail_dl", lang))
             return True
-        src = os.path.join(self._restyle_dir(chat_id), "source.mp4")
+        src = os.path.join(self._restyle_dir(chat_id), f"source_{uuid.uuid4().hex}.mp4")
         with open(src, "wb") as fh:
             fh.write(data)
         sess.restyle_state, sess.restyle_src = "want_text", src
@@ -83,13 +84,13 @@ class RestyleMixin:
             self._start_restyle_flow(chat_id, sess, lang)
             return True
         self._enqueue_item(chat_id, {"type": "text", "text": PAYLOAD + text.strip(),
-                                    "_context_generation": generation})
+                                    "_context_generation": generation, "_source_video_path": src})
         return True
 
-    def _run_restyle(self, chat_id: int, lang: str, prompt: str, ctx) -> bool:
+    def _run_restyle(self, chat_id: int, lang: str, prompt: str, ctx, source: str = "") -> bool:
         """The queued task body. True when a clip went out."""
         import video_control
-        src = getattr(self._get_session(chat_id), "restyle_src", "")
+        src = source or getattr(self._get_session(chat_id), "restyle_src", "")
         if not src or not os.path.exists(src):
             self._send_text(chat_id, tg_bot._t("restyle_fail_dl", lang))
             return False
