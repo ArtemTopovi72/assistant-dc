@@ -28,5 +28,12 @@ def test_safety_and_policy_lines_always_stay():
         assert section in out
 
 
+def test_writing_preferences_survive_scoping_without_tools():
+    out = PS.scope(S, [], KNOWN)
+    assert '[Conversation and creative writing]' in out
+    assert 'do not add subplots, flashbacks or ambiguity mechanically' in out
+    assert 'If the user asks for no advice' in out
+
+
 def test_it_can_be_switched_off():
     assert PS.scope(S, [], KNOWN, on=False) == S
