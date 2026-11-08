@@ -406,7 +406,7 @@ def add_text_verified(ctx, image_path: str, instruction: str,
         wanted = [m.group(1) for m in _CAPS_TEXT_RE.finditer(instruction or "")]
     if not wanted:
         return None, "", ""
-    from draw_text import _similarity, TEXT_MATCH_OK
+    from draw_text import _similarity, _visual_norm, TEXT_MATCH_OK
     from text_placement_check import text_position_failure
     import ocr_reader
     quoted = ", ".join(f'"{w}"' for w in wanted)
@@ -427,6 +427,13 @@ def add_text_verified(ctx, image_path: str, instruction: str,
         score, reading = 2.0, ""
         for w in wanted:
             s, r = max(((_similarity(w, c), c) for c in reads), default=(0.0, ""))
+            expected = [_visual_norm(t) for t in re.findall(r"[^\W_]+", w)]
+            for c in reads:
+                words = [_visual_norm(t) for t in re.findall(r"[^\W_]+", c)]
+                if expected and any(words[i:i + len(expected)] == expected
+                                    for i in range(len(words) - len(expected) + 1)):
+                    s, r = 1.0, c
+                    break
             if s < score:
                 score, reading = s, r
         logger.info("text_add try %d: read %r for %r (%.2f)", k + 1, reading, wanted, score)
