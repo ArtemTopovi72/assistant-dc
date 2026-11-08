@@ -29,3 +29,12 @@ def test_unavailable_speech_check_marks_the_video_unverified(monkeypatch):
     result = handlers._speech_ok(ctx, 'missing.mp4', ['hello'])
     assert result is handlers._SPEECH_CHECK_UNAVAILABLE
     assert ctx.video_speech_unverified
+
+
+def test_different_failed_edit_calls_stop_forcing_same_tool(monkeypatch):
+    monkeypatch.setattr(graph, '_turn_intent', lambda *a: {'must_call': 'inpaint_image'})
+    tools = [{'function': {'name': 'inpaint_image'}}]
+    failures = {('inpaint_image', '{"region":"barrel"}'): 1,
+                ('inpaint_image', '{"region":"apron"}'): 1}
+    assert graph._forced_intent(SimpleNamespace(), {}, 'change the inscriptions', True,
+                                tools, (), failures) == ''

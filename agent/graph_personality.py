@@ -522,7 +522,7 @@ def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_c
         return ""
     # A hard failure is not a successful tool call, but forcing it on every
     # round prevents the model from explaining the outage or using another path.
-    if any(name == tool and count >= 2 for (name, _), count in (failed_calls or {}).items()):
+    if sum(count for (name, _), count in (failed_calls or {}).items() if name == tool) >= 2:
         return ""
     offered = {t.get("function", {}).get("name") for t in (turn_tools or [])}
     return tool if tool in offered else ""
