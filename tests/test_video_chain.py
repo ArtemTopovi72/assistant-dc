@@ -749,3 +749,12 @@ def test_failed_continuation_join_reports_original_missing(tmp_path):
     answer = H._handle_generate_video(ctx, {}, {'description': 'The person waves.'})
     assert ctx.video_parts_incomplete
     assert 'incomplete' in answer.lower()
+
+def test_failed_later_chain_render_is_reported_incomplete(tmp_path, monkeypatch):
+    rig = _Rig(tmp_path)
+    ctx = rig.ctx()
+    monkeypatch.setattr(H, '_render_chain_parts', lambda ctx, path, parts, args, chain, idx, **kw: idx)
+    answer = H._handle_generate_video(ctx, {}, {'description': LONG, 'use_current_images': False})
+    assert ctx.video_parts_incomplete
+    assert 'incomplete' in answer.lower()
+    assert not rig.kept

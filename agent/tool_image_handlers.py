@@ -2722,8 +2722,10 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         if chain_id:
             if len(parts) > 1:
                 _chain_reference = images[0] if images and re.search(r'<Picture 1>', ctx.video_request or '', re.I) else ''
+                expected_chain_idx = chain_idx + len(parts) - 1
                 chain_idx = _render_chain_parts(ctx, path, prepped, args, chain_id, chain_idx,
                                                 reference=_chain_reference)
+                ctx.video_parts_incomplete = chain_idx < expected_chain_idx
             if chain_idx > 1:
                 joined = video_mod.stitch_chain(ctx, chain_id, chain_idx)
                 if joined:
