@@ -1349,9 +1349,8 @@ _FRAMING_LOCK_SUFFIX = (
     # research: ALG, CVPR 2026 -- the conditioning start frame dominates i2v and
     # suppresses motion; over-constrained "keep the same" prompts freeze clips).
     # Only the CAMERA is locked; the scene inside the frame performs.
-    " Only the camera is locked -- the scene inside the frame LIVES: the subject "
-    "carries out the described action with natural follow-through, and the scene's ambience "
-    "responds to it.")
+    " Only the camera is locked; the described action unfolds naturally "
+    "and the scene's ambience responds to it.")
 
 
 def _lock_framing_unless_requested(description: str, ctx=None) -> str:
