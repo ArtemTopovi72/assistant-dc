@@ -130,7 +130,8 @@ def _add_earlier_pictures(ctx, state, summary: str) -> str:
     # image was provided, there is no second picture" (2026-10-13).
     cur = getattr(ctx, "last_image_path", None)
     pics = [(f"Picture {i} (sent earlier): " +
-             ("Video frame sheet; yellow timestamp labels were added for analysis and are not part of the video."
+             ("Video frame sheet; yellow timestamp labels were added for analysis and are not part of the video. "
+              "Answer about the video itself, not these labels, unless asked about the frame sheet."
               if is_video_sheet(p) else ""), p) for i, p in enumerate(earlier, 1)]
     if cur and Path(cur).exists():
         pics.append((f"Picture {len(pics) + 1} (the latest):", cur))

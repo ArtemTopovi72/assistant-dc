@@ -442,7 +442,7 @@ def _video_seen_note(seen: dict) -> str:
     """Scaffold line: what the frames of a video message showed."""
     times = seen.get("times") or []
     span = f"{len(times)} frames" + (f", 0:00-{int(times[-1]) // 60}:{int(times[-1]) % 60:02d}" if times else "")
-    return (f"[Video message, {seen.get('duration', 0):.0f} s. Yellow timestamps on frame sheets are added for analysis, not part of the video. What is SEEN in it ({span}): "
+    return (f"[Video message, {seen.get('duration', 0):.0f} s. Yellow timestamps on frame sheets are added for analysis, not part of the video; answer about the video, not the labels, unless asked about the sheet. What is SEEN in it ({span}): "
             f"{(seen.get('description') or '').strip()}]")
 
 
