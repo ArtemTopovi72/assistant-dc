@@ -588,7 +588,9 @@ def send_to_lm_studio(
     is_glimmer = _is_glimmer(model_name)
     is_qwen = _is_qwen(model_name)
     native_off = bool(getattr(ctx, 'no_think', False)) and not force_think
-    native_reasoning = not native_off or bool(is_gemma and (tools or json_schema))
+    gemma_auto_single = bool(is_gemma and native_off and tools and len(tools) == 1
+                             and tool_choice == 'auto' and not json_schema)
+    native_reasoning = not native_off or bool(is_gemma and (tools or json_schema) and not gemma_auto_single)
 
     if is_gemma or is_qwen:
         # Let the model produce its own reasoning; a closed think block conflicts
@@ -596,7 +598,9 @@ def send_to_lm_studio(
         no_think = False
         if prefill and ('<think' in prefill.lower() or prefill == GEMMA_NO_THINK_PREFILL):
             prefill = None
-        if tools or json_schema:
+        if gemma_auto_single:
+            prefill = GEMMA_NO_THINK_PREFILL
+        elif tools or json_schema:
             prefill = None
         elif is_gemma and native_off:
             prefill = GEMMA_NO_THINK_PREFILL
