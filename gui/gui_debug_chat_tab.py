@@ -53,12 +53,15 @@ class _Poller(QThread):
         while not self._stop:
             try:
                 msgs = _call("/messages?since=%f&user=%d" % (self.since, self.user)).get("messages") or []
+                if self._stop:
+                    break
                 self.state.emit(True)
                 if msgs:
                     self.since = max(m["t"] for m in msgs) + 1e-6
                     self.got.emit(msgs)
             except Exception:
-                self.state.emit(False)
+                if not self._stop:
+                    self.state.emit(False)
             self.msleep(500)
 
     def stop(self):
@@ -345,7 +348,10 @@ class DebugChatTab(QWidget):
         except Exception:
             logger.info("debug chat: cannot open %s", url.toString())
 
-    def closeEvent(self, e):
+    def shutdown(self):
         self._poller.stop()
-        self._poller.wait(1500)
+        self._poller.wait(6500)
+
+    def closeEvent(self, e):
+        self.shutdown()
         super().closeEvent(e)
