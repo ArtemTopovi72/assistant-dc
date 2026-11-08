@@ -2134,8 +2134,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             # then revoice the new part with the clip's own speaker from the
             # Use the longer source as the speaker reference: the motion tail
             # is only 2.5 seconds and often lacks enough clean speech.
-            _vs = video_mod.voice_sample(cont_src) if os.path.exists(cont_src) else ""
-            if not _vs and os.path.exists(cont_tail):
+            silent = bool(ctx.video_request and yes_no(ctx)(
+                "Does the user explicitly prohibit speech or dialogue in the continuation? {text}",
+                ctx.video_request, default=False))
+            _vs = video_mod.voice_sample(cont_src) if not silent and os.path.exists(cont_src) else ""
+            if not silent and not _vs and os.path.exists(cont_tail):
                 _vs = video_mod.voice_sample(cont_tail)
             ctx.continue_voice_sample = _vs
         # Pinned frames (same as the parts of a long script): faster and seamless, but they
@@ -2161,7 +2164,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                                  or video_mod.quoted_lines(_said_now)) and yes_no(ctx)(
                 "Does this request include spoken dialogue for a person to say aloud? "
                 "Words only written on signs, screens, or clothing are not spoken dialogue. {text}",
-                f"User request: {_said_now}\nVideo description: {description}", default=True):
+                ctx.video_request or description, default=True):
             _speaker = video_mod.clip_speaker(ctx, cont_src, cont_tail)
             if _speaker:
                 logger.info("generate_video: the clip's own speaker says the line: %s",

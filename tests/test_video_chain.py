@@ -767,7 +767,28 @@ def test_clip_speaker_is_checked_for_dialogue_not_quoted_sign(tmp_path, monkeypa
     seed = tmp_path / 'seed.jpg'
     seed.write_bytes(b'image')
     ctx.deps = types.SimpleNamespace(_current_image_paths=lambda c, s: [str(seed)], script_read=_fakes.script_model)
-    ctx.yes_no = lambda q, t, default=False, **kw: spoken if 'spoken dialogue' in q else default
+    checked = []
+    def yes(q, t, default=False, **kw):
+        if 'spoken dialogue' in q:
+            checked.append(t)
+            return spoken
+        return default
+    ctx.yes_no = yes
     text = 'He says "Hello".' if spoken else 'Keep the sign "GOOD TALKS" unchanged.'
     H._handle_generate_video(ctx, {'user_input_original': text}, {'description': text})
     assert bool(seen) is spoken
+    assert checked and all(item == text for item in checked)
+
+def test_silent_static_continuation_does_not_apply_voice(tmp_path):
+    src, tail, seed = (tmp_path / name for name in ('original.mp4', 'tail.mp4', 'seed.jpg'))
+    for p in (src, tail, seed):
+        p.write_bytes(b'x')
+    voices = []
+    rig = _Rig(tmp_path, herrgott_on=lambda: False, static_continuation=lambda *a: True,
+               voice_sample=lambda p: voices.append(p) or str(src),
+               join_continuation=lambda *a, **kw: str(tail))
+    ctx = rig.ctx(continue_src=str(src), continue_tail=str(tail))
+    ctx.deps = types.SimpleNamespace(_current_image_paths=lambda c, s: [str(seed)], script_read=_fakes.script_model)
+    ctx.yes_no = lambda q, t, default=False, **kw: True if 'explicitly prohibit speech' in q else default
+    H._handle_generate_video(ctx, {'user_input_original': 'Продолжи без речи.'}, {'description': 'He waves silently.'})
+    assert not voices
