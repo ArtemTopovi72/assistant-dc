@@ -38,6 +38,8 @@ check("button payload inherits", ms("[upscale]") == "")
 check("one-word command inherits", ms("upscale") == "")
 check("emoji inherits", ms("👍") == "")
 check("link inherits", ms("https://ru.wikipedia.org/wiki/Омлет") == "")
+check("Russian request with a link -> ru",
+      ms("Пожалуйста найди независимый обзор и сравни условия покупки https://ozon.ru/t/example") == "ru")
 check("mixed text inherits", ms("замени надпись на «BREAD AND SALT» please now") == "")
 check("Russian with a quoted brand is still ru", ms("нарисуй витрину пекарни с вывеской «ХЛЕБ У ДОМА»") == "ru")
 check("empty inherits", ms("") == "")

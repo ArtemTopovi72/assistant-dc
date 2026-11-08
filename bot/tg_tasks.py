@@ -162,7 +162,10 @@ def _message_script(text: str, ctx=None) -> str:
     a bare link, a one-word command). At least three words are needed: 'ok' or
     'upscale' says nothing about what language the user wants back."""
     t = (text or "").strip()
-    if not t or t.startswith("[") or _re.search(r"https?://", t):
+    if not t or t.startswith(("[", "animate this photo: ", "continue this video: ")):
+        return ""
+    t = _re.sub(r"https?://\S+", " ", t).strip()
+    if not t:
         return ""
     # "и то же самое по-английски" is Cyrillic and wants an English reply --
     # the alphabet rule alone would pin it to Russian. An explicit ask for English wins; it is a one-turn
