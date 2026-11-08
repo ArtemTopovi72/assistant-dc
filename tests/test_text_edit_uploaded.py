@@ -77,3 +77,15 @@ def test_verify_text_ignores_quoted_original_in_instruction(tmp_path, monkeypatc
     out, _, wanted = image_router.add_text_verified(ctx, str(source),
         'change "OLD" inscription to "NEW"', verify_text='the text "NEW"', allow_overlay=False)
     assert out == str(source) and wanted == 'NEW'
+
+
+def test_ocr_split_across_adjacent_lines_matches_label(tmp_path, monkeypatch):
+    source = tmp_path / 'source.png'
+    Image.new('RGB', (200, 100), 'white').save(source)
+    monkeypatch.setattr(image_router, 'TEXT_ADD_TRIES', 1)
+    ctx = SimpleNamespace(vision_model=lambda *a, **k: 'YES', deps=SimpleNamespace(
+        image=SimpleNamespace(edit_image_with_firered=lambda *a, **k: str(source)),
+        ocr_read=lambda _: ['Обед', 'для всех', 'ШЕФ 2026']))
+    out, _, _ = image_router.add_text_verified(ctx, str(source),
+        'write "Обед для всех" on the barrel and "ШЕФ 2026" on the apron', allow_overlay=False)
+    assert out == str(source)

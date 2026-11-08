@@ -428,10 +428,11 @@ def add_text_verified(ctx, image_path: str, instruction: str,
                 return out, "", " / ".join(wanted)
             continue
         score, reading = 2.0, ""
+        candidates = list(reads) + [f"{a} {b}" for a, b in zip(reads, reads[1:])]
         for w in wanted:
-            s, r = max(((_similarity(w, c), c) for c in reads), default=(0.0, ""))
+            s, r = max(((_similarity(w, c), c) for c in candidates), default=(0.0, ""))
             expected = [_visual_norm(t) for t in re.findall(r"[^\W_]+", w)]
-            for c in reads:
+            for c in candidates:
                 words = [_visual_norm(t) for t in re.findall(r"[^\W_]+", c)]
                 if expected and any(words[i:i + len(expected)] == expected
                                     for i in range(len(words) - len(expected) + 1)):
