@@ -850,7 +850,7 @@ def _add_audio_refine(wf: dict, seed: int, steps: int) -> None:
 
 
 def _add_lowpass_guidance(wf: dict) -> None:
-    """Use a blurred first-frame condition for step 1, then the clean frame."""
+    """Experimental low-pass first step; not the paper's three-branch ALG guider."""
     cond = wf[N_COND]["inputs"]
     source = cond["first_frame"]
     steps = wf[N_SAMPLER]["inputs"]["steps"]
