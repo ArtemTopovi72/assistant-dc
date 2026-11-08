@@ -54,3 +54,26 @@ def test_cancel_during_text_edit_does_not_start_more_renders(tmp_path, monkeypat
                                                require_ocr=True, allow_overlay=False)
     assert out is None
     assert len(calls) == 1
+
+
+def test_text_edit_verifies_new_label_not_quoted_old_label(monkeypatch):
+    seen = []
+    monkeypatch.setattr(image_router, 'classify_edit_intent', lambda *a, **k: 'text_edit')
+    monkeypatch.setattr(image_router, 'add_text_verified',
+                        lambda *a, **k: (seen.append((a, k)) or ('edited.png', 'NEW', 'NEW')))
+    ctx = SimpleNamespace(deps=SimpleNamespace(image=SimpleNamespace(load_layout_for=lambda _: None)))
+    image_router._route_edit_request(ctx, 'uploaded.png',
+        'change the "OLD" inscription to "NEW"', verify_text='the text "NEW"')
+    assert seen[0][1]['verify_text'] == 'the text "NEW"'
+
+
+def test_verify_text_ignores_quoted_original_in_instruction(tmp_path, monkeypatch):
+    source = tmp_path / 'source.png'
+    Image.new('RGB', (200, 100), 'white').save(source)
+    monkeypatch.setattr(image_router, 'TEXT_ADD_TRIES', 1)
+    ctx = SimpleNamespace(vision_model=lambda *a, **k: 'YES', deps=SimpleNamespace(
+        image=SimpleNamespace(edit_image_with_firered=lambda *a, **k: str(source)),
+        ocr_read=lambda _: ['NEW']))
+    out, _, wanted = image_router.add_text_verified(ctx, str(source),
+        'change "OLD" inscription to "NEW"', verify_text='the text "NEW"', allow_overlay=False)
+    assert out == str(source) and wanted == 'NEW'

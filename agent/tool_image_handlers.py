@@ -500,7 +500,8 @@ def _handle_inpaint_image(ctx, state, args: dict) -> str:
             # for and redraws the scene from the same seed. The whole-frame toggle
             # is deliberately overridden — it chooses between renderers, and the
             # question here is not which renderer.
-            _cat, new_path = _image(ctx).route_edit_request(ctx, source, synth)
+            _cat, new_path = _image(ctx).route_edit_request(
+                ctx, source, synth, **({"verify_text": instructions} if category == "text_edit" else {}))
             edit_path = f"route_edit_request:{_cat}"
         elif manual_whole:
             # GUI "Whole frame" switch ON: bypass the category router and every masked

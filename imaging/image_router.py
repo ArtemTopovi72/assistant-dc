@@ -390,7 +390,7 @@ TEXT_ADD_FAILED_NOTE = (
 
 def add_text_verified(ctx, image_path: str, instruction: str,
                       seed: Optional[int] = None, *, require_ocr: bool = False,
-                      allow_overlay: bool = True) -> tuple:
+                      allow_overlay: bool = True, verify_text: Optional[str] = None) -> tuple:
     """Add NEW lettering with FireRed, then read it back and reseed until the
     words match. Returns (path | None, best_reading, wanted).
 
@@ -399,11 +399,12 @@ def add_text_verified(ctx, image_path: str, instruction: str,
     success; the OCR read-back is what turns it into a retry.
     """
     _img = dep(ctx, "image", _image)
+    requested = instruction if verify_text is None else verify_text
     wanted = [next(w.strip() for w in match if w.strip())
-              for match in _QUOTED_RE.findall(instruction or "") if any(w.strip() for w in match)]
+              for match in _QUOTED_RE.findall(requested or "") if any(w.strip() for w in match)]
     if not wanted:
         # "add the text SALE on the window": the agent's args often drop the quotes.
-        wanted = [m.group(1) for m in _CAPS_TEXT_RE.finditer(instruction or "")]
+        wanted = [m.group(1) for m in _CAPS_TEXT_RE.finditer(requested or "")]
     if not wanted:
         return None, "", ""
     from draw_text import _similarity, _visual_norm, TEXT_MATCH_OK
@@ -501,7 +502,7 @@ def route_edit_request(ctx, image_path: str, instruction: str, **kw) -> tuple:
 def _route_edit_request(
         ctx, image_path: str, instruction: str,
         *, region: Optional[tuple] = None, seed: Optional[int] = None,
-        timeout: int = 1900) -> tuple:
+        timeout: int = 1900, verify_text: Optional[str] = None) -> tuple:
     """Single entry point for edit dispatch. Classifies `instruction`, extracts the
     per-category payload, and calls the matching specialized pipeline.
 
@@ -544,7 +545,8 @@ def _route_edit_request(
         return category, out
     elif category == "text_edit":
         out, _read, _want = add_text_verified(ctx, image_path, text, seed=seed,
-                                               require_ocr=True, allow_overlay=False)
+                                               require_ocr=True, allow_overlay=False,
+                                               verify_text=verify_text)
         return category, out
 
     if category == "colour_convert":
