@@ -29,3 +29,36 @@ def test_raw_control_and_first_frame():
 def test_unknown_kind_refused():
     with pytest.raises(ValueError):
         C.build_control_workflow("x", "a.mp4", kind="depth")
+
+
+def test_control_server_is_swapped_only_while_card_is_reserved(monkeypatch):
+    import contextlib
+    import types
+    events = []
+    @contextlib.contextmanager
+    def card_session(**kwargs):
+        events.append("card acquired")
+        try:
+            yield
+        finally:
+            events.append("card released")
+    @contextlib.contextmanager
+    def control_server(ctx):
+        events.append("server switched")
+        try:
+            yield
+        finally:
+            events.append("server restored")
+    monkeypatch.setattr(C, "on_control_server", control_server)
+    monkeypatch.setattr(C, "_restyle", lambda *a, **k: events.append("render") or "out.mp4")
+    ctx = types.SimpleNamespace(deps=types.SimpleNamespace(card_session=card_session))
+    assert C.restyle(ctx, "in.mp4", "same style") == "out.mp4"
+    assert events == ["card acquired", "server switched", "render", "server restored", "card released"]
+    events.clear()
+    def fail(*a, **kw):
+        events.append("render failed")
+        raise RuntimeError("failed")
+    monkeypatch.setattr(C, "_restyle", fail)
+    with pytest.raises(RuntimeError):
+        C.restyle(ctx, "in.mp4", "same style")
+    assert events == ["card acquired", "server switched", "render failed", "server restored", "card released"]

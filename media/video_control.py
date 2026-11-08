@@ -158,9 +158,11 @@ def restyle(ctx, video_path: str, prompt: str, *, kind: str = "canny",
             seed: Optional[int] = None, timeout: int = 3600) -> Optional[str]:
     """Render `prompt` over the motion of `video_path`. Returns the clip path or None.
     Runs on the control server (qi21), started for the job if it is not up."""
-    with on_control_server(ctx):
-        return _restyle(ctx, video_path, prompt, kind=kind, first_frame_path=first_frame_path,
-                        seconds=seconds, seed=seed, timeout=timeout)
+    import comfy_client
+    with dep(ctx, "card_session", comfy_client.card_session)(label="h3_control", ctx=ctx):
+        with on_control_server(ctx):
+            return _restyle(ctx, video_path, prompt, kind=kind, first_frame_path=first_frame_path,
+                            seconds=seconds, seed=seed, timeout=timeout)
 
 
 def _restyle(ctx, video_path, prompt, *, kind, first_frame_path, seconds, seed, timeout):
