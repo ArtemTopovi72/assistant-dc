@@ -1003,11 +1003,11 @@ def _video_review_notice(answer: str, note: str, user_input: str) -> str:
 
 
 def _approved_video_reply(ctx, answer: str, user_input: str) -> str:
-    if not getattr(ctx, 'video_plan_approved_result', False):
+    warnings = set(getattr(ctx, 'video_plan_warnings', ()) or ())
+    if not getattr(ctx, 'video_plan_approved_result', False) and not warnings:
         return answer
     ru = bool(re.search(r'[А-Яа-яЁё]', user_input or ''))
     result = 'Видео готово, отправляю.' if ru else 'The video is ready.'
-    warnings = set(getattr(ctx, 'video_plan_warnings', ()) or ())
     if 'incomplete' in warnings:
         result = ('Удалось сделать только часть видео; остальные части не создались.' if ru else
                   'Only part of the video was created; the remaining parts failed.')

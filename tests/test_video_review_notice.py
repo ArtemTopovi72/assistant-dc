@@ -59,6 +59,13 @@ def test_approved_video_reply_does_not_claim_removed_scenes_or_duration():
     assert _approved_video_reply(SimpleNamespace(), 'Готово', 'Продолжи') == 'Готово'
 
 
+def test_unapproved_video_with_drift_does_not_claim_scene_is_unchanged():
+    ctx = SimpleNamespace(video_plan_approved_result=False, video_plan_warnings=['framing'])
+    result = _approved_video_reply(ctx, 'Синий фон остался неподвижным.', 'Продолжи видео')
+    assert 'Синий фон остался' not in result
+    assert 'кадре' in result
+
+
 def test_approved_video_reply_reports_incomplete_result():
     ctx = SimpleNamespace(video_plan_approved_result=True, video_plan_warnings=['incomplete'])
     result = _approved_video_reply(ctx, 'Всё готово!', 'Продолжи видео')
