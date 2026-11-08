@@ -2294,8 +2294,10 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             if (tool_name in _EDIT_TOOLS and state.get("edit_before") and state.get("image_path")
                     and not tool_result.lstrip().startswith(("[TOOL ERROR]", "Unknown tool"))):
                 import edit_verdict as _ev
+                ctx.set_stage("Checking the picture")
                 _v = dep(ctx, "edit_verdict", _ev).judge(ctx, state["edit_before"], state["image_path"],
                                                          original_input or user_input)
+                ctx.set_stage("Writing a response")
                 if _v.get("verdict"):
                     edit_judged = True
                     # the verdict IS the inspection: the escalation and the finalize hedge both

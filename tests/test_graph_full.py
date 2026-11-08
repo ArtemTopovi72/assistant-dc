@@ -793,7 +793,7 @@ def test_an_edit_is_judged_once_by_the_before_after_judge():
     """The inspector's labels + two readers of its text called 11 of 25 clean edits failed
     (bench/edit_judge_eval.py, 2026-10-21). After an edit the graph asks edit_verdict once:
     BEFORE (the turn's original), AFTER and the user's own words; its verdict is the check."""
-    seen = []
+    seen, stages = [], []
 
     class EditTools(Tools):
         def __call__(self, ctx, state, tool_name, tool_args):
@@ -804,10 +804,12 @@ def test_an_edit_is_judged_once_by_the_before_after_judge():
             return r
 
     def judge(ctx, before, after, request):
+        assert stages and stages[-1] == "Checking the picture"
         seen.append((before, after, request))
         return {"verdict": "not", "why": "a new watch was drawn on the wrist"}
 
     c = _ctx()
+    c.set_stage = stages.append
     llm = LLM([_asst("", [_tc("inpaint_image", {"region": "watch", "instructions": "bare wrist"}, "c1")]),
                _asst("Готово! Часы убраны.")] + [_asst("Не вышло: на руке нарисовались новые часы.")] * 4)
     out = _run(c, llm, EditTools(), {"messages": [], "user_input": "убери часы"},
