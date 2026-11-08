@@ -2095,7 +2095,7 @@ class TaskRunnerMixin:
         # the picture-editing keyboard. task.image_is_photo is only ever True for an actual
         # photo/album upload (tg_resolve.py's "photo"/"album" branches), so a
         # derived sheet never qualifies no matter what sess.turn_image holds.
-        _turn_img_id = (_target or {}).get("id", "") if _target and _target.get('src') != 'video' else (
+        _turn_img_id = (_target or {}).get("id", "") if _target and (task.image_is_photo or not tg_bot._is_video_image(sess, _target)) else (
             ctx.current_image_id if getattr(task, "image_is_photo", False) else "")
         if (_turn_img_id and (task.image_is_photo or ctx.image_pointed_at
                              or intent_read(ctx)(None, task.user_text)["about_picture"])

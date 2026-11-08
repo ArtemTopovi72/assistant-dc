@@ -561,6 +561,25 @@ def _file_digest(path: str) -> str:
     return h.hexdigest()
 
 
+def _is_video_image(sess, entry) -> bool:
+    if not entry:
+        return False
+    if entry.get("src") == "video":
+        return True
+    if entry.get("src") != "user" or entry.get("msg_id"):
+        return False
+    path = entry.get("path", "")
+    for candidate in getattr(sess, "image_log", None) or []:
+        try:
+            other = candidate.get("path", "")
+            if (candidate.get("src") == "video" and os.path.getsize(path) == os.path.getsize(other)
+                    and _file_digest(path) == _file_digest(other)):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def _one_lineage(images: list) -> bool:
     """True when every picture but one is a version OF another one in the
     list: draw -> upscale -> outpaint is one picture in three states, and

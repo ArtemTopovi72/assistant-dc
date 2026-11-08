@@ -317,12 +317,12 @@ _revoice_reply = H._handle_generate_video(_revoice_check, {}, {"description": 'h
 check("speech is checked again after voice conversion",
       _revoice_check.checks >= 2 and "could not confirm the requested line" in _revoice_reply,
       _revoice_reply)
-_E["eye_drift"] = lambda *a, **k: 5.0
+_E["overlay_drift"] = lambda *a, **k: V.OVERLAY_DRIFT_MAX + 1
 class VisualDriftCtx(TCtx):
     speech_ok = staticmethod(lambda ctx, clip, lines: True)
 _drift_reply = H._handle_generate_video(VisualDriftCtx(), {}, {"description": 'he says "the line"'})
 check("visual drift is disclosed", "visual drift in the selected take" in _drift_reply, _drift_reply)
-_E.pop("eye_drift")
+_E.pop("overlay_drift")
 _E["revoice"] = lambda ctx, clip, voice: None
 _failed_state = {}
 _failed_reply = H._handle_generate_video(TCtx(), _failed_state, {"description": 'he says "the line"'})

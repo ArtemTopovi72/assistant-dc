@@ -590,6 +590,7 @@ class ResolveMixin:
         # see where the prefix is applied, below.
         scaffold: list[str] = []
         img_bytes: Optional[bytes] = None
+        video_sheet_path = ""
         # True only when img_bytes is a picture the user actually SENT (photo/
         # album), never an internally-derived one (a video's frame sheet, a
         # sandbox render). A video note's sheet rides img_bytes exactly like a
@@ -1348,6 +1349,7 @@ class ResolveMixin:
                     if _seen.get("sheet"):
                         try:
                             img_bytes = Path(_seen["sheet"]).read_bytes()
+                            video_sheet_path = _seen["sheet"]
                         except Exception:
                             pass
                     # In play like a forwarded clip's sheet: «продолжи» under a GIF sent
@@ -1967,12 +1969,13 @@ class ResolveMixin:
         if not still_current():
             return
         if img_bytes:
-            img_path = _save_image_bytes(img_bytes)
+            img_path = video_sheet_path if video_sheet_path and not _photo_upload else _save_image_bytes(img_bytes)
             # A photo the user just sent goes into the register too, so a later
             # "the one I sent earlier" has something to resolve to.
             photo_mid = next((int(it.get('_message_id') or 0) for it in batch
                               if it.get('type') in ('photo', 'album')), 0)
-            tg_bot._log_image(sess, img_path, msg_id=photo_mid, label=merged[:80], src="user")
+            if img_path != video_sheet_path:
+                tg_bot._log_image(sess, img_path, msg_id=photo_mid, label=merged[:80], src="user")
             try: self._store.put(sess)
             except Exception:
                 tg_bot.logger.warning("session persist failed", exc_info=True)

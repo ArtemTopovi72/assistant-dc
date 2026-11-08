@@ -35,3 +35,27 @@ def test_photo_actions_belong_to_the_current_reply(tmp_path, selection, about_pi
     callbacks = [b.get('callback_data', '') for kb in sent if isinstance(kb, dict)
                  for row in kb.get('inline_keyboard', []) for b in row]
     assert any(x.startswith('ask:') for x in callbacks) == expect_actions
+
+
+def test_old_video_sheet_copy_does_not_offer_photo_actions(tmp_path):
+    bot = make_bot(tmp_path)
+    ctx = FakeCtx()
+    vars(ctx).update(reads(read=lambda text: {'needs_tool': False, 'about_picture': True,
+                                            'is_question': True}, yes=lambda *a: False))
+    bot._get_ctx = lambda: ctx; bot._get_graph = lambda: object()
+    bot._get_base_state = lambda: {'messages': []}
+    class Graph:
+        def invoke(self, state):
+            return {'final_answer': 'Answer', 'messages': state.get('messages', [])}
+    bot.graph_builder = lambda ctx: Graph()
+    sheet = tmp_path / 'sheet.png'; Image.new('RGB', (20, 20), 'blue').save(sheet)
+    copy = tmp_path / 'copy.png'; copy.write_bytes(sheet.read_bytes())
+    sess = bot._get_session(101); sess.reply_mode = 'text'
+    T._log_image(sess, str(sheet), src='video')
+    image = T._log_image(sess, str(copy), src='user'); sess.turn_image = image
+    sent = []; bot._send_text = lambda cid, text, **kw: sent.append(kw.get('keyboard'))
+    bot._execute_task(T._Task(task_id='reply', chat_id=101, user_text='Describe the video',
+                              image_id=image, image_selection='context'))
+    callbacks = [b.get('callback_data', '') for kb in sent if isinstance(kb, dict)
+                 for row in kb.get('inline_keyboard', []) for b in row]
+    assert not any(x.startswith('ask:') for x in callbacks)
