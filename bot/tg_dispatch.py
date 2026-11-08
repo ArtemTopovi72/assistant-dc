@@ -363,7 +363,7 @@ class DispatchMixin:
             return
         key = tg_bot._LABEL2KEY.get(text, '') if not _fwd else ''
         direct = tg_bot._DIRECT_KB.get(key, '')
-        if (direct.startswith('__menu_') or direct in ('__clear__', '__randomizer_menu__', '__restyle__')
+        if (direct.startswith('__menu_') or direct in ('__clear__', '__randomizer_menu__', '__restyle__', '__admin_panel__')
                 or key.startswith(('tr_','teach_')) or key in tg_bot._PROMPT_KB):
             self._resolve_and_push(chat_id, [{'type': 'text', 'text': text,
                 '_message_id': msg.get('message_id', 0),
