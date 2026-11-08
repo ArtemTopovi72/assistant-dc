@@ -113,6 +113,23 @@ def test_researched_product_matches_exact_manufacturer_code(monkeypatch, brand, 
     assert (result == 'CONFIRMED') is confirmed
 
 
+def test_researched_product_can_be_an_inspected_alternative(monkeypatch):
+    wrong = {'sku': '1', 'name': 'Kingston 2 ТБ SSD SNV3S/2000G'}
+    right = {'sku': '2', 'name': 'Kingston 1 ТБ SSD SNV3S/1000G',
+             'url': 'https://www.ozon.ru/product/item-2/', 'review_texts': ['Works well']}
+    monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda *a: None)
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: (
+        {'mode': 'one'}, [{'choice': wrong, 'others': [right], 'decision': {'why': 'wrong product'},
+                           'item': {'need': 'SSD'}}]))
+    monkeypatch.setattr(ozon_shopper, 'report', lambda rows, *a: rows[0]['choice']['name'] + str(rows[0]['decision']))
+    state = {'user_input_original': 'Найди обзор Kingston NV3 SNV3S/1000G, затем поищи на Ozon',
+             'research_shop_evidence': 'Review: Kingston NV3 1TB SNV3S/1000G'}
+    ctx = SimpleNamespace(turn_products=[], _ozon_shop_review_checked=False)
+    result = handler._handle_ozon_shop(ctx, state, {'request': 'Kingston NV3 1TB SNV3S/1000G'})
+    assert 'SNV3S/1000G' in result and 'wrong product' not in result
+    assert ctx._ozon_shop_review_checked
+
+
 def test_web_reviews_then_ozon_rejects_unresearched_shop(monkeypatch):
     monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: pytest.fail('research was skipped'))
     state = {'user_input_original': 'Сначала найди модели по обзорам в интернете, затем проверь на Ozon'}

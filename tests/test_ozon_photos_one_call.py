@@ -24,5 +24,19 @@ def test_one_vision_call():
     assert not os.path.exists(os.path.dirname(calls[0]["image_path"]))
 
 
+def test_photo_downloads_can_overlap():
+    import threading
+    barrier = threading.Barrier(2, timeout=2)
+    got = types.SimpleNamespace(content=_jpg(), raise_for_status=lambda: None)
+    def fetch(url, **kwargs):
+        barrier.wait()
+        return got
+    calls = []
+    ctx = types.SimpleNamespace(set_stage=lambda s: None, deps=types.SimpleNamespace(safe_get=fetch),
+                                vision_model=lambda **k: calls.append(k) or 'two photos')
+    assert 'two photos' in H._look_at_photos(ctx, {'name': 'item', 'images': ['https://x/1', 'https://x/2']})
+    assert len(calls) == 1
+
+
 if __name__ == "__main__":
     import pytest; sys.exit(pytest.main([__file__, "-q"]))

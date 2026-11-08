@@ -329,17 +329,21 @@ def _look_at_photos(ctx, d: dict, question=None) -> str:
     from photo_search import make_sheet
     from dr_urls import safe_get
     tmp = Path(tempfile.mkdtemp(prefix="ozon_look_"))
-    paths = []
-    for i, url in enumerate((d.get("images") or [])[:_LOOK_MAX], 1):
+    def download(item):
+        i, url = item
         try:
             r = dep(ctx, "safe_get", safe_get)(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
             if r is None:
                 raise ValueError("unsafe image URL")
             r.raise_for_status()
             (tmp / f"{i}.img").write_bytes(r.content)
-            paths.append(tmp / f"{i}.img")
+            return tmp / f"{i}.img"
         except Exception as exc:
             logger.warning("ozon photo %s failed: %s", url, exc)
+            return None
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        paths = [p for p in pool.map(download, enumerate((d.get("images") or [])[:_LOOK_MAX], 1)) if p]
     text = ""
     if paths:
         try:
@@ -625,20 +629,27 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
             logger.warning("ozon_shop same-seller check failed: %s", exc)
             results[0]["same_offer_unchecked"] = True
     chosen = [r["choice"] for r in results if r.get("choice")]
-    ctx._ozon_shop_review_checked = bool(chosen and all(
-        c.get("review_texts") is not None for c in chosen))
+    ctx._ozon_shop_review_checked = False
     if research_then_ozon(original):
         model_words = normalize(selected_model).split()
         codes = [code for code in _re.findall(
             r'\b(?=[A-Za-z0-9/-]{6,}\b)(?=[A-Za-z0-9/-]*\d)'
             r'[A-Za-z0-9]+(?:[-/][A-Za-z0-9]+)+\b', requested)
             if ' ' + normalize(code) + ' ' in ' ' + normalize(selected_model) + ' ']
-        def matches_model(row):
-            name = ' ' + normalize(str(row.get('choice', {}).get('name') or '')) + ' '
+        def matches_model(candidate):
+            name = ' ' + normalize(str(candidate.get('name') or '')) + ' '
             return (all(' ' + word + ' ' in name for word in model_words)
                     or bool(codes and model_words and ' ' + model_words[0] + ' ' in name
                             and any(' ' + normalize(code) + ' ' in name for code in codes)))
-        results = [row for row in results if row.get("choice") and matches_model(row)]
+        for row in results:
+            if row.get('choice') and not matches_model(row['choice']):
+                match = next((item for item in row.get('others') or []
+                              if item.get('sku') and item.get('url') and matches_model(item)), None)
+                if match:
+                    row['others'] = [item for item in row['others'] if item is not match and matches_model(item)]
+                    row['choice'] = match
+                    row['decision'] = {}
+        results = [row for row in results if row.get("choice") and matches_model(row['choice'])]
         chosen = [row["choice"] for row in results]
         if not chosen:
             if not state.get('research_shop_index_attempted'):
@@ -649,6 +660,8 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
                     "a generic substitute or claim the model is absent from Ozon."
                     + _research_model_hint(state))
         state["research_shop_verified"] = True
+    ctx._ozon_shop_review_checked = bool(chosen and all(
+        c.get("review_texts") is not None for c in chosen))
     _remember(ctx, chosen)
     for r in results:
         r["show_review_evidence"] = show_reviews
