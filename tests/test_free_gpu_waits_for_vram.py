@@ -74,5 +74,15 @@ failed = NS(deps=NS(wait_vram_free=lambda *a, **k: 21000,
 LT.free_gpu(log=said.append, ctx=failed)
 check("failed LM Studio unload is not logged as successful", not any(m == "LM Studio: выгружено" for m in said), said)
 
+from unittest.mock import patch
+calls = []
+launch = NS(deps=NS(wait_vram_free=lambda *a, **k: 21000,
+                   subprocess=NS(run=lambda args, **kw: calls.append((args, kw)) or NS(returncode=0)),
+                   urlopen=lambda *a, **k: (_ for _ in ()).throw(OSError("no comfy"))))
+with patch("shutil.which", return_value="resolved-lms"):
+    LT.free_gpu(ctx=launch)
+check("LM Studio is launched by its resolved path without a shell",
+      calls and calls[0][0][0] == "resolved-lms" and not calls[0][1].get("shell"), calls)
+
 print("\n%d/%d checks passed" % (OK, OK + BAD))
 sys.exit(1 if BAD else 0)

@@ -25,6 +25,7 @@ import os
 import config as _cfg_env   # env_int/env_float: a bad .env value falls back, never crashes the import
 import logging
 import re
+import shutil
 import time
 import subprocess
 import urllib.request
@@ -152,10 +153,11 @@ def free_gpu(log=None, min_free_mb: int = None, ctx=None) -> None:
             log(m)
     def unload_lms():
         result = dep(ctx, "subprocess", subprocess).run(
-            ["lms", "unload", "--all"], capture_output=True,
-            text=True, timeout=60, shell=(os.name == "nt"))
+            [shutil.which("lms") or "lms", "unload", "--all"], capture_output=True,
+            text=True, timeout=60)
         if getattr(result, "returncode", 0) != 0:
-            say("LM Studio: не удалось выгрузить модель (код %s)" % result.returncode)
+            detail = (getattr(result, "stderr", "") or getattr(result, "stdout", "") or "").strip()
+            say("LM Studio: не удалось выгрузить модель (код %s): %s" % (result.returncode, detail[-300:]))
             return False
         return True
     try:
