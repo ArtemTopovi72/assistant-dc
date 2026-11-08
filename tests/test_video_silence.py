@@ -24,3 +24,17 @@ def test_mute_video_removes_audio_without_touching_source(tmp_path):
     assert out and out != src and video.probe(src)['has_audio']
     assert not video.probe(out)['has_audio']
     assert video.probe(out)['seconds'] > .9
+
+
+def test_silent_video_tool_result_does_not_claim_generated_audio(tmp_path):
+    from tests.test_video_chain import _Rig
+    import tool_image_handlers as handlers
+    silent = tmp_path / 'silent.mp4'
+    silent.write_bytes(b'video')
+    rig = _Rig(tmp_path, explicit_silence=lambda *a: True, mute_video=lambda _: str(silent))
+    ctx = rig.ctx()
+    state = {'user_input_original': 'Создай короткое видео в полной тишине'}
+    result = handlers._handle_generate_video(ctx, state, {'description': 'A silent square.', 'seconds': 5})
+    assert state['video_path'] == str(silent)
+    assert 'without audio' in result
+    assert 'with generated audio' not in result

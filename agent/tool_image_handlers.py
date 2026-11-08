@@ -2838,12 +2838,14 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         objects_note = ('The video may contain added objects or effects.'
                         if watch and drawn is not None and drawn > video_mod.DRAWN_OVER_MAX else '')
         ctx.video_action_note = ' '.join(note for note in (ctx.video_action_note, background_note, objects_note) if note)
+    audio_removed = False
     if not continuing and video_mod.explicit_silence(ctx, ctx.video_request):
         muted = video_mod.mute_video(path)
         if not muted:
             state["video_status"] = "error"
             return "[TOOL ERROR] Could not remove the audio requested by the user; no finished video was delivered."
         path = muted
+        audio_removed = True
     state["video_path"] = path
     state["video_status"] = "success"
     state["video_seconds"] = result.get("seconds")
@@ -2875,7 +2877,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         f"Video generated and saved: {path}\n"
         f"Mode: {video_mod.MODE_LABELS.get(display_mode, display_mode)}; "
         f"{result.get('seconds')}s at {result.get('width')}x{result.get('height')}, "
-        f"with generated audio.{used}\n"
+        f"{'without audio' if audio_removed else 'with generated audio'}.{used}\n"
         + ("Only part of the planned video was rendered; tell the user it is incomplete.\n"
            if ctx.video_parts_incomplete else "")
         # The reply told of a grandma's scream from a part the user had dropped
