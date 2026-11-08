@@ -28,6 +28,7 @@ from seams import text_model
 
 import logging
 import os
+import re
 import threading
 from collections import OrderedDict
 from typing import Literal
@@ -131,6 +132,8 @@ def read(ctx, reply: str, user: str = "") -> dict:
     reply = (reply or "").strip()
     if not reply:
         return dict(NOTHING)
+    if re.fullmatch(r'[+-]?\d+(?:[.,]\d+)?', reply):
+        return dict(NOTHING, computed=True, ok=True)
     # Suites script the model call by call; under F5_TEST_RUN they script this read on the
     # context too (seams.reply_read), so an unscripted one claims nothing.
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
