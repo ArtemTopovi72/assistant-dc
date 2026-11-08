@@ -783,12 +783,26 @@ def test_silent_static_continuation_does_not_apply_voice(tmp_path):
     src, tail, seed = (tmp_path / name for name in ('original.mp4', 'tail.mp4', 'seed.jpg'))
     for p in (src, tail, seed):
         p.write_bytes(b'x')
-    voices = []
-    rig = _Rig(tmp_path, herrgott_on=lambda: False, static_continuation=lambda *a: True,
+    voices, checks = [], []
+    rig = _Rig(tmp_path, eye_drift=lambda *a, **k: checks.append("eyes") or 0,
+               herrgott_on=lambda: False, static_continuation=lambda *a: True,
                voice_sample=lambda p: voices.append(p) or str(src),
                join_continuation=lambda *a, **kw: str(tail))
     ctx = rig.ctx(continue_src=str(src), continue_tail=str(tail))
     ctx.deps = types.SimpleNamespace(_current_image_paths=lambda c, s: [str(seed)], script_read=_fakes.script_model)
     ctx.yes_no = lambda q, t, default=False, **kw: True if 'explicitly prohibit speech' in q else default
-    H._handle_generate_video(ctx, {'user_input_original': 'Продолжи без речи.'}, {'description': 'He waves silently.'})
-    assert not voices
+    ctx.speech_ok = lambda *a: checks.append('speech') or True
+    H._handle_generate_video(ctx, {'user_input_original': 'Продолжи без речи, сохрани надпись «GOOD TALKS».'}, {'description': 'He waves silently beside the sign \"GOOD TALKS\".'})
+    assert not voices and not checks
+    assert ctx.video_static_continuation
+
+def test_static_continuation_keeps_keyframes_without_freezing_face():
+    ctx = types.SimpleNamespace(video_static_continuation=True, video_request='He turns his head and waves.',
+                                yes_no=lambda *a, **k: False,
+                                video_engine=Over(V, _context_ir_on=lambda: True,
+                                                  to_context_ir=lambda ctx, description, **kw: description,
+                                                  VIDEO_SPEECH_STRESS=False))
+    prompt, _ = V.prepare_prompt(ctx, ctx.video_request, images=['still.jpg', 'still.jpg'],
+                                 seconds=5, keyframe=True)
+    assert V._FRAMING_LOCK_SUFFIX in prompt
+    assert V._HEAD_LOCK_SUFFIX not in prompt

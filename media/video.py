@@ -2434,14 +2434,14 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
         frames = snap_frames(frames + MOTION_CONTEXT_FRAMES - 5)
     if eng._context_ir_on():
         locked = description.endswith(_FRAMING_LOCK_SUFFIX)
-        if keyframe and images:
+        if keyframe and images and not getattr(ctx, "video_static_continuation", False):
             description += _HEAD_LOCK_SUFFIX       # seen by the rewrite, restated after it
         description = eng.to_context_ir(ctx, description, mode=mode,
                                     seconds=frames_to_seconds(frames), images=images,
                                     n_videos=len(videos), n_audios=len(audios))
         if locked:
             description = _with_lock(description, _FRAMING_LOCK_SUFFIX)
-        if keyframe and images:
+        if keyframe and images and not getattr(ctx, "video_static_continuation", False):
             description = _with_lock(description, _HEAD_LOCK_SUFFIX)
     if 1 <= len(images) <= 2 and not videos:     # a photo to animate, not a set of references
         restyle = _asks_new_style(getattr(ctx, "video_request", "") or asked, ctx)

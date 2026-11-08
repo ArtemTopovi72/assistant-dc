@@ -1973,6 +1973,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     ctx.video_duration_short = False
     ctx.video_part_request = ""
     ctx.video_text_required = ctx.video_text_source = False
+    ctx.video_static_continuation = False
     ctx.video_untrusted_ocr = ()
 
     description = (args.get("description") or "").strip()
@@ -2083,6 +2084,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     cont_src = getattr(ctx, "continue_src", "") or ""
     continuing = bool(cont_tail and os.path.exists(cont_tail))
     static_hold = False
+    silent = False
     check_unexpected_flash = False
     chain_id, chain_idx = "", 0
     people: list = []
@@ -2103,6 +2105,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         _static_voice = ""
         static_hold = bool(not prior and not people and _seed_img
                            and video_mod.static_continuation(ctx, description))
+        ctx.video_static_continuation = static_hold
         if prior:
             chain_id, chain_idx = prior[0], prior[1] + 1
             videos, images = [], []
@@ -2600,7 +2603,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         speech_unverified = False
         framing_unverified = False
         possible_flash = False
-        said_first = video_mod.quoted_lines(parts[0]) if head and parts else []
+        said_first = video_mod.quoted_lines(parts[0]) if head and parts and not silent else []
         speech_ok = getattr(ctx, "speech_ok", None) or _speech_ok
         try:
             for attempt in (1, 2, 3):
@@ -2634,7 +2637,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     r'без движен\w* камер\w*',
                     (state.get('user_input_original') or '') + '\n' + (ctx.video_request or ''), re.I)
                 drift = video_mod.overlay_drift(p) if look and fixed_frame else None
-                eyes = video_mod.eye_drift(images[0], p, light=False) if head and p and os.path.exists(p) else None
+                eyes = video_mod.eye_drift(images[0], p, light=False) if head and not static_hold and p and os.path.exists(p) else None
                 # part 1 had no speech check: its last word, cut by the clip's end, went to the user
                 # in runs 17 and 18 (2026-10-20); a take that says it all ranks first
                 verdict = (speech_ok(ctx, p, said_first)
