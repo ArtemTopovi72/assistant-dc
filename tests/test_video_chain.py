@@ -783,9 +783,9 @@ def test_silent_static_continuation_does_not_apply_voice(tmp_path):
     src, tail, seed = (tmp_path / name for name in ('original.mp4', 'tail.mp4', 'seed.jpg'))
     for p in (src, tail, seed):
         p.write_bytes(b'x')
-    voices, checks = [], []
+    voices, checks, reads = [], [], []
     rig = _Rig(tmp_path, eye_drift=lambda *a, **k: checks.append("eyes") or 0,
-               herrgott_on=lambda: False, static_continuation=lambda *a: True,
+               herrgott_on=lambda: False, static_continuation=lambda c, text: reads.append(text) or True,
                voice_sample=lambda p: voices.append(p) or str(src),
                join_continuation=lambda *a, **kw: str(tail))
     ctx = rig.ctx(continue_src=str(src), continue_tail=str(tail))
@@ -793,6 +793,7 @@ def test_silent_static_continuation_does_not_apply_voice(tmp_path):
     ctx.yes_no = lambda q, t, default=False, **kw: True if 'explicitly prohibit speech' in q else default
     ctx.speech_ok = lambda *a: checks.append('speech') or True
     H._handle_generate_video(ctx, {'user_input_original': 'Продолжи без речи, сохрани надпись «GOOD TALKS».'}, {'description': 'He waves silently beside the sign \"GOOD TALKS\".'})
+    assert reads == ['Продолжи без речи, сохрани надпись «GOOD TALKS».']
     assert not voices and not checks
     assert ctx.video_static_continuation
 

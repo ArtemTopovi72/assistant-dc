@@ -2111,7 +2111,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         _seed_img = next((p for p in (images or []) if p and os.path.exists(p)), "")
         _static_voice = ""
         static_hold = bool(not prior and not people and _seed_img
-                           and video_mod.static_continuation(ctx, description))
+                           and video_mod.static_continuation(ctx, ctx.video_request or description))
         ctx.video_static_continuation = static_hold
         if prior:
             chain_id, chain_idx = prior[0], prior[1] + 1

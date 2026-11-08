@@ -1888,6 +1888,15 @@ def static_continuation(ctx, description: str) -> bool:
             "not move and the scene does not change. moving = the world or camera keeps "
             "going: someone walks on, turns away and leaves, an object moves, the shot "
             "or place changes. Is it static?", text[:2000], default=False))
+        if out:
+            moves = yes_no(ctx)(
+                "The user requests this video continuation: {text}. Do they explicitly ask an object "
+                "or person to move to a DIFFERENT LOCATION in the scene, cross the frame, leave, "
+                "enter or transform? A still camera, a person speaking or waving without changing "
+                "location, and actions explicitly forbidden are NO. Answer YES only for a requested "
+                "spatial movement or transformation.", text[:2000], default=False)
+            if moves:
+                out = False
     except Exception:
         logger.debug("static-continuation read failed", exc_info=True)
         out = False
