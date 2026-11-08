@@ -49,3 +49,19 @@ def test_placement_still_checked_if_ocr_is_unavailable(tmp_path, monkeypatch):
                              ocr_read=lambda _: None, OUTPUT_DIR=tmp_path))
     result, _, _ = image_router.add_text_verified(ctx, str(source), 'write "HELLO" on the barrel')
     assert result == str(second)
+
+
+def test_quoted_labels_do_not_capture_possessive_apostrophe(tmp_path, monkeypatch):
+    source = tmp_path / 'source.png'
+    result = tmp_path / 'result.png'
+    for path in (source, result):
+        Image.new('RGB', (200, 100), 'white').save(path)
+    monkeypatch.setattr(image_router, 'TEXT_ADD_TRIES', 1)
+    ctx = SimpleNamespace(
+        vision_model=lambda *a, **k: 'YES',
+        deps=SimpleNamespace(image=SimpleNamespace(edit_image_with_firered=lambda *a, **k: str(result)),
+                             ocr_read=lambda _: ['Обед для всех', 'ШЕФ 2026']))
+    instruction = "the barrel has the text 'Обед для всех' and the chef's apron has the text 'ШЕФ 2026'"
+    out, _, wanted = image_router.add_text_verified(ctx, str(source), instruction)
+    assert out == str(result)
+    assert wanted == 'Обед для всех / ШЕФ 2026'

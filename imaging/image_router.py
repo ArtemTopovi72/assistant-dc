@@ -379,7 +379,7 @@ def transform_image(image_path: str, instruction: str, ctx=None) -> Optional[str
     return str(final)
 
 
-_QUOTED_RE = re.compile(r"[\"«“']([^\"»”']{1,80})[\"»”']")
+_QUOTED_RE = re.compile(r'''«([^»]{1,80})»|“([^”]{1,80})”|"([^"]{1,80})"|(?<!\w)'([^']{1,80})'(?!\w)''')
 _CAPS_TEXT_RE = re.compile(r"(?-i:([A-ZА-ЯЁ0-9][A-ZА-ЯЁ0-9!?&%.,\- ]*[A-ZА-ЯЁ0-9!?%]))")
 TEXT_ADD_TRIES = _cfg_env.env_int("TEXT_ADD_TRIES", 3)
 
@@ -401,7 +401,8 @@ def add_text_verified(ctx, image_path: str, instruction: str,
     success; the OCR read-back is what turns it into a retry.
     """
     _img = dep(ctx, "image", _image)
-    wanted = [w.strip() for w in _QUOTED_RE.findall(instruction or "") if w.strip()]
+    wanted = [next(w.strip() for w in match if w.strip())
+              for match in _QUOTED_RE.findall(instruction or "") if any(w.strip() for w in match)]
     if not wanted:
         # "add the text SALE on the window": the agent's args often drop the quotes.
         wanted = [m.group(1) for m in _CAPS_TEXT_RE.finditer(instruction or "")]
