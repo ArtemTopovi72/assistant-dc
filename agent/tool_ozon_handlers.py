@@ -629,9 +629,16 @@ def _handle_ozon_shop(ctx, state, args: dict) -> str:
         c.get("review_texts") is not None for c in chosen))
     if research_then_ozon(original):
         model_words = normalize(selected_model).split()
-        results = [row for row in results if row.get("choice") and all(
-            word in normalize(str(row["choice"].get("name") or "")).split()
-            for word in model_words)]
+        codes = [code for code in _re.findall(
+            r'\b(?=[A-Za-z0-9/-]{6,}\b)(?=[A-Za-z0-9/-]*\d)'
+            r'[A-Za-z0-9]+(?:[-/][A-Za-z0-9]+)+\b', requested)
+            if ' ' + normalize(code) + ' ' in ' ' + normalize(selected_model) + ' ']
+        def matches_model(row):
+            name = ' ' + normalize(str(row.get('choice', {}).get('name') or '')) + ' '
+            return (all(' ' + word + ' ' in name for word in model_words)
+                    or bool(codes and model_words and ' ' + model_words[0] + ' ' in name
+                            and any(' ' + normalize(code) + ' ' in name for code in codes)))
+        results = [row for row in results if row.get("choice") and matches_model(row)]
         chosen = [row["choice"] for row in results]
         if not chosen:
             if not state.get('research_shop_index_attempted'):

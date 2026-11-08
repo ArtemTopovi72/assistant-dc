@@ -457,9 +457,10 @@ def _unverified_research_answer(state, sources=()) -> str:
     from tool_ozon_handlers import _verified_links_only
     verified_only = _verified_links_only(state)
     answer = 'Не удалось проверить карточки на Озоне: цены, наличие и продавцы неизвестны. '
-    answer += ('Непроверенные ссылки не привожу. В веб-поиске упомянуты модели:' if verified_only else
-               'В результатах веб-поиска упомянуты модели; ссылки ниже — только возможные совпадения из поискового индекса, '
-               'они не проверены на Озоне:')
+    if rows:
+        answer += ('Непроверенные ссылки не привожу. В веб-поиске упомянуты модели:' if verified_only else
+                   'В результатах веб-поиска упомянуты модели; ссылки ниже — только возможные совпадения из поискового индекса, '
+                   'они не проверены на Озоне:')
     for row in rows[:3]:
         model = str(row.get('model') or '')
         if not re.fullmatch(r'[\w .+\-/]{3,100}', model):
@@ -2451,7 +2452,7 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
     from intent import research_then_ozon
     if (research_then_ozon(str(original_input or user_input))
             and not state.get("research_shop_verified")):
-        if state.get('research_shop_candidates'):
+        if state.get('research_shop_candidates') or state.get('research_shop_evidence'):
             final_answer = _unverified_research_answer(state, getattr(ctx, 'turn_sources', ()))
         else:
             final_answer = ("Не удалось подтвердить на Озоне карточку конкретной модели из обзоров. "

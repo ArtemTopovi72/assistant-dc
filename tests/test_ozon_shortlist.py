@@ -96,6 +96,23 @@ def test_find_review_then_ozon_does_not_skip_research(monkeypatch):
     assert out['must_call'] == 'search'
 
 
+@pytest.mark.parametrize('brand,card_model,confirmed', [
+    ('Kingston', 'SNV3S/1000G', True), ('Kingston', 'SNV3S/2000G', False),
+    ('AnotherBrand', 'SNV3S/1000G', False)])
+def test_researched_product_matches_exact_manufacturer_code(monkeypatch, brand, card_model, confirmed):
+    monkeypatch.setattr(handler, '_research_shop_index_fallback', lambda *a: None)
+    monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: (
+        {'mode': 'one'}, [{'choice': {'sku': '123', 'name': brand + ' 1 ТБ SSD ' + card_model,
+                                     'url': 'https://www.ozon.ru/product/item-123/'},
+                           'item': {'need': 'SSD'}}]))
+    monkeypatch.setattr(ozon_shopper, 'report', lambda *a: 'CONFIRMED')
+    state = {'user_input_original': 'Найди независимый обзор, затем поищи на Ozon',
+             'research_shop_evidence': 'Review: Kingston NV3 1TB SNV3S/1000G'}
+    result = handler._handle_ozon_shop(SimpleNamespace(turn_products=[]), state,
+                                       {'request': 'Kingston NV3 1TB SNV3S/1000G'})
+    assert (result == 'CONFIRMED') is confirmed
+
+
 def test_web_reviews_then_ozon_rejects_unresearched_shop(monkeypatch):
     monkeypatch.setattr(ozon_shopper, 'shop', lambda *a, **kw: pytest.fail('research was skipped'))
     state = {'user_input_original': 'Сначала найди модели по обзорам в интернете, затем проверь на Ozon'}
@@ -231,6 +248,16 @@ def test_unverified_index_results_are_labelled_not_recommended():
     assert 'Thule Subterra 2' in answer and 'Bellroy Transit' in answer
     assert 'https://ozon.ru/product/thule-subterra-2-123/' in answer
     assert 'не провер' in answer.lower() and 'цен' in answer.lower()
+    assert 'купи' not in answer.lower()
+
+
+def test_unverified_shopping_keeps_web_sources_without_model_candidates():
+    answer = personality._unverified_research_answer(
+        {'research_shop_evidence': 'A review was found.'},
+        [{'url': 'https://example.com/ssd-review'}])
+    assert 'https://example.com/ssd-review' in answer
+    assert 'упомянуты модели' not in answer
+    assert 'не удалось проверить' in answer.lower() and 'цен' in answer.lower()
     assert 'купи' not in answer.lower()
 
 
