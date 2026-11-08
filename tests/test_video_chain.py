@@ -825,3 +825,11 @@ def test_preserving_source_text_still_uses_typography_adapter(tmp_path):
                              {'description': 'Animate this image; keep the sign.', 'use_current_images': True})
     assert ctx.video_text_required and ctx.video_text_source
     assert ctx.video_text_overlay_allowed is False
+
+def test_short_explicit_continuation_duration_survives_intent_miss(tmp_path, monkeypatch):
+    monkeypatch.setattr(H, 'intent_read', lambda ctx: lambda *a: {'song_seconds': 0})
+    rig, ctx, _ = _continued(tmp_path, video_plan_ask=True)
+    state = {'user_input_original': 'Продолжи видео на 5 секунд: он говорит «Добрый вечер, друзья».'}
+    result = H._handle_generate_video(ctx, state, {'description': 'The man sits. He says "Добрый вечер, друзья".'})
+    assert '[NOT MADE YET]' not in result
+    assert rig.renders() and rig.renders()[0][1]['seconds'] == 5

@@ -2323,6 +2323,15 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             asked = float(intent_read(ctx)(None, user_words(_said).strip()).get("song_seconds") or 0)
         except Exception:
             asked = 0.0
+        if not asked:
+            explicit = re.search(r'\b(?:продолж\w*|видео|ролик|клип|video|clip|continue)\s+'
+                                 r'(?:на|длительностью|for)\s+(\d+(?:[.,]\d+)?)\s*'
+                                 r'(сек(?:унд[уы]?)?|с|sec(?:ond)?s?|s|мин(?:ут[уы]?)?|minutes?)\b',
+                                 ctx.video_request, re.I)
+            if explicit:
+                asked = float(explicit.group(1).replace(',', '.'))
+                if explicit.group(2).lower().startswith(('мин', 'minute')):
+                    asked *= 60
         if asked > 0:
             logger.info("generate_video: %.0f s asked in the words, none in the call", asked)
             args["seconds"] = asked
