@@ -168,8 +168,11 @@ _BEAT_SYS = (
     "camera, rest -- only when the sentence joins a camera move to a different subject's "
     "action with as / while / when (\"the camera pans up as the kite soars high\"): the camera "
     "move and the action as two sentences; otherwise both \"\".\n"
+    "spoken -- exact quoted phrases actually spoken aloud; exclude text merely printed on "
+    "signs, clothing, screens or objects. Use [] when nobody speaks. If a person says "
+    '"Hello" beside a sign "OPEN", spoken is ["Hello"].\n'
     'Answer ONE JSON object and nothing else: {"sentences": [{"beats": 1, "hold": false, '
-    '"camera": "", "rest": ""}, ...]}, one per line, in order.')
+    '"camera": "", "rest": "", "spoken": []}, ...]}, one per line, in order.')
 _PLAIN_READ = {"kind": "action", "beats": 1, "hold": False, "camera": "", "rest": ""}
 _SCRIPT_READS: dict = {}
 _SCRIPT_READ_FAILURES: dict = {}
@@ -239,6 +242,7 @@ def _clean_read(r) -> dict:
     return {"kind": r.get("kind") if r.get("kind") in ("action", "look", "once") else "action",
             "beats": max(1, min(12, b)) if isinstance(b, int) and not isinstance(b, bool) else 1,
             "hold": r.get("hold") is True,
+            "spoken": [s for s in r['spoken'] if isinstance(s, str)] if isinstance(r.get('spoken'), list) else None,
             "camera": str(r.get("camera") or "").strip(), "rest": str(r.get("rest") or "").strip()}
 
 
@@ -304,9 +308,17 @@ def estimate_seconds(description: str, capped: bool = True, reads=None) -> float
     # counted as beats, five of them pushed every part of a 5-part plan to the 10.1 s cap.
     sents = [s.strip() for s in _SENT.split(text) if s and s.strip()]
     acts = [(s, r) for s, r in zip(sents, read_sentences(sents, reads)) if r["kind"] == "action"]
-    spoken = " ".join(next(g for g in m.groups() if g is not None)
-                      for s, _ in acts for m in _QUOTED.finditer(s))
-    words = len(spoken.split())
+    spoken = []
+    for s, row in acts:
+        selected = row.get('spoken')
+        selected = list(selected) if selected is not None else None
+        for m in _QUOTED.finditer(s):
+            line = next(g for g in m.groups() if g is not None)
+            if selected is None or line in selected:
+                spoken.append(line)
+                if selected is not None:
+                    selected.remove(line)
+    words = len(" ".join(spoken).split())
     beats = max(1, sum(r["beats"] for _, r in acts))
     secs = 1.0 + words / 2.3 + beats * 1.3 + 2.0 * sum(r["hold"] for _, r in acts)
     top = frames_to_seconds(VIDEO_MAX_FRAMES_AUTO) if capped else float("inf")

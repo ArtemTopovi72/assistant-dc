@@ -82,6 +82,31 @@ def test_spoken_lines_add_time():
     assert long_ > short
 
 
+def test_written_quotes_are_not_timed_as_spoken_dialogue():
+    script = ('The camera is stationary. The shirts show "SOL" and "ERRA". '
+              'A sign reads "МОСКВА".')
+    def reads(sentences):
+        return {'sentences': [{'kind': 'action', 'beats': 1, 'spoken': []} for _ in sentences]}
+    assert V.estimate_seconds(script, capped=False, reads=reads) == V.frames_to_seconds(V.VIDEO_DEFAULT_FRAMES)
+    assert V.split_script(script, reads=reads) == [script]
+
+
+def test_mixed_writing_and_speech_times_only_actual_spoken_words():
+    script = 'He says "one two three four five six seven eight" beside a sign "X Y Z".'
+    def reads(sentences):
+        return {'sentences': [{'kind': 'action', 'beats': 1,
+                               'spoken': ['one two three four five six seven eight']} for _ in sentences]}
+    assert V.estimate_seconds(script, capped=False, reads=reads) == 5.78
+
+
+def test_identical_sign_and_dialogue_are_not_counted_twice():
+    phrase = 'one two three four five six seven eight'
+    script = f'He says "{phrase}" beside a sign "{phrase}".'
+    def reads(sentences):
+        return {'sentences': [{'kind': 'action', 'beats': 1, 'spoken': [phrase]} for _ in sentences]}
+    assert V.estimate_seconds(script, capped=False, reads=reads) == 5.78
+
+
 def test_continue_template_does_not_count():
     assert _est(V.CONTINUE_PREFIX + "he waves.") == _est("he waves.")
 
