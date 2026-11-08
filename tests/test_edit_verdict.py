@@ -63,6 +63,28 @@ def test_malformed_other_field_is_not_a_success(monkeypatch):
     assert E.judge(ctx, "before", "after", "change two labels")["verdict"] == "not"
 
 
+def test_explicitly_preserved_text_missing_from_ocr_cannot_be_reported_done(monkeypatch):
+    import json
+    from types import SimpleNamespace
+    monkeypatch.setattr(E, "_unchanged", lambda *a: False)
+    monkeypatch.setattr(E, "_close_ups", lambda *a: [])
+    facts = {"asked_change_visible": True, "something_else_instead": False, "defect": ""}
+    before = [([[0, 0], [20, 0], [20, 10], [0, 10]], "GLM 5.3", .97)]
+    ctx = SimpleNamespace(vision_model=lambda **kw: json.dumps(facts),
+                          deps=SimpleNamespace(ocr_boxes=lambda path: before if path == "before" else []))
+    result = E.judge(ctx, "before", "after", "Change the apron to blue and keep all text.")
+    assert result["verdict"] == "partial"
+    assert "confirm" in result["why"].lower()
+    assert E.judge(ctx, "before", "after", "Перекрась фартук и сохрани надписи.")["verdict"] == "partial"
+    ctx.deps.ocr_boxes = lambda path: before
+    assert E.judge(ctx, "before", "after", "Change the apron to blue and keep all text.")["verdict"] == "done"
+    ctx.deps.ocr_boxes = lambda path: None
+    assert E.judge(ctx, "before", "after", "Change the apron to blue and keep all text.")["verdict"] == "done"
+    ctx.deps.ocr_boxes = lambda path: before if path == "before" else []
+    assert E.judge(ctx, "before", "after", "Remove the text from the apron and keep the other text.")["verdict"] == "done"
+    assert E.judge(ctx, "before", "after", "Удали одну надпись, остальные надписи сохрани.")["verdict"] == "done"
+
+
 def test_a_small_local_edit_is_a_change_and_a_copy_is_not(tmp_path):
     """A nose edit moved the whole-frame mean by 0.16 and was called «the picture did not change»
     (live 2026-10-22): the measure looks for a changed area."""

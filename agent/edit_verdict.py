@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+from difflib import SequenceMatcher
 
-from seams import vision_model
+from seams import dep, vision_model
 
 logger = logging.getLogger("assistant." + __name__)
 
@@ -21,12 +23,35 @@ SYSTEM = """You check a picture edit. You get two pictures, BEFORE and AFTER, an
 - "after_shows": look ONLY at AFTER and say in one sentence what is there now at the thing or place the request is about (which person wears what, whether the object is there, what the background shows). Do not let the request tell you what you see.
 - "changed": one sentence on what differs between BEFORE and AFTER, or "nothing".
 - "asked_change_visible": true when AFTER shows what the user asked for, also when BEFORE already did. For a removal the thing must be fully gone: a faint, blurred or ghostly version of it still there is not gone.
-- For text replacement, check whether the old text remains mixed with the replacement: if it does, the replacement is incomplete, even when the new words are legible.
+- Only when the user asks to replace text, check whether the old text remains mixed with the replacement. When text must be preserved, a single inscription in a different colour is not duplicated or old text to remove.
 - "some_requested_changes_visible": true only when the request has multiple distinct changes and AFTER visibly satisfies at least one of them, even though another is still missing. Do not infer success from the request itself.
 - "something_else_instead": true when something other than the request was done: a new person or object drawn instead of changing the one there, a removed thing replaced by another of its kind (a new watch, a new strap), or a change nobody asked for to something the request did not name (another colour, material or person). When the request asks for a new scene or a whole new picture, drawing it is the change, not something else.
 - "defect": a visible flaw that came with the edit -- a seam, a patch of different colour or texture where the edit was, part of the thing left behind, a duplicate, an extra object or person nobody asked for -- in a few words; "" when there is none a viewer would notice.
 
 Answer with ONE JSON object and nothing else: {"after_shows": "...", "changed": "...", "asked_change_visible": true, "some_requested_changes_visible": false, "something_else_instead": false, "defect": ""}"""
+
+
+def _preserved_text_unconfirmed(ctx, before: str, after: str, request: str) -> bool:
+    """An OCR miss is uncertainty, not proof that preserved lettering was removed."""
+    text = (request or "").lower()
+    preserve = r"(?:keep|preserve|retain|сохрани\w*|остав\w*)[^.!?\n]{0,100}(?:text|lettering|inscription|надпис\w*|текст\w*|букв\w*)"
+    if not re.search(preserve, text) or re.search(r"\b(?:remove|erase|replace|delete|убер\w*|удал\w*|замен\w*|стери\w*)\b", text):
+        return False
+    try:
+        import ocr_reader
+        read = dep(ctx, "ocr_boxes", ocr_reader.read_boxes)
+        old, new = read(before), read(after)
+        if old is None or new is None:
+            return False
+        def words(rows, min_conf):
+            return [re.sub(r"\W+", "", str(label)).casefold() for _, label, conf in rows
+                    if conf >= min_conf and len(re.sub(r"\W+", "", str(label))) >= 4]
+        previous, current = words(old, .9), words(new, .5)
+        return any(not any(SequenceMatcher(None, x, y).ratio() >= .8 for y in current)
+                   for x in previous)
+    except Exception:
+        logger.debug("preserved text OCR check unavailable", exc_info=True)
+        return False
 
 def _verdict(facts: dict) -> str:
     """The model states facts; the grading is fixed here (it graded a new strap «partial» and a
@@ -105,6 +130,9 @@ def judge(ctx, before: str, after: str, request: str) -> dict:
                             verdict, len(crops), got.get("some_requested_changes_visible"),
                             got.get("something_else_instead"), got.get("defect"), why[:200])
                 result = {"verdict": verdict, "why": why, "changed": str(got.get("changed") or "")}
+                if verdict == "done" and _preserved_text_unconfirmed(ctx, before, after, request):
+                    result.update(verdict="partial", why="OCR could not confirm all requested preserved text; check it before claiming it is intact.")
+                    verdict = "partial"
                 if first_incomplete is not None:
                     return result if verdict == "partial" else first_incomplete
                 if (attempt == 0 and verdict == "not" and got.get("some_requested_changes_visible") is False
