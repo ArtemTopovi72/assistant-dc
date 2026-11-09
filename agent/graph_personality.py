@@ -440,7 +440,7 @@ def _forced_ozon_reviews(read, called, failures, tools, user_text='', products=(
 
 
 def _guard_failed_ozon_reviews(answer, calls, ctx, user_text=''):
-    asked = bool(re.search(r'отзыв|reviews?', user_text, re.I))
+    asked = _requests_ozon_reviews(user_text)
     if 'ozon_shop' in calls and getattr(ctx, '_ozon_shop_review_checked', False):
         return answer
     if 'ozon_reviews' in calls or not ('ozon_reviews!' in calls or (asked and {'ozon_product', 'ozon_search'} & set(calls))):
