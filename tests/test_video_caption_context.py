@@ -88,6 +88,117 @@ def test_new_video_storyboard_is_identified_for_overview_and_detail(monkeypatch,
     assert all('sheet of consecutive frames' not in text.lower() for _, text in calls)
 
 
+def test_photo_and_video_sheet_are_both_sent_to_vision(monkeypatch, tmp_path):
+    import io
+    from types import SimpleNamespace
+    from PIL import Image
+    import graph
+    calls = []
+    monkeypatch.setattr(graph, 'is_picture_question', lambda ctx, state: False)
+    monkeypatch.setattr(graph, '_add_earlier_pictures', lambda ctx, state, summary: summary)
+    sheet = tmp_path / 'sheet.jpg'; sheet.write_bytes(b'sheet')
+    buf = io.BytesIO(); Image.new('RGB', (20, 20)).save(buf, format='PNG')
+    def vision(**kwargs):
+        calls.append(kwargs)
+        return 'photo and video'
+    ctx = SimpleNamespace(combined_video_sheet=str(sheet), deps=SimpleNamespace(
+        downscale_image_bytes=lambda data: data, OUTPUT_DIR=tmp_path),
+        vision_model=vision, set_stage=lambda stage: None,
+        remember=lambda *args: None, memory_text=lambda: '')
+    graph.vision_agent_node(ctx, {'image_data': buf.getvalue(), 'user_input': 'Compare them'})
+    paths = calls[0]['image_paths']
+    assert len(paths) == 2 and paths[0][1] == ctx.last_image_path and paths[1][1] == str(sheet)
+    assert 'not part of the video' in paths[1][0]
+
+
+def test_combined_vision_never_uses_stale_photo_when_write_fails(monkeypatch, tmp_path):
+    import io
+    from types import SimpleNamespace
+    from PIL import Image
+    import graph
+    calls = []
+    monkeypatch.setattr(graph, 'is_picture_question', lambda ctx, state: False)
+    monkeypatch.setattr(graph, '_add_earlier_pictures', lambda ctx, state, summary: summary)
+    sheet = tmp_path / 'sheet.jpg'; sheet.write_bytes(b'sheet')
+    blocked = tmp_path / 'not-a-directory'; blocked.write_bytes(b'x')
+    buf = io.BytesIO(); Image.new('RGB', (20, 20), 'blue').save(buf, format='PNG')
+    def vision(**kwargs):
+        calls.append(kwargs)
+        return 'blue'
+    ctx = SimpleNamespace(last_image_path='stale.jpg', combined_video_sheet=str(sheet),
+        deps=SimpleNamespace(downscale_image_bytes=lambda data: data, OUTPUT_DIR=blocked),
+        vision_model=vision, set_stage=lambda stage: None,
+        remember=lambda *args: None, memory_text=lambda: '')
+    import pytest
+    with pytest.raises(RuntimeError, match='фото и кадры видео'):
+        graph.vision_agent_node(ctx, {'image_data': buf.getvalue(), 'user_input': 'Compare them'})
+    assert not calls
+
+
+def test_combined_vision_rejects_missing_frames(monkeypatch, tmp_path):
+    import io, pytest
+    from types import SimpleNamespace
+    from PIL import Image
+    import graph
+    buf = io.BytesIO(); Image.new('RGB', (20, 20)).save(buf, format='PNG')
+    ctx = SimpleNamespace(combined_video_sheet=str(tmp_path / 'gone.jpg'),
+        deps=SimpleNamespace(downscale_image_bytes=lambda data: data, OUTPUT_DIR=tmp_path),
+        set_stage=lambda stage: None)
+    with pytest.raises(RuntimeError, match='фото и кадры видео'):
+        graph.vision_agent_node(ctx, {'image_data': buf.getvalue(), 'user_input': 'Compare'})
+
+
+def test_strict_vision_does_not_send_partial_images(monkeypatch, tmp_path):
+    import pytest
+    from types import SimpleNamespace
+    import llm
+    from PIL import Image
+    calls = []
+    monkeypatch.setattr(llm, '_vision_sized', lambda path: path)
+    monkeypatch.setattr(llm, '_vision_call', lambda *a, **k: calls.append(a))
+    photo = tmp_path / 'photo.png'; video = tmp_path / 'video.png'
+    Image.new('RGB', (2, 2)).save(photo); Image.new('RGB', (2, 2)).save(video)
+    def data_url(path):
+        if path == str(video):
+            raise OSError('read failed')
+        return 'data:image/png;base64,AA=='
+    ctx = SimpleNamespace(deps=SimpleNamespace(file_to_data_url=data_url))
+    with pytest.raises(RuntimeError, match='фото и кадры видео'):
+        llm.analyze_image_with_llm(ctx, image_paths=[('photo', str(photo)), ('frames', str(video))], strict_images=True)
+    assert not calls
+
+
+def test_strict_vision_does_not_send_corrupt_frames(monkeypatch, tmp_path):
+    import pytest
+    from types import SimpleNamespace
+    from PIL import Image
+    import llm
+    calls = []
+    monkeypatch.setattr(llm, '_vision_call', lambda *a, **k: calls.append(a))
+    photo = tmp_path / 'photo.png'; Image.new('RGB', (2, 2)).save(photo)
+    video = tmp_path / 'sheet.jpg'; video.write_bytes(b'not an image')
+    ctx = SimpleNamespace(deps=SimpleNamespace(file_to_data_url=lambda path: 'data:image/png;base64,AA=='))
+    with pytest.raises(RuntimeError, match='фото и кадры видео'):
+        llm.analyze_image_with_llm(ctx, image_paths=[('photo', str(photo)), ('frames', str(video))], strict_images=True)
+    assert not calls
+
+
+def test_strict_vision_does_not_send_truncated_jpeg(monkeypatch, tmp_path):
+    import pytest
+    from types import SimpleNamespace
+    from PIL import Image
+    import llm
+    calls = []
+    monkeypatch.setattr(llm, '_vision_call', lambda *a, **k: calls.append(a))
+    photo = tmp_path / 'photo.png'; Image.new('RGB', (40, 40)).save(photo)
+    video = tmp_path / 'sheet.jpg'; Image.new('RGB', (40, 40)).save(video)
+    video.write_bytes(video.read_bytes()[:-10])
+    ctx = SimpleNamespace(deps=SimpleNamespace(file_to_data_url=lambda path: 'data:image/png;base64,AA=='))
+    with pytest.raises(RuntimeError, match='фото и кадры видео'):
+        llm.analyze_image_with_llm(ctx, image_paths=[('photo', str(photo)), ('frames', str(video))], strict_images=True)
+    assert not calls
+
+
 def test_video_comparison_drops_unsupported_viewer_guess_but_keeps_observations():
     reply = ('Визуальной связи между ними нет: на фото человек, а в видео монтаж. '
              'Как интерпретацию можно предположить, что это кадр человека, который смотрит такое видео во время отдыха.')

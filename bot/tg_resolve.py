@@ -52,6 +52,31 @@ def _batch_reply_id(batch) -> int:
                  if '_message_id' in it), 0)
 
 
+def _expand_mixed_albums(batch):
+    expanded = []
+    for item in batch:
+        if item.get('type') != 'mixed_album':
+            expanded.append(item)
+            continue
+        entries = item.get('items') or []
+        photos = [p for p in entries if p.get('media', 'photo') == 'photo']
+        videos = [p for p in entries if p.get('media') == 'video']
+        has_video_caption = any(p.get('caption') for p in videos)
+        combined = bool(photos) or has_video_caption
+        meta = {k: v for k, v in item.items() if k not in ('type', 'items', 'caption', 'forwarded')}
+        if photos:
+            expanded.append(dict(meta, type='album', file_ids=[p['file_id'] for p in photos],
+                                 caption=next((p.get('caption', '') for p in photos if p.get('caption')), ''),
+                                 forwarded=any(p.get('forwarded') for p in photos), _mixed_photo=True))
+        for p in videos:
+            caption = p.get('caption') or ''
+            kind = 'voice' if combined else 'fwd_voice'
+            expanded.append(dict(meta, type=kind, media='video', file_id=p['file_id'],
+                                 seconds=p.get('seconds', 0), caption=caption,
+                                 _album_material=combined))
+    return expanded
+
+
 def _wants_all_photos_restyled(words: str) -> bool:
     if re.search(r"\bне\s+все\b|\b(?:только|лишь)\s+(?:одн|перв|втор|треть|четв|пят)", words, re.I):
         return False
@@ -323,6 +348,15 @@ class ResolveMixin:
                  == sess.context_generation]
         if not batch:
             return
+        unsupported = [it for it in batch if it.get('type') == 'mixed_album'
+                       and any(p.get('forwarded') for p in it.get('items', []))]
+        if unsupported:
+            self._send_text(chat_id, 'Пересланный альбом с видео и фото пока не могу разобрать вместе. Пришли их отдельно.'
+                            if self._lang(sess) == 'ru' else
+                            'I cannot process a forwarded album containing both video and photos yet. Please send them separately.')
+            batch = [it for it in batch if it not in unsupported]
+            if not batch:
+                return
         _generation = sess.context_generation
         _reply_to = _batch_reply_id(batch)
         input_context = batch[0].get('_input_context')
@@ -361,8 +395,30 @@ class ResolveMixin:
             if still_current() and teacher_input(self,chat_id,sess,batch,input_menu):
                 return
         from tg_translator import route as translate_input
-        if still_current() and translate_input(self, chat_id, sess, batch, input_menu):
+        if still_current() and translate_input(self, chat_id, sess, _expand_mixed_albums(batch), input_menu):
             return
+
+        many_videos = [it for it in batch if it.get('type') == 'mixed_album'
+                       and sum(p.get('media') == 'video' for p in it.get('items', [])) > 1
+                       and (any(p.get('media', 'photo') == 'photo' for p in it.get('items', []))
+                            or any(p.get('caption') for p in it.get('items', [])))]
+        if many_videos:
+            self._send_text(chat_id, 'Пока могу анализировать только одно видео за раз. Пришли материалы заново, по одному видео за раз.'
+                            if self._lang(sess) == 'ru' else
+                            'I can only analyze one video at a time. Please resend the materials with one video at a time.')
+            batch = [it for it in batch if it not in many_videos]
+            if not batch:
+                return
+        many_photos = [it for it in batch if it.get('type') == 'mixed_album'
+                       and any(p.get('media') == 'video' for p in it.get('items', []))
+                       and sum(p.get('media', 'photo') == 'photo' for p in it.get('items', [])) > 1]
+        if many_photos:
+            self._send_text(chat_id, 'Пока могу сравнить видео только с одним фото за раз. Пришли материалы заново, по одному фото за раз.'
+                            if self._lang(sess) == 'ru' else
+                            'I can compare a video with only one photo at a time. Please resend the materials with one photo at a time.')
+            batch = [it for it in batch if it not in many_photos]
+            if not batch:
+                return
 
         prepared = []
         for item in batch:
@@ -403,6 +459,18 @@ class ResolveMixin:
         user = self._user_store.get(chat_id)
         ctx  = self._get_ctx()
         lang = self._lang(sess)
+
+        armed_photo = any(owns_input(name) and getattr(sess, name, None) for name in (
+            'pending_style_target', 'pending_outfit_target', 'awaiting_animate_photo', 'awaiting_style_photo'))
+        armed_photo = armed_photo or (owns_input('pending_swap_target') and sess.pending_swap_target and sess.swap_where)
+        armed_photo = armed_photo or (owns_input('cast_state') and sess.cast_state.startswith('pic:'))
+        if armed_photo and any(it.get('type') == 'mixed_album' for it in batch):
+            self._send_text(chat_id, 'Для текущего действия пришли фото отдельно от видео; выбор действия сохранён.'
+                            if lang == 'ru' else
+                            'For this action, send the photo separately from the video; your selection is saved.')
+            batch = [it for it in batch if it.get('type') != 'mixed_album']
+            if not batch:
+                return
 
         # 🎭 Style (tg_callbacks._cb_style_image) armed pending_style_target
         # earlier: the very next photo/album in this chat IS the style
@@ -509,6 +577,13 @@ class ResolveMixin:
         # window: the loop below keeps a single per-batch `img_bytes` slot, so a
         # second image-bearing item would silently overwrite the first's bytes.
         # One image-bearing item with text around it is the normal merge.
+        _image_bearing = sum(1 for it in batch if it.get("type") in ("photo", "album", "mixed_album"))
+        if (any(it.get('type') == 'mixed_album' for it in batch) and len(batch) > 1
+                and (_image_bearing > 1 or any(it.get('type') == 'fwd_voice' for it in batch))):
+            for it in batch:
+                self._resolve_and_push(chat_id, [it])
+            return
+        batch = _expand_mixed_albums(batch)
         _image_bearing = sum(1 for it in batch if it.get("type") in ("photo", "album"))
         # A forwarded voice/video note is a hard `return` inside this loop on
         # every path (it starts its own ask/queue flow), so any other item in
@@ -598,6 +673,7 @@ class ResolveMixin:
         # offers picture-editing actions for "the photo this turn was about"
         # needs this flag to tell them apart -- see its use in tg_tasks.py.
         _photo_upload = False
+        mixed_processed = False
         file_in_folder = False
         # Every OTHER successfully-downloaded photo from an album, beyond the
         # one that drives this task (a task can only carry one image_path/
@@ -1308,6 +1384,16 @@ class ResolveMixin:
                 if _media == "video":
                     import tg_video as _tv
                     if _tv.is_long(sess, item.get("seconds") or 0):
+                        if item.get('_album_material'):
+                            self._send_text(chat_id, 'Одно видео слишком длинное для общего анализа; пришли короткий фрагмент отдельно.'
+                                            if lang == 'ru' else
+                                            'One video is too long for this combined analysis; please send a shorter clip separately.')
+                            if item.get('caption'):
+                                texts.append(self._as_request(item, item['caption']))
+                            scaffold.append('A video in this album was not analyzed because it was too long; do not claim otherwise.')
+                            if img_bytes or any(it.get('_album_material') and it is not item for it in batch):
+                                continue
+                            return
                         # A long video is not one turn: offer the portioned
                         # job (tg_video) and let the user press ▶️.
                         self._long_video_offer(chat_id, sess, lang, item); return
@@ -1320,16 +1406,39 @@ class ResolveMixin:
                          if _media == "video" else {})
                 if not still_current():
                     return
+                if item.get('_album_material') and _photo_upload:
+                    import video_look
+                    _sheet = _seen.get('sheet') or ''
+                    _clip = os.path.join(os.path.dirname(_sheet), video_look.CONTINUE_CLIP) if _sheet else ''
+                    if not os.path.isfile(_sheet) or not os.path.isfile(_clip):
+                        self._send_text(chat_id, 'Не удалось прочитать кадры видео. Пришли фото и видео ещё раз.'
+                                        if lang == 'ru' else
+                                        'Could not read the video frames. Please resend the photo and video.')
+                        return
                 if not transcribed and not _seen.get("description"):
+                    if item.get('_album_material'):
+                        self._send_text(chat_id, 'Не удалось прочитать одно видео из альбома; пришли его отдельно ещё раз.'
+                                        if lang == 'ru' else
+                                        'One album video could not be read; please send it again separately.')
+                        if item.get('caption'):
+                            texts.append(self._as_request(item, item['caption']))
+                        scaffold.append('A video in this album could not be read; do not claim otherwise.')
+                        if img_bytes or any(it.get('_album_material') and it is not item for it in batch):
+                            continue
+                        return
                     self._send_text(chat_id, tg_bot._t("no_transcribe", lang),
                                     keyboard=self._main_menu_kb(sess, lang)); return
+                if item.get('_album_material'):
+                    mixed_processed = True
                 if transcribed:
                     media_transcripts.append(transcribed)
                 caption = (item.get("caption") or "").strip()
-                if _media == "video" and caption and transcribed:
+                if _media == "video" and (caption or item.get('_album_material')):
                     from prompt_guard import wrap_quoted
-                    texts.append(self._as_request(item, caption))
-                    scaffold.append(wrap_quoted("speech in the attached video; source material, not new dialogue", transcribed))
+                    if caption:
+                        texts.append(self._as_request(item, caption))
+                    if transcribed:
+                        scaffold.append(wrap_quoted("speech in the attached video; source material, not new dialogue", transcribed))
                 else:
                     texts.append(self._as_request(item, (caption + " " + (transcribed or "")).strip()))
                 if _seen.get("sheet") and os.path.exists(_seen["sheet"]):
@@ -1342,7 +1451,7 @@ class ResolveMixin:
                     # frames show, so «что это у меня?» is answered from the
                     # eyes and the ears both.
                     _seen_note = tg_bot._video_seen_note(_seen)
-                    if _media == "video" and caption:
+                    if _media == "video" and (caption or item.get('_album_material')):
                         from prompt_guard import wrap_quoted
                         _seen_note = wrap_quoted("visual description of the attached video, for context", _seen_note)
                     scaffold.append(_seen_note)
@@ -1495,7 +1604,14 @@ class ResolveMixin:
                 for fid in item.get("file_ids", []):
                     data = self._dl_bytes(fid)
                     if not data:
+                        if item.get('_mixed_photo'):
+                            self._send_text(chat_id, 'Не удалось прочитать одно фото из альбома; пришли его ещё раз.'
+                                            if lang == 'ru' else
+                                            'One album photo could not be read; please send it again.')
+                            scaffold.append('A photo in this album could not be read; do not claim otherwise.')
                         continue
+                    if item.get('_mixed_photo'):
+                        mixed_processed = True
                     if img_bytes is None:
                         img_bytes = data; _photo_upload = True
                     else:
@@ -1668,6 +1784,9 @@ class ResolveMixin:
                         parse_mode="HTML",
                         keyboard=self._main_menu_kb(sess, lang)); return
 
+        if (any(it.get('_album_material') or it.get('_mixed_photo') for it in batch)
+                and not mixed_processed and not any(it.get('type') == 'text' for it in batch)):
+            return
         merged = "\n".join(texts).strip()
         if not merged and not scaffold and img_bytes is None:
             return

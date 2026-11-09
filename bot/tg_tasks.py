@@ -1875,6 +1875,9 @@ class TaskRunnerMixin:
         # The last clip delivered here, so "use that video" resolves.
         _attached_video = getattr(task, 'source_video_path', '') if not task.image_is_photo else ''
         ctx.attached_video_path = _attached_video
+        _combined_sheet = (Path(task.source_video_path).parent / 'sheet.jpg'
+                           if task.image_is_photo and getattr(task, 'source_video_path', '') else None)
+        ctx.combined_video_sheet = str(_combined_sheet) if _combined_sheet else ''
         _lv = ctx.attached_video_path or _last_video(self._chat_videos, chat_id)
         ctx.last_video_path = _lv if (_lv and os.path.exists(_lv)) else None
 

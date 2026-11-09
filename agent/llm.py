@@ -1674,6 +1674,7 @@ def analyze_image_with_llm(
     max_tokens: int = 1900,
     prefill: Optional[str] = None,
     image_paths: Optional[list] = None,
+    strict_images: bool = False,
 ) -> Optional[str]:
     """Vision call: analyze an image with optional text question.
 
@@ -1689,9 +1690,15 @@ def analyze_image_with_llm(
         content = []
         for label, p in image_paths:
             try:
+                if strict_images:
+                    from PIL import Image
+                    with Image.open(p) as im:
+                        im.load()
                 url = dep(ctx, "file_to_data_url", file_to_data_url)(_vision_sized(p))
             except Exception as exc:
                 logger.warning("analyze_image_with_llm: could not read image %r: %s", p, exc)
+                if strict_images:
+                    raise RuntimeError('Не удалось подготовить фото и кадры видео для сравнения. Пришли оба файла ещё раз.') from exc
                 continue
             content += [{"type": "text", "text": str(label)},
                         {"type": "image_url", "image_url": {"url": url, "detail": "auto"}}]

@@ -99,3 +99,15 @@ def test_album_owns_translation_settings_before_flush_and_after_recovery(tmp_pat
     bot._resolve_and_push(101, [item])
     task = bot._backend.pop(timeout=0)
     assert task.translation['target'] == 'fr' and task.translation['mode'] == 'image'
+
+
+def test_translator_accepts_photo_and_two_videos(tmp_path):
+    bot, _ = ready_bot(tmp_path)
+    sess = bot._get_session(101)
+    sess.translation_target, sess.translation_mode = 'fr', 'text'
+    bot._resolve_and_push(101, [{'type': 'mixed_album', 'items': [
+        {'file_id': 'photo'}, {'file_id': 'v1', 'media': 'video', 'seconds': 3},
+        {'file_id': 'v2', 'media': 'video', 'seconds': 3}]}])
+    task = bot._backend.pop(timeout=0)
+    assert task is not None and task.translation
+    assert len(task.translation['items']) == 3

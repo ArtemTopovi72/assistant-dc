@@ -490,6 +490,11 @@ class DispatchMixin:
         # menu (transcript, summary, storyboard, ▶️ continue) instead of a one-off comment
         # (owner, 2026-10-12). A кружок is the user talking; words on a clip are the task.
         _clip_as_material = (not msg.get("video_note") and not (msg.get("caption") or "").strip())
+        if msg.get('video') and msg.get('media_group_id') and not tg_bot._is_forwarded(msg, self_is_own=False):
+            self._buffer_album(chat_id, msg['media_group_id'], video_note['file_id'],
+                               (msg.get('caption') or '').strip(), media='video',
+                               seconds=int(video_note.get('duration') or 0))
+            return
         if video_note:
             if _clip_as_material or tg_bot._is_forwarded(msg, self_is_own=False):
                 emit({
@@ -646,7 +651,8 @@ class DispatchMixin:
             tg_bot.logger.exception("could not save an incoming photo")
             return ""
 
-    def _buffer_album(self, chat_id, group_id, file_id, caption, forwarded=False, saved=None):
+    def _buffer_album(self, chat_id, group_id, file_id, caption, forwarded=False, saved=None,
+                      media='photo', seconds=0):
         # A QUIET period, not a fixed window: a forwarded album of 10 pages arrives over several seconds, and a
         # timer started by the first page cut it into pieces answered one by one.
         sess = self._get_session(chat_id)
@@ -667,13 +673,17 @@ class DispatchMixin:
                     "forwarded": forwarded}
             elif e["timer"] is not None:
                 e["timer"].cancel()
-            if not any(p["file_id"] == file_id for p in e["photos"]):
+            message_id = (getattr(self, '_msg_id', {}) or {}).get(chat_id, 0)
+            if not saved and not any((p.get('_message_id') == message_id if message_id else p['file_id'] == file_id)
+                                     for p in e['photos']):
                 e["photos"].append({'file_id': file_id, 'caption': caption,
-                    '_message_id': (getattr(self, '_msg_id', {}) or {}).get(chat_id, 0),
+                    'forwarded': forwarded,
+                    **({'media': media, 'seconds': seconds} if media != 'photo' else {}),
+                    '_message_id': message_id,
                     '_sent_ts': (getattr(self, '_msg_date', {}) or {}).get(chat_id)})
             key = e["_inbox_id"]
             self._incoming.put(chat_id, {"type": "album_pending", "group_id": group_id,
-                "photos": e["photos"], "forwarded": forwarded, "_inbox_id": key,
+                "photos": e["photos"], "forwarded": e['forwarded'], "_inbox_id": key,
                 **{name: e[name] for name in ('_arrival_ts', '_context_generation', '_input_context', '_translation')}}, key)
             wait = max(0.05, min(getattr(self, "album_collect_s", None) or tg_bot._ALBUM_COLLECT_S, e["t0"] + tg_bot._ALBUM_MAX_S - time.monotonic()))
             t = threading.Timer(wait, self._flush_album, (group_id,))
@@ -684,6 +694,13 @@ class DispatchMixin:
         if not entry: return
         cap = next((p["caption"] for p in entry["photos"] if p["caption"]), "")
         source = next((p for p in entry['photos'] if p['caption']), entry['photos'][-1])
+        if any(p.get('media') == 'video' for p in entry['photos']):
+            self._enqueue_item(entry['chat_id'], {
+                'type': 'mixed_album', 'items': entry['photos'], 'caption': cap,
+                'forwarded': entry.get('forwarded', False), '_inbox_id': entry['_inbox_id'],
+                **{name: entry[name] for name in ('_arrival_ts', '_context_generation', '_input_context', '_translation')},
+                '_message_id': source.get('_message_id', 0), '_sent_ts': source.get('_sent_ts')})
+            return
         self._enqueue_item(entry["chat_id"], {
             "type": "album", "forwarded": entry.get("forwarded", False),
             "_inbox_id": entry["_inbox_id"],

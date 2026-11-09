@@ -213,12 +213,14 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
                "bmp": "bmp", "tiff": "tiff", "gif": "png"}.get(fmt, "jpg")
     except Exception:
         pass
+    written_path = ''
     try:
         _out_dir = dep(ctx, "OUTPUT_DIR", OUTPUT_DIR)
         _out_dir.mkdir(parents=True, exist_ok=True)
         work_path = _out_dir / f"_working_input_{int(time.time() * 1000)}.{ext}"
         with open(work_path, "wb") as fh:
             fh.write(original_bytes)  # full-resolution original, byte-for-byte
+        written_path = str(work_path)
         import hashlib
         for candidate in reversed(getattr(ctx, 'layout_candidates', None) or []):
             try:
@@ -248,12 +250,21 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
                     "Grid borders, gaps and timestamp labels are not part of the video. "
                     "Describe the scene inside each frame, not the sheet layout. Request: " + question)
     ctx.set_stage("Looking at the video" if sheet else "Looking at the image")
-    response = vision_model(ctx)(
-        ctx=ctx,
-        image_bytes=proxy_bytes,  # analysis uses the proxy, not the original
-        user_text=question,
-        system_prompt=VISION_PROMPT,
-    )
+    combined_sheet = getattr(ctx, 'combined_video_sheet', '')
+    if combined_sheet and (not Path(combined_sheet).is_file() or not written_path):
+        raise RuntimeError('Не удалось подготовить фото и кадры видео для сравнения. Пришли оба файла ещё раз.')
+    if combined_sheet and Path(combined_sheet).is_file() and written_path:
+        response = vision_model(ctx)(
+            ctx=ctx, image_paths=[('The user\'s photo:', written_path),
+                ('Frames from the user\'s video; grid borders and timestamps are not part of the video:', combined_sheet)],
+            user_text=question, system_prompt=VISION_PROMPT, strict_images=True)
+    else:
+        response = vision_model(ctx)(
+            ctx=ctx,
+            image_bytes=proxy_bytes,  # analysis uses the proxy, not the original
+            user_text=question,
+            system_prompt=VISION_PROMPT,
+        )
     _pq = is_picture_question(ctx, state)
     if response and _pq and not getattr(ctx, 'video_summary_overview_only', False):
         # A question about the photo: the zoomed parts are read too, so the

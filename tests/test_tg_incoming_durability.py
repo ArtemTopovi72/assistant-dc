@@ -110,6 +110,75 @@ def test_album_parts_are_durable_before_the_collect_timer(tmp_path):
             album["timer"].cancel()
 
 
+def test_repeated_video_file_keeps_distinct_messages_and_caption(tmp_path):
+    bot = make_bot(tmp_path)
+    hold_worker(bot, 101)
+    bot.album_collect_s = 60
+    common = {'date': 1, 'chat': {'id': 101, 'type': 'private'}, 'from': {'id': 101},
+              'media_group_id': 'repeated'}
+    for message_id in (11, 12):
+        bot._dispatch_logged({'update_id': message_id, 'message': dict(common,
+            message_id=message_id, video={'file_id': 'same-video', 'duration': 3},
+            caption='second caption' if message_id == 12 else '')})
+    bot._albums['repeated']['timer'].cancel()
+    items = bot._incoming.pending()[0]['item']['photos']
+    assert [item['_message_id'] for item in items] == [11, 12]
+    assert items[1]['caption'] == 'second caption'
+
+
+@pytest.mark.parametrize('video_first', [False, True])
+def test_mixed_video_photo_album_survives_recovery(tmp_path, video_first):
+    bot = make_bot(tmp_path)
+    hold_worker(bot, 101)
+    bot.album_collect_s = 60
+    common = {'date': 1, 'chat': {'id': 101, 'type': 'private'}, 'from': {'id': 101},
+              'media_group_id': 'mixed'}
+    video = {'update_id': 11, 'message': dict(common, message_id=11,
+             video={'file_id': 'video-one', 'duration': 3}, caption='compare both')}
+    photo = {'update_id': 12, 'message': dict(common, message_id=12,
+             photo=[{'file_id': 'photo-one', 'width': 50, 'height': 50}])}
+    for update in ([video, photo] if video_first else [photo, video]):
+        bot._dispatch_logged(update)
+    pending = bot._incoming.pending()
+    assert len(pending) == 1 and pending[0]['item']['type'] == 'album_pending'
+    saved = pending[0]['item']
+    assert {p['file_id'] for p in saved['photos']} == {'video-one', 'photo-one'}
+    bot._albums['mixed']['timer'].cancel()
+    recovered = make_bot(tmp_path)
+    hold_worker(recovered, 101)
+    recovered.album_collect_s = 60
+    recovered._buffer_album(101, 'mixed', saved['photos'][0]['file_id'], '', saved=saved)
+    recovered._albums['mixed']['timer'].cancel()
+    recovered._flush_album('mixed')
+    item = recovered._queues[101].get_nowait()
+    assert item['type'] == 'mixed_album'
+    assert {p['file_id'] for p in item['items']} == {'video-one', 'photo-one'}
+    assert next(p for p in item['items'] if p['file_id'] == 'video-one')['caption'] == 'compare both'
+
+
+@pytest.mark.parametrize('caption_on_video', [False, True])
+def test_mixed_album_keeps_photo_video_and_caption(caption_on_video):
+    from tg_resolve import _expand_mixed_albums
+    cap = 'compare both'
+    album = {'type': 'mixed_album', '_arrival_ts': 2, '_context_generation': 3,
+             'items': [{'file_id': 'video', 'media': 'video', 'seconds': 3,
+                        'caption': cap if caption_on_video else ''},
+                       {'file_id': 'photo', 'caption': '' if caption_on_video else cap}]}
+    photo, video = _expand_mixed_albums([album])
+    assert photo['type'] == 'album' and photo['file_ids'] == ['photo']
+    assert video['type'] == 'voice' and video['media'] == 'video' and video['_album_material']
+    assert [photo['caption'], video['caption']].count(cap) == 1
+    assert all(x['_context_generation'] == 3 for x in (photo, video))
+
+
+def test_video_only_album_without_caption_keeps_material_menu_route():
+    from tg_resolve import _expand_mixed_albums
+    videos = _expand_mixed_albums([{'type': 'mixed_album', 'items': [
+        {'file_id': 'v1', 'media': 'video', 'seconds': 3, 'caption': ''},
+        {'file_id': 'v2', 'media': 'video', 'seconds': 3, 'caption': ''}]}])
+    assert [v['type'] for v in videos] == ['fwd_voice', 'fwd_voice']
+
+
 def test_stop_discards_durable_items_including_a_buffered_album(tmp_path):
     bot = make_bot(tmp_path)
     hold_worker(bot, 101)
