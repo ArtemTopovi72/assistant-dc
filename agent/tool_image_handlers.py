@@ -2495,7 +2495,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         if said:
             try:
                 old = (text_model(ctx)(
-                    None, "Copy, word for word, ONLY the part of the user's message that they say "
+                    ctx, "Copy, word for word, ONLY the part of the user's message that they say "
                     "is ALREADY in the existing video (e.g. the words before «это уже есть на "
                     "видео» / «it is already in the video»). If they say nothing is already "
                     "there, reply NONE. No other words.", said, temperature=0, max_tokens=200)
@@ -2513,7 +2513,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             sentences = re.split(r"(?<=[.!?»])\s+", raw)
             try:
                 n = int(re.search(r"\d+", text_model(ctx)(
-                    None, "You trim a video continuation script. The existing clip already "
+                    ctx, "You trim a video continuation script. The existing clip already "
                     "shows: «" + old + "». The numbered sentences below are the script for what "
                     "comes AFTER the clip. Count how many sentences AT THE START only show what "
                     "the existing clip already shows (setting the scene, the same action again). "

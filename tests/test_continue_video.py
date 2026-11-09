@@ -213,16 +213,22 @@ C.seed_frame, C.first_frame = _original_seed_frame, _original_first_frame
 CALLS = []
 _E["generate_video"] = lambda ctx, description, **kw: (CALLS.append(description), fake_gen(ctx, description, **kw))[1]
 # what is already there, then how many leading sentences repeat it (one: the scream)
-_TM[0] = lambda ctx, system, user, **k: (
-    "она орёт" if "ALREADY" in system else "1" if "trim a video" in system else "")
+_trim_contexts = []
+def _trim_read(ctx, system, user, **k):
+    if "ALREADY" in system or "trim a video" in system:
+        _trim_contexts.append(ctx)
+    return "она орёт" if "ALREADY" in system else "1" if "trim a video" in system else ""
+_TM[0] = _trim_read
 _script = ("The old woman touches the things in the cabinet, jerks her hand back and screams eh at "
            "the top of her voice, her mouth wide open in shock for a long moment. Then the cabinet "
            "door slowly swings open with a creak while the young man inside waits in the dark. "
            "Sound: her scream screams on. The young man with a blue glove on his fist steps out of "
            "the dark, walks up to her and stops right in front of her, staring at her face. The "
            "camera glides slowly across the wardrobe and the clothes hanging in it, the light soft.")
-H._handle_generate_video(TCtx(), {"user_input_original": "она орёт, это уже есть на видео, а потом выходит парень"},
+_trim_ctx = TCtx()
+H._handle_generate_video(_trim_ctx, {"user_input_original": "она орёт, это уже есть на видео, а потом выходит парень"},
                          {"description": _script})
+check("both continuation reads use the active task context", _trim_contexts == [_trim_ctx, _trim_ctx], _trim_contexts)
 _all = " ".join(CALLS)
 check("the part already in the clip is not rendered; the door (its sound line echoing the scream) and the guy are",
       CALLS and "jerks her hand" not in _all and "swings open" in _all and "glove" in _all, CALLS)

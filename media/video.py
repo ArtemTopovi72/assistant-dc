@@ -142,6 +142,10 @@ def snap_frames(length: int) -> int:
 
 
 _QUOTED = re.compile(r'''«([^»]*)»|"([^"]*)"|“([^”]*)”|(?<!\w)'([^'\n]+)'(?!\w)''')
+_STATIC_CAMERA_LINE = re.compile(
+    r'(?:the )?camera (?:remains|stays|is) (?:(?:completely|perfectly|fully) )?'
+    r'(?:stationary|static|fixed|still|locked(?: off)?)'
+    r' (?:throughout|the entire (?:clip|scene)|for the (?:entire|whole) (?:clip|scene))[.!]?', re.I)
 
 # What each sentence of a shot script is, read by the model (bench/script_read_eval.py).
 # Word lists read this before: «camera» or «visible» anywhere made an action a look line
@@ -153,7 +157,7 @@ _KIND_SYS = (
     "\"look\" -- how the whole clip looks or sounds; nobody in the story does anything in "
     "it: sound or music (\"Sound: wind.\", \"Soundscape: waves\", "
     "\"The audio is his calm voice with subtle ambient studio sounds.\"), light, colour, style, mood, "
-    "quality (\"Quality: 4K\"), \"The camera is handheld\", weather or scenery in the background "
+    "quality (\"Quality: 4K\"), \"The camera is handheld\", a camera that remains still throughout the clip, weather or scenery in the background "
     "(\"Rain falls outside the window\"). An already silent, still listener is ongoing "
     "scene context, not a separate action: 'The listener stays silent, looking at the speaker' "
     "and 'The person is silent and looks towards them' are look. An unchanged expression or "
@@ -191,10 +195,36 @@ _SCRIPT_READ_FAILURES: dict = {}
 def _ask_json(system: str, sentences: list, keys: tuple, per: int):
     from seams import text_model
     from utils import safe_json_from_llm
-    raw = text_model(None)(None, system,
-                           "\n".join(f"{i}. {s[:400]}" for i, s in enumerate(sentences, 1)),
-                           temperature=0.0, max_tokens=60 + per * len(sentences)) or ""
-    return safe_json_from_llm(raw, keys)
+    import intent
+    ctx = getattr(intent.current_turn(), 'cancel_context', None)
+    message = "\n".join(f"{i}. {s[:400]}" for i, s in enumerate(sentences, 1))
+    raw = text_model(ctx)(ctx, system, message, temperature=0.0,
+                          max_tokens=60 + per * len(sentences)) or ""
+    result = safe_json_from_llm(raw, keys)
+    def valid(value):
+        if not isinstance(value, dict):
+            return False
+        for k in keys:
+            rows = value.get(k)
+            if not isinstance(rows, list) or len(rows) != len(sentences):
+                return False
+            if k == 'kinds' and any(r not in ('action', 'look', 'camera') for r in rows):
+                return False
+            if k == 'sentences' and any(not isinstance(r, dict) for r in rows):
+                return False
+        return True
+    if not valid(result) and ctx is not None and not getattr(ctx, 'no_think', False):
+        if callable(getattr(ctx, 'is_cancelled', None)) and ctx.is_cancelled():
+            return result
+        import copy
+        retry_ctx = copy.copy(ctx)
+        retry_ctx.no_think = True
+        raw = text_model(retry_ctx)(retry_ctx, system, message, temperature=0.0,
+                                    max_tokens=60 + per * len(sentences)) or ""
+        result = safe_json_from_llm(raw, keys)
+        if valid(result):
+            result['_light_retry'] = True
+    return result if valid(result) else None
 
 
 def _script_model(sentences: list):
@@ -202,15 +232,21 @@ def _script_model(sentences: list):
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
         return None
     try:
-        kinds = (_ask_json(_KIND_SYS, sentences, ("kinds",), 8) or {}).get("kinds")
+        kind_result = _ask_json(_KIND_SYS, sentences, ("kinds",), 8) or {}
+        kinds = kind_result.get("kinds")
         if not isinstance(kinds, list) or len(kinds) != len(sentences):
             return None
         kinds = ["once" if k == "camera" else k for k in kinds]
         acts = [s for s, k in zip(sentences, kinds) if k == "action"]
-        rows = (_ask_json(_BEAT_SYS, acts, ("sentences",), 50) or {}).get("sentences") if acts else []
-        rows = iter(rows if isinstance(rows, list) and len(rows) == len(acts) else [{}] * len(acts))
+        beat_result = (_ask_json(_BEAT_SYS, acts, ("sentences",), 50) or {}) if acts else {}
+        rows = beat_result.get("sentences", [])
+        incomplete = not isinstance(rows, list) or len(rows) != len(acts)
+        if incomplete:
+            rows = [{}] * len(acts)
+        rows = iter(rows)
         return {"sentences": [dict(next(rows), kind=k) if k == "action" else {"kind": k}
-                              for k in kinds]}
+                              for k in kinds],
+                "_light_retry": bool(incomplete or kind_result.get('_light_retry') or beat_result.get('_light_retry'))}
     except Exception:
         logger.warning("video: script read failed", exc_info=True)
         return None
@@ -225,25 +261,43 @@ def read_sentences(sentences: list, model=None) -> list:
         if not isinstance(rows, list) or len(rows) != len(sentences):
             return [_PLAIN_READ] * len(sentences)
         return [_clean_read(r) for r in rows]
+    import intent
+    turn = intent.current_turn()
+    ctx = getattr(turn, 'cancel_context', None)
+    local_reads = getattr(turn, '_script_reads', None)
+    if turn is not None and local_reads is None:
+        local_reads = {}
+        turn._script_reads = local_reads
+    local_reads = local_reads if local_reads is not None else {}
+    scope = (getattr(ctx, 'model_name', '') or _config.MODEL_NAME,
+             bool(getattr(ctx, 'no_think', False)))
+    key = lambda sentence: scope + (sentence,)  # noqa: E731
     now = time.monotonic()
+    fresh = {}
     if len(_SCRIPT_READ_FAILURES) > 2000:
         _SCRIPT_READ_FAILURES.clear()
     # shortcut: reuse the existing one-beat fallback for five minutes after a failed read.
-    todo = list(dict.fromkeys(s for s in sentences if s not in _SCRIPT_READS
-                              and now - _SCRIPT_READ_FAILURES.get(s, -300) >= 300))
+    todo = list(dict.fromkeys(s for s in sentences if key(s) not in _SCRIPT_READS and key(s) not in local_reads
+                              and now - _SCRIPT_READ_FAILURES.get(key(s), -300) >= 300))
     for i in range(0, len(todo), 20):
         batch = todo[i:i + 20]
         got = _script_model(batch)
         rows = got.get("sentences") if isinstance(got, dict) else None
         if not isinstance(rows, list) or len(rows) != len(batch):
-            _SCRIPT_READ_FAILURES.update({s: time.monotonic() for s in batch})
+            if not (callable(getattr(ctx, 'is_cancelled', None)) and ctx.is_cancelled()):
+                _SCRIPT_READ_FAILURES.update({key(s): time.monotonic() for s in batch})
             continue
         if len(_SCRIPT_READS) > 2000:
             _SCRIPT_READS.clear()
         for s, r in zip(batch, rows):
-            _SCRIPT_READS[s] = _clean_read(r)
-            _SCRIPT_READ_FAILURES.pop(s, None)
-    return [_SCRIPT_READS.get(s, _PLAIN_READ) for s in sentences]
+            fresh[s] = _clean_read(r)
+            if not (callable(getattr(ctx, 'is_cancelled', None)) and ctx.is_cancelled()):
+                if got.get('_light_retry'):
+                    local_reads[key(s)] = fresh[s]
+                else:
+                    _SCRIPT_READS[key(s)] = fresh[s]
+            _SCRIPT_READ_FAILURES.pop(key(s), None)
+    return [fresh.get(s, local_reads.get(key(s), _SCRIPT_READS.get(key(s), _PLAIN_READ))) for s in sentences]
 
 
 def _clean_read(r) -> dict:
@@ -591,6 +645,9 @@ def split_script(description: str, max_seconds: float = 0.0, reads=None) -> list
         else:
             pieces.append(x)
     kind = dict(zip(pieces, (r["kind"] for r in read_sentences([restore(p).strip() for p in pieces], reads))))
+    for p in pieces:
+        if _STATIC_CAMERA_LINE.fullmatch(restore(p).strip()):
+            kind[p] = "look"
     _look = lambda p: kind[p] == "look"  # noqa: E731
     # Sound, light and look lines take no screen time and belong to every part: as a
     # part of their own they were "2. Soundscape: soft indoor ambience…" with no action
@@ -2204,7 +2261,7 @@ def dictated_speech(said: str, description: str, ctx=None) -> str:
         return ""
     try:
         out = text_model(ctx)(
-            None,
+            ctx,
             "The user asks for a video in which a person speaks. Copy, character for character, "
             "ONLY the words the person must say aloud, if the user wrote them out. Not the "
             "instructions, not the link, not the description of the picture. Reply with the "
@@ -3353,7 +3410,7 @@ def condense_script(script: str, now_s: float, fit_s: float, ctx=None, sentences
     word. "" when the model fails."""
     try:
         out = text_model(ctx)(
-            None,
+            ctx,
             "You condense a video shot script. Keep the same people, place, order of "
             "events and every quoted spoken line word for word; cut repeated, minor and "
             "lingering actions and merge small beats. Reply with the condensed script "
@@ -3375,7 +3432,7 @@ def action_script(script: str, ctx=None) -> str:
     fails or answers with nothing usable."""
     try:
         out = text_model(ctx)(
-            None,
+            ctx,
             "A picture is the FIRST FRAME of a video clip; the script below was written for "
             "it. Rewrite the script as what HAPPENS from that frame on: ONE event played out "
             "in 3 to 5 sentences, each sentence one visible action by the characters that "

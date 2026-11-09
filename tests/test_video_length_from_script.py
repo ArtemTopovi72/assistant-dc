@@ -210,6 +210,23 @@ def test_sound_and_light_lines_are_never_a_part_of_their_own():
     assert not any(p.lstrip().startswith("Soundscape") for p in parts)
 
 
+def test_stationary_camera_is_not_a_separate_scene_when_read_as_action():
+    first = ' '.join(f'word{i}' for i in range(21))
+    script = (f'The woman on the left says "{first}". '
+              'The woman on the right says "Yes I remember". '
+              'The camera remains completely stationary throughout. '
+              'Soundscape is just their spoken dialogue and a quiet room ambience, with no music.')
+    def reads(sentences):
+        return {'sentences': [{'kind': ('look' if s.startswith('Soundscape') else 'action'),
+                               'beats': 1, 'spoken': V.quoted_lines(s)} for s in sentences]}
+    parts = V.split_script(script, reads=reads)
+    assert len(parts) == 2, parts
+    assert all('stationary' in p and 'quiet room' in p for p in parts), parts
+    assert not V._STATIC_CAMERA_LINE.fullmatch('The camera pans right.')
+    assert not V._STATIC_CAMERA_LINE.fullmatch('The camera is still.')
+    assert not V._STATIC_CAMERA_LINE.fullmatch('The camera stays still while the dog jumps.')
+
+
 def test_scenery_lines_are_never_a_part_of_their_own():
     # Live 2026-10-12: «The background shows shelves with a bag…» was a 5-minute part.
     long_action = " ".join(f"Then the cat does trick number {i} and the dog answers it." for i in range(12))
