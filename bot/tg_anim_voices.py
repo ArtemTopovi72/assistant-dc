@@ -69,12 +69,12 @@ class AnimVoicesMixin:
         self._store.put(sess)
         self._send_animate_presets(chat_id, lang, sess.pending_animate_target)
 
-    def _offer_voices(self, chat_id: int, sess, lang: str, request: str, n: int, images=None) -> None:
+    def _offer_voices(self, chat_id: int, sess, lang: str, request: str, n: int, images=None, primary_id="") -> None:
         """generate_video stopped before rendering people who talk: «🎙 Свои
         голоса» collects samples (voice notes or round videos, left to right),
         «▶️ Стандартные» goes on without them. Either way the same request runs again."""
         sess.voice_pending, sess.voice_choice = request, ""
-        sess.voice_pending_images = list(images or [])
+        sess.voice_pending_images, _ = tg_bot._video_offer_images(sess, images, primary_id)
         sess.anim_voices, sess.anim_voice_state = [], ""
         self._store.put(sess)
         if not self._voice_from_request_link(chat_id, sess, lang, request):

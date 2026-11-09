@@ -259,6 +259,36 @@ def test_pending_video_offer_persists_its_own_images_and_enqueues_its_primary(tm
     assert sess.voice_pending_images == sess.video_plan_images == []
 
 
+@pytest.mark.parametrize('offer', ['voice', 'plan'])
+def test_video_offer_keeps_registered_target_when_working_copy_has_a_new_path(tmp_path, offer):
+    from test_tg_incoming_durability import make_bot
+    bot = make_bot(tmp_path)
+    sess = bot._get_session(101)
+    source = tmp_path / 'photo.jpg'
+    copy = tmp_path / '_working_input.png'
+    Image.new('RGB', (16, 16), 'blue').save(source, format='PNG')
+    copy.write_bytes(source.read_bytes())
+    image_id = T._log_image(sess, str(source), src='user')
+    other = tmp_path / 'same_photo_other_message.png'
+    other.write_bytes(source.read_bytes())
+    T._log_image(sess, str(other), src='user')
+    queued = []
+    bot._enqueue_item = lambda cid, item: queued.append(item)
+    bot._busy_note = lambda *a: None
+    bot._voice_from_request_link = lambda *a: False
+    bot.text_model = lambda *a, **kw: '{"lines": ["Человек машет"]}'
+    if offer == 'voice':
+        bot._offer_voices(101, sess, 'ru', 'animate', 1, images=[str(copy), str(source)], primary_id=image_id)
+        assert sess.voice_pending_images == [str(source)]
+        bot._voices_go(101, sess, 'ru')
+    else:
+        bot._offer_video_plan(101, sess, 'ru', 'animate', [{'text': 'A person waves', 'sec': 5}],
+                              images=[str(copy), str(source)], primary_id=image_id)
+        assert sess.video_plan_images == [str(source)]
+        bot._cb_video_plan(101, 'vp:go')
+    assert queued[0]['image_id'] == image_id
+
+
 @pytest.mark.parametrize('voice_choice', ['', 'own'])
 @pytest.mark.parametrize('has_seed', [False, True])
 def test_approved_video_plan_restores_its_own_original_clip(tmp_path, voice_choice, has_seed):

@@ -10,6 +10,7 @@ from tests.fakes import Over
 
 made = []
 ENGINE = Over(V, engine_available=lambda ctx: (True, ""),
+              count_speakers=lambda ctx, request, description: 2 if '"' in description else 0,
               generate_video=lambda ctx, d, **k: made.append((d, k.get("audios"))) or {"status": "cancelled"})
 
 

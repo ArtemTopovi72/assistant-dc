@@ -1,9 +1,4 @@
-"""The video plan shows each part in the chat's language, never the English prompts.
-
-A six-part Russian monologue came back unusable once and the chat saw «The elderly man …
-looks directly into the came…» for every part (live 2026-10-20): 90 tokens a part did not
-hold the spoken lines copied whole, and the fallback was silent.
-"""
+"""Video plans keep the original speaker attribution and dialogue intact."""
 import os
 import sys
 import types
@@ -15,7 +10,7 @@ os.environ.setdefault("F5_TEST_RUN", "1")
 
 import tg_video_plan as P  # noqa: E402
 
-PARTS = ['The man says: "Ах, вот и ты."', 'He goes on: "Нам нужен твой морозильник."']
+PARTS = ['A man waves.', 'A woman nods.']
 
 
 def _owner(*replies):
@@ -28,22 +23,57 @@ def _owner(*replies):
 
 
 def test_a_broken_reply_is_asked_again_before_the_prompts_show():
-    owner, asked = _owner('{"lines": ["Мужчина: \\"Ах, вот и ты.\\""', '{"lines": ["1. Мужчина: \\"Ах, вот и ты.\\"", '
-                          '"2. Он: \\"Нам нужен твой морозильник.\\""]}')
-    assert P._summaries(PARTS, "ru", owner) == ['Мужчина: "Ах, вот и ты."', 'Он: "Нам нужен твой морозильник."']
+    owner, asked = _owner('{"lines": ["Мужчина машет"', '{"lines": ["1. Мужчина машет", "2. Женщина кивает"]}')
+    assert P._summaries(PARTS, "ru", owner) == ['Мужчина машет', 'Женщина кивает']
     assert len(asked) == 2
 
 
 def test_a_reply_that_corrects_itself_gives_its_whole_list():
     """One line, then «Wait… let me do all of them» and the full list (live 2026-10-20)."""
-    owner, asked = _owner('{"lines": ["Мужчина: \\"Ах, вот и ты.\\""]}\nWait, both shots:\n'
-                          '```json\n{"lines": ["Мужчина: \\"Ах, вот и ты.\\"", "Он: \\"Нам нужен твой морозильник.\\""]}\n```')
-    assert P._summaries(PARTS, "ru", owner) == ['Мужчина: "Ах, вот и ты."', 'Он: "Нам нужен твой морозильник."']
+    owner, asked = _owner('{"lines": ["Мужчина машет"]}\nWait, both shots:\n'
+                          '```json\n{"lines": ["Мужчина машет", "Женщина кивает"]}\n```')
+    assert P._summaries(PARTS, "ru", owner) == ['Мужчина машет', 'Женщина кивает']
     assert len(asked) == 1
 
 
-def test_the_budget_grows_with_the_spoken_lines():
-    long = ['He says: "' + "Слово " * 120 + '"'] * 6
+def test_one_quote_with_two_people_preserves_original_speaker():
+    owner, asked = _owner('{"lines": ["Алиса говорит: \\\"Привет\\\""]}')
+    assert P._summaries(['Alice watches Bob. Bob says "Привет".'], 'ru', owner) == ['']
+    assert not asked
+
+
+def test_spoken_camera_cuts_phrase_is_still_preserved():
+    owner, asked = _owner('{"lines": ["Мужчина говорит"]}')
+    assert P._summaries(['The man says "The camera cuts to the chase".'], 'ru', owner) == ['']
+    assert not asked
+
+
+def test_unquoted_parts_still_receive_translations():
+    owner, asked = _owner('{"lines": ["Женщина кивает"]}')
+    assert P._summaries(['Bob says "Привет".', 'A woman nods.'], 'ru', owner) == ['', 'Женщина кивает']
+    assert len(asked) == 1
+
+
+def test_plan_shows_timing_and_spacing_inside_dialogue_unchanged():
+    sess = types.SimpleNamespace(video_plan=[{'text': 'Bob says "Start  [3.2 s] now".', 'sec': 5}])
+    text = P.VideoPlanMixin()._video_plan_script(sess, 'ru')
+    assert 'Start  [3.2 s] now' in text
+
+
+def test_multiple_quotes_keep_original_plan_without_misattributing_speakers():
+    owner, asked = _owner('{"lines": ["Алиса: \\\"Нет\\\". Боб: \\\"Да\\\""]}')
+    assert P._summaries(['Alice says "Да". Bob says "Нет".'], 'ru', owner) == ['']
+    assert not asked
+
+
+def test_repeated_quotes_do_not_get_collapsed():
+    owner, asked = _owner('{"lines": ["Он: \\\"Да\\\""]}')
+    assert P._summaries(['He says "Да", then repeats "Да".'], 'ru', owner) == ['']
+    assert not asked
+
+
+def test_the_budget_grows_with_long_descriptions():
+    long = ['The scene shows ' + "details " * 120] * 6
     owner, asked = _owner('{"lines": ["x", "x", "x", "x", "x", "x"]}')
     P._summaries(long, "ru", owner)
     assert asked[0] > 200 + 90 * 6 + sum(len(t) for t in long) // 3

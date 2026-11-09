@@ -552,6 +552,24 @@ def _image_by_content(sess, path: str) -> Optional[dict]:
     return None
 
 
+def _video_offer_images(sess, images, primary_id=""):
+    paths = list(images or [])
+    if not paths:
+        return [], None
+    primary = _image_by_id(sess, primary_id)
+    if primary and primary.get('path') != paths[0]:
+        import filecmp
+        try:
+            if not filecmp.cmp(primary['path'], paths[0], shallow=False):
+                primary = None
+        except OSError:
+            primary = None
+    primary = primary or _image_by_path(sess, paths[0])
+    if primary:
+        paths[0] = primary['path']
+    return list(dict.fromkeys(paths)), primary
+
+
 def _file_digest(path: str) -> str:
     import hashlib
     h = hashlib.sha1()

@@ -50,6 +50,14 @@ def _summaries(texts: list, lang: str, owner=None) -> list:
     import video
     from seams import text_model
     from utils import safe_json_from_llm
+    # A summary can attribute even a single quote to the wrong person.
+    plain = [i for i, text in enumerate(texts) if not video._QUOTED.search(text)]
+    if len(plain) != len(texts):
+        result = [""] * len(texts)
+        if plain:
+            for i, summary in zip(plain, _summaries([texts[i] for i in plain], lang, owner)):
+                result[i] = summary
+        return result
     name = {"ru": "Russian"}.get(lang, lang)
     listing = "\n".join(f"{i}. {video.strip_timing(t)}" for i, t in enumerate(texts, 1))
     lines, raw = [], ""
@@ -62,8 +70,9 @@ def _summaries(texts: list, lang: str, owner=None) -> list:
             # line riding every part («пульс искр наполняет сцену») became a part of its own.
             raw = text_model(owner)(
                 None,
-                f"Retell each numbered video shot description in {name} as ONE short line "
-                "(at most 14 words): who does what on screen. A line in double quotes is spoken "
+                f"Retell each numbered video shot description in {name} as ONE short line: "
+                "who does what on screen. Keep the action description to at most 14 words; "
+                "do not count quoted dialogue towards that limit. A line in double quotes is spoken "
                 "aloud: copy it into your line in quotes, character for character, never "
                 "paraphrased or replaced by 'says something'. Leave out camera, sound, music, "
                 "light and particle effects (sparks, smoke, embers) unless they are the action. "
@@ -81,7 +90,9 @@ def _summaries(texts: list, lang: str, owner=None) -> list:
             lines = []
         # «…и лает ""»: told to copy spoken lines, the model left empty quotes where a dog barks.
         lines = [re.sub(r'\s*(?:""|«»|“”)', "", re.sub(r"^\d+[.)]\s*", "", str(x).strip())) for x in lines]
-        if len(lines) == len(texts) and all(lines):
+        if (len(lines) == len(texts) and all(lines)
+                and all(not video._QUOTED.search(line)
+                        for text, line in zip(texts, lines))):
             return lines
     tg_bot.logger.warning("video plan: no %s summaries for %d parts (got %d); the prompts are shown: %r",
                           name, len(texts), len(lines), raw[-300:])
@@ -120,8 +131,11 @@ class VideoPlanMixin:
 
     def _video_plan_script(self, sess, lang: str) -> str:
         import video
+        def display(part):
+            text = part.get("say") or part.get("text", "")
+            return text if video._QUOTED.search(text) else " ".join(video.strip_timing(text).split())
         return "\n".join(tg_bot._t("vp_part", lang, i=i, sec=f"{float(p.get('sec') or 0):.1f}",
-                                   text=html.escape(" ".join(video.strip_timing(p.get("say") or p.get("text", "")).split())))
+                                   text=html.escape(display(p)))
                          for i, p in enumerate(sess.video_plan, 1))
 
     def _send_video_plan(self, chat_id: int, sess, lang: str) -> None:
@@ -131,14 +145,13 @@ class VideoPlanMixin:
         text, kb = self._video_plan_card(sess, lang)
         self._send_text(chat_id, text, parse_mode="HTML", keyboard=kb)
 
-    def _offer_video_plan(self, chat_id: int, sess, lang: str, request: str, plan: list, images=None, continuation=None, requested_seconds=0) -> None:
+    def _offer_video_plan(self, chat_id: int, sess, lang: str, request: str, plan: list, images=None, continuation=None, requested_seconds=0, primary_id="") -> None:
         sess.video_plan = _with_summaries(
             [{"text": str(p.get("text", "")), "sec": float(p.get("sec") or 0)} for p in plan], lang, self)
         sess.video_plan_request, sess.video_plan_ok = request, []
-        sess.video_plan_images = list(images or [])
+        sess.video_plan_images, primary = tg_bot._video_offer_images(sess, images, primary_id)
         sess.video_plan_continuation = dict(continuation or {})
         sess.video_plan_requested_seconds = float(requested_seconds or 0)
-        primary = tg_bot._image_by_path(sess, images[0]) if images else None
         sess.video_plan_image = primary['id'] if primary else getattr(sess, "turn_image", "") or ""
         self._store.put(sess)
         self._send_video_plan(chat_id, sess, lang)

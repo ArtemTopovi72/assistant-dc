@@ -2284,7 +2284,8 @@ class TaskRunnerMixin:
                         if p and os.path.exists(p)]
         if final.get("ask_voices"):
             try:
-                self._offer_voices(chat_id, sess, lang, task.user_text, int(final["ask_voices"]), images=video_images)
+                self._offer_voices(chat_id, sess, lang, task.user_text, int(final["ask_voices"]),
+                                   images=video_images, primary_id=getattr(ctx, 'current_image_id', ''))
             except Exception:
                 tg_bot.logger.exception("voice offer failed chat=%s", chat_id)
 
@@ -2303,7 +2304,8 @@ class TaskRunnerMixin:
             try:
                 self._offer_video_plan(chat_id, sess, lang, task.user_text, final["video_plan"],
                                        images=final.get("video_plan_images", video_images), continuation=continuation,
-                                       requested_seconds=final.get("video_plan_requested_seconds", 0))
+                                       requested_seconds=final.get("video_plan_requested_seconds", 0),
+                                       primary_id=getattr(ctx, 'current_image_id', ''))
             except Exception:
                 tg_bot.logger.exception("video plan offer failed chat=%s", chat_id)
 
