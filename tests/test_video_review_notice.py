@@ -96,7 +96,7 @@ def test_video_with_unverified_audio_does_not_claim_sound_was_heard():
 def test_approved_video_reply_reports_incomplete_result():
     ctx = SimpleNamespace(video_plan_approved_result=True, video_plan_warnings=['incomplete'])
     result = _approved_video_reply(ctx, 'Всё готово!', 'Продолжи видео')
-    assert 'только часть' in result and 'не создались' in result
+    assert 'неполным' in result and 'не создались' not in result
 
 
 def test_short_video_reply_does_not_claim_requested_length():

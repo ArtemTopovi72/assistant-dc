@@ -1026,8 +1026,8 @@ def _approved_video_reply(ctx, answer: str, user_input: str) -> str:
     ru = bool(re.search(r'[А-Яа-яЁё]', user_input or ''))
     result = 'Видео готово, отправляю.' if ru else 'The video is ready.'
     if 'incomplete' in warnings:
-        result = ('Удалось сделать только часть видео; остальные части не создались.' if ru else
-                  'Only part of the video was created; the remaining parts failed.')
+        result = ('Видео получилось неполным; отправляю то, что удалось сохранить.' if ru else
+                  'The video is incomplete; sending the part that was saved.')
     elif 'short' in warnings:
         result = ('Видео получилось короче запрошенного, отправляю результат.' if ru else
                   'The video is shorter than requested; sending the result.')

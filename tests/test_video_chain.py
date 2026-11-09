@@ -819,6 +819,8 @@ def test_failed_chain_stitch_reports_partial_and_does_not_remember_full_chain(tm
     assert ctx.video_parts_incomplete
     assert "incomplete" in answer.lower()
     assert not rig.kept
+    assert 'delivered video is incomplete' in answer
+    assert 'unconfirmed' in ctx.last_video_prompt
 
 
 def test_failed_continuation_join_reports_original_missing(tmp_path):
@@ -840,6 +842,29 @@ def test_failed_later_chain_render_is_reported_incomplete(tmp_path, monkeypatch)
     assert ctx.video_parts_incomplete
     assert 'incomplete' in answer.lower()
     assert not rig.kept
+
+
+def test_failed_later_approved_part_is_not_claimed_as_rendered(tmp_path, monkeypatch):
+    from contextlib import nullcontext
+    monkeypatch.setattr(comfy_client, 'card_session', lambda *a, **k: nullcontext())
+    monkeypatch.setattr(comfy_client, 'this_thread_holds_card', lambda: True)
+    rig = _Rig(tmp_path)
+    ctx = rig.ctx(video_plan_parts=['First scene.', 'Second scene.', 'Last scene never rendered.'])
+    memories = []
+    checks = []
+    ctx.deps = types.SimpleNamespace(script_read=_fakes.script_model, text_model=lambda *a, **kw: '',
+                                     _remember=lambda *args: memories.append(args))
+    monkeypatch.setattr(H, '_render_chain_parts', lambda ctx, path, parts, args, chain, idx, **kw: idx)
+    monkeypatch.setattr(H, '_check_actions', lambda *args, **kw: checks.append(args) or 'Last scene never rendered.')
+    answer = H._handle_generate_video(ctx, {}, {'description': LONG, 'use_current_images': False})
+    assert ctx.video_parts_incomplete
+    assert 'Last scene never rendered.' not in answer
+    assert 'incomplete' in answer.lower()
+    assert 'Say it is ready briefly' not in answer
+    assert 'Last scene never rendered.' not in ctx.last_video_prompt
+    assert 'unconfirmed' in ctx.last_video_prompt
+    assert all('Last scene never rendered.' not in str(memory) for memory in memories)
+    assert not checks
 
 @pytest.mark.parametrize('spoken', [False, True])
 def test_clip_speaker_is_checked_for_dialogue_not_quoted_sign(tmp_path, monkeypatch, spoken):

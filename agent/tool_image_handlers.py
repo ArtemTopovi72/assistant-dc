@@ -3014,15 +3014,17 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # «pick a voice variant» (live 2026-10-20)
     ctx.video_review_start = review_start
     try:
-        ctx.video_action_note = "" if head or (continuing and not images) else _check_actions(ctx, path, parts, references=images)
+        ctx.video_action_note = ("The video could not be checked against the request." if ctx.video_parts_incomplete
+                                 else "" if head or (continuing and not images)
+                                 else _check_actions(ctx, path, parts, references=images))
     finally:
         ctx.video_review_start = 0.0
-    if images and not continuing and not head:
+    if images and not continuing and not head and not ctx.video_parts_incomplete:
         background_note = _check_static_background(ctx, video_mod, path, ctx.video_request or description)
         objects_note = ('The video may contain added objects or effects.'
                         if watch and drawn is not None and drawn > video_mod.DRAWN_OVER_MAX else '')
         ctx.video_action_note = ' '.join(note for note in (ctx.video_action_note, background_note, objects_note) if note)
-    if len(images) == 1 and not continuing:
+    if len(images) == 1 and not continuing and not ctx.video_parts_incomplete:
         graphic_note = _check_added_graphics(ctx, path, images[0], ctx.video_request or description)
         ctx.video_action_note = ' '.join(note for note in (ctx.video_action_note, graphic_note) if note)
     audio_removed = False
@@ -3048,7 +3050,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             logger.warning('Could not verify video duration', exc_info=True)
     ctx.last_video_path = path
     ctx.video_made = path           # last_video_path is each PART's clip while the parts render
-    ctx.last_video_prompt = ctx.video_request or description
+    ctx.last_video_prompt = ("The delivered video is incomplete; its exact contents are unconfirmed. "
+                             "Inspect it before describing or continuing it."
+                             if ctx.video_parts_incomplete else (ctx.video_request or description))
     dep(ctx, "_remember", _remember)(ctx, state, "video", f"Video for: {ctx.last_video_prompt}", {"path": path})
 
     used = ""
@@ -3068,13 +3072,13 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         f"{'without audio' if audio_removed else 'with generated audio'}.{used}\n"
         + ("An audio track alone does not verify its contents. Do not claim specific audio content "
            "was heard unless independently verified.\n" if not audio_removed else "")
-        + ("Only part of the planned video was rendered; tell the user it is incomplete.\n"
+        + ("The delivered video is incomplete; tell the user it is incomplete.\n"
            if ctx.video_parts_incomplete else "")
         # The reply told of a grandma's scream from a part the user had dropped
         # from the plan (live 2026-10-12): the approved parts are what was made.
         + ("What the clip shows is ONLY these approved plan parts (anything else in the "
            "request, such as parts the user removed, was NOT made -- never describe it): "
-           + " | ".join(approved) + "\n" if approved else "")
+           + " | ".join(approved) + "\n" if approved and not ctx.video_parts_incomplete else "")
         + (("The visual check did not complete; do not claim the clip was verified.\n"
             if 'The video could not be checked against the request.' in ctx.video_action_note else
             "A review of a few sampled frames suggests possible issues: " + ctx.video_action_note
@@ -3093,7 +3097,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
          "Warn the user this is a possible visual artifact, not a confirmed defect.\n"
          if possible_flash else "") +
         "The clip is delivered to the user automatically. "
-        + ("Include the warnings above. " if speech_unverified or framing_unverified or possible_flash else "Say it is ready briefly. ")
+        + ("Include the warnings above. " if speech_unverified or framing_unverified or possible_flash or ctx.video_parts_incomplete else "Say it is ready briefly. ")
         + "Do NOT call generate_video again for this turn."
     )
 
