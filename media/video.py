@@ -3976,11 +3976,27 @@ def revoice(ctx, clip: str, voice: str) -> Optional[str]:
     return _adopt_output(out, OUTPUT_DIR)
 
 
-def explicit_silence(ctx, request: str) -> bool:
-    return bool(request and yes_no(ctx)(
-        "Does the user explicitly require ALL sound removed from the finished video, "
-        "not just no speech or no music? Background ambience requested means NO. {text}",
-        request, default=False))
+def explicit_silence(ctx, request: str) -> Optional[bool]:
+    if not request:
+        return False
+    def read(question):
+        # ask_yes normally truncates its text argument; a long approved plan must remain visible.
+        if len(request) > 1400:
+            question = question.replace('{text}', 'the complete request below') + '\nCOMPLETE REQUEST:\n' + request
+            return yes_no(ctx)(question, 'See the complete request above.', default=None)
+        return yes_no(ctx)(question, request, default=None)
+    silence = read(
+        "Is the entire video explicitly requested to be completely silent, including background noises? "
+        "'No speech' alone is NOT a request for complete silence. Reply no for no speech alone. Request: {text}")
+    # Conflicting readings cannot establish whether the finished clip should have audio.
+    allows_background = read(
+        "A user requests a video: {text}. Is background sound allowed or unspecified? "
+        "Answer YES if they only exclude speech, music, a specific sound, or do not mention background. "
+        "Answer NO only if they explicitly require the entire finished video to have absolutely no sound at all.")
+    logger.info('video audio intent: silence=%s background_allowed=%s', silence, allows_background)
+    if silence is None or allows_background is None or silence == allows_background:
+        return None
+    return bool(silence)
 
 
 def mute_video(path: str) -> Optional[str]:

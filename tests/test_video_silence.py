@@ -7,9 +7,70 @@ import video
 
 def test_silence_classifier_does_not_confuse_no_speech():
     seen = []
-    ctx = SimpleNamespace(yes_no=lambda q, text, **kw: seen.append((q, text)) or False)
+    ctx = SimpleNamespace(yes_no=lambda q, text, **kw: seen.append((q, text)) or len(seen) > 1)
     assert not video.explicit_silence(ctx, 'Без речи, но дождь должен быть слышен')
-    assert 'speech' in seen[0][0].lower() and 'all sound' in seen[0][0].lower()
+    assert 'speech' in seen[0][0].lower() and 'background' in seen[0][0].lower()
+
+
+def test_silence_requires_independent_confirmation_that_no_background_is_allowed():
+    answers = iter([True, True])
+    ctx = SimpleNamespace(yes_no=lambda *a, **kw: next(answers))
+    assert video.explicit_silence(ctx, 'Оживи фото без речи') is None
+    answers = iter([True, False])
+    assert video.explicit_silence(ctx, 'Убери вообще весь звук')
+    answers = iter([False, False])
+    assert video.explicit_silence(ctx, 'Убери вообще весь звук') is None
+    answers = iter([False, True])
+    assert video.explicit_silence(ctx, 'Без речи') is False
+    answers = iter([True, None])
+    assert video.explicit_silence(ctx, 'Убери вообще весь звук') is None
+    ctx.yes_no = lambda *a, **kw: kw['default']
+    assert video.explicit_silence(ctx, 'Убери вообще весь звук') is None
+
+
+def test_ambiguous_silence_is_not_delivered_as_confirmed_audio(tmp_path):
+    from tests.test_video_chain import _Rig
+    import tool_image_handlers as handlers
+    rig = _Rig(tmp_path, explicit_silence=lambda *a: None)
+    ctx = rig.ctx(last_video_path='previous.mp4')
+    result = handlers._handle_generate_video(ctx,
+        {'user_input_original': 'Сделай ролик без звука'}, {'description': 'A quiet scene.', 'seconds': 5})
+    assert '[TOOL ERROR]' in result and 'audio setting' in result.lower()
+    assert not rig.renders() and ctx.last_video_path == 'previous.mp4'
+
+
+def test_ambiguous_silence_keeps_the_approved_plan(tmp_path):
+    from tests.test_video_chain import _Rig
+    import tool_image_handlers as handlers
+    rig = _Rig(tmp_path, explicit_silence=lambda *a: None)
+    ctx = rig.ctx(video_plan_parts=['A calm scene.'], video_plan_seconds=[5.2])
+    result = handlers._handle_generate_video(ctx,
+        {'user_input_original': 'Сделай ролик без звука'}, {'description': 'A calm scene.', 'seconds': 5})
+    assert '[TOOL ERROR]' in result and not rig.renders()
+    assert ctx.video_plan_parts == ['A calm scene.'] and ctx.video_plan_seconds == [5.2]
+
+
+def test_long_request_is_not_truncated_before_audio_decision():
+    seen = []
+    ctx = SimpleNamespace(yes_no=lambda question, text, **kw: seen.append((question, text)) or None)
+    request = ('Длинный сценарий. ' * 120) + ' Утверждённый план: полная тишина.'
+    assert video.explicit_silence(ctx, request) is None
+    assert len(seen) == 2 and all('полная тишина' in question for question, _ in seen)
+
+
+def test_prechecked_audio_decision_is_bound_to_one_request(tmp_path):
+    from tests.test_video_chain import _Rig
+    import tool_image_handlers as handlers
+    reads = []
+    rig = _Rig(tmp_path, explicit_silence=lambda ctx, request: reads.append(request) or None)
+    ctx = rig.ctx(video_silence_prechecked=('Создай видео', False))
+    handlers._handle_generate_video(ctx, {'user_input_original': 'Создай видео'},
+                                    {'description': 'A quiet scene.', 'seconds': 5})
+    assert rig.renders() and not reads
+    rig.calls.clear()
+    result = handlers._handle_generate_video(ctx, {'user_input_original': 'Теперь без звука'},
+                                              {'description': 'A quiet scene.', 'seconds': 5})
+    assert '[TOOL ERROR]' in result and reads == ['Теперь без звука'] and not rig.renders()
 
 
 def test_mute_video_removes_audio_without_touching_source(tmp_path):

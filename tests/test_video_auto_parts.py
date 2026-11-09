@@ -48,6 +48,7 @@ def _run(tmp_path, args, condensed="", state=None, ctx_kw=None, **eng):
 
     fakes = dict(AUTO_MAX_PARTS=2, generate_video=fake_gen, engine_available=lambda ctx: (True, ""),
                  herrgott_on=lambda: False, motion_context_on=lambda: False,
+                 explicit_silence=lambda ctx, request: False,
                  count_speakers=lambda *a: 0,
                  ground_spoken_script=lambda ctx, request, script: script,
                  dictated_speaker=lambda ctx, script, said: 'An old man',

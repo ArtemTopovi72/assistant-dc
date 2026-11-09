@@ -2582,7 +2582,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     else:
         parts = [raw]
     # 🎬 The plan the user approved under the card (tg_video_plan): exactly those parts.
-    approved = [p for p in (getattr(ctx, "video_plan_parts", None) or []) if p]
+    original_plan = list(getattr(ctx, "video_plan_parts", None) or [])
+    approved = [p for p in original_plan if p]
     approved_seconds = list(getattr(ctx, "video_plan_seconds", None) or [])
     ctx.video_plan_parts = []
     ctx.video_plan_seconds = []
@@ -2661,6 +2662,24 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 "plan first: it is shown under your message with buttons. Reply with ONE "
                 "short line in their language that the plan is below. Do not describe the "
                 "clip, do not call generate_video again this turn.")
+    silence_request = user_words(_said).strip()
+    if approved:
+        silence_request += '\nApproved video plan (takes precedence for explicit changes):\n' + ctx.video_request
+    checked = getattr(ctx, 'video_silence_prechecked', None)
+    ctx.video_silence_prechecked = None
+    if isinstance(checked, tuple) and len(checked) == 2 and checked[0] == silence_request:
+        silence = checked[1]
+    else:
+        silence = video_mod.explicit_silence(ctx, silence_request)
+    if silence is None:
+        if approved:
+            ctx.video_plan_parts, ctx.video_plan_seconds = original_plan, approved_seconds
+        if continuing:
+            ctx.continue_tail, ctx.continue_src, ctx.continue_people = cont_tail, cont_src, people
+        state['video_status'] = 'error'
+        return ('[TOOL ERROR] Could not determine the requested audio setting. No video was rendered; ask the user '
+                'to specify whether speech and background sound are wanted in the plan or a new request, '
+                'then start the video again.')
     # A plan or voice question makes no render and must not consume this budget.
     _over = dep(ctx, "_render_budget_exhausted", _t._render_budget_exhausted)(
         state, "generate_video",
@@ -3001,7 +3020,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         graphic_note = _check_added_graphics(ctx, path, images[0], ctx.video_request or description)
         ctx.video_action_note = ' '.join(note for note in (ctx.video_action_note, graphic_note) if note)
     audio_removed = False
-    if video_mod.explicit_silence(ctx, ctx.video_request):
+    if silence:
         muted = video_mod.mute_video(path)
         if not muted:
             state["video_status"] = "error"

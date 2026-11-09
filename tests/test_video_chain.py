@@ -142,6 +142,7 @@ class _Rig:
             "herrgott_on": lambda: True,
             "motion_context_on": lambda: False,
             "bridge_part": lambda ctx, f, part: "BRIDGE. " + part,
+            "explicit_silence": lambda ctx, request: False,
             "bridge_script": lambda ctx, ps: ps,
             "mark_inserts": lambda ctx, ps: ps,
             "prepare_prompt": prep,

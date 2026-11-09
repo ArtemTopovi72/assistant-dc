@@ -5,6 +5,7 @@ import sys
 import tempfile
 import threading
 import time
+import types
 import pytest
 
 os.environ.setdefault("F5_TEST_RUN", "1")
@@ -35,6 +36,7 @@ class FakeCtx:
         self.total_user_turns = 0
         self.tts_disabled = True
         self.memory_lock = threading.Lock()
+        self.deps = types.SimpleNamespace(video_silence_check=lambda *a: False)
 
     def load_memory(self, *a, **k):
         pass
@@ -301,6 +303,86 @@ def test_approved_video_plan_restores_its_own_original_clip(tmp_path, voice_choi
     end = time.monotonic() + 15
     while time.monotonic() < end and not seen: time.sleep(0.1)
     assert seen == [(str(tail), str(source), voice_choice or 'default', str(seed) if has_seed else None, [8.0])]
+
+
+@pytest.mark.parametrize('pending', ['plan', 'voice', 'continuation'])
+def test_audio_uncertainty_does_not_consume_pending_video_state(tmp_path, pending):
+    import uuid
+    from test_tg_incoming_durability import make_bot
+    bot = make_bot(tmp_path)
+    sent = threading.Event()
+    shared = FakeCtx()
+    shared.deps.video_silence_check = lambda *a: None
+    bot._get_ctx = lambda: shared
+    bot._get_graph = lambda: object()
+    bot._get_base_state = lambda: {'messages': []}
+    bot.graph_builder = lambda ctx: (_ for _ in ()).throw(AssertionError('must not invoke graph'))
+    bot._backend = T.InMemoryBackend()
+    bot._send_text = lambda *a, **k: sent.set()
+    bot._running = True
+    sess = bot._get_session(101)
+    text = 'continue this video please' if pending == 'continuation' else 'Оживи фото'
+    if pending == 'plan':
+        sess.video_plan_request = text
+        sess.video_plan = [{'text': 'Герой идёт', 'sec': 8.0}]
+        sess.video_plan_ok = ['Герой идёт']
+        sess.voice_choice, sess.anim_voices = 'own', ['voice.wav']
+    elif pending == 'voice':
+        sess.voice_pending, sess.voice_choice = text, 'own'
+        sess.anim_voices, sess.voice_pending_images = ['voice.wav'], ['image.png']
+    else:
+        tail, source = tmp_path / 'tail.mp4', tmp_path / 'source.mp4'
+        tail.write_bytes(b'tail'); source.write_bytes(b'source')
+        sess.continue_tail, sess.continue_src = str(tail), str(source)
+    bot._store.put(sess)
+    task = T._Task(task_id=str(uuid.uuid4()), chat_id=101, user_text=text, enqueue_ts=time.time())
+    with bot._task_lock: bot._pending_journal[task.task_id] = task
+    threading.Thread(target=bot._consumer_loop, daemon=True).start()
+    bot._backend.push(task)
+    assert sent.wait(15)
+    stored = bot._store.get(101)
+    if pending == 'plan':
+        assert stored.video_plan_ok == ['Герой идёт'] and stored.video_plan_request == text
+        assert stored.voice_choice == 'own' and stored.anim_voices == ['voice.wav']
+    elif pending == 'voice':
+        assert stored.voice_pending == text and stored.voice_choice == 'own'
+        assert stored.anim_voices == ['voice.wav'] and stored.voice_pending_images == ['image.png']
+    else:
+        assert stored.continue_tail == str(tail) and stored.continue_src == str(source)
+
+
+def test_audio_precheck_does_not_consume_a_newer_plan(tmp_path):
+    import uuid
+    from test_tg_incoming_durability import make_bot
+    bot = make_bot(tmp_path)
+    sent = threading.Event()
+    shared = FakeCtx()
+    sess = bot._get_session(101)
+    def decide(*args):
+        sess.video_plan_request = 'Новый запрос'
+        sess.video_plan = [{'text': 'Новый план', 'sec': 6}]
+        sess.video_plan_ok = ['Новый план']
+        bot._store.put(sess)
+        return False
+    shared.deps.video_silence_check = decide
+    bot._get_ctx = lambda: shared
+    bot._get_graph = lambda: object()
+    bot._get_base_state = lambda: {'messages': []}
+    bot.graph_builder = lambda ctx: (_ for _ in ()).throw(AssertionError('must not invoke graph'))
+    bot._backend = T.InMemoryBackend()
+    bot._send_text = lambda *a, **k: sent.set()
+    bot._running = True
+    sess.video_plan_request = 'Оживи фото'
+    sess.video_plan = [{'text': 'Старый план', 'sec': 5}]
+    sess.video_plan_ok = ['Старый план']
+    bot._store.put(sess)
+    task = T._Task(task_id=str(uuid.uuid4()), chat_id=101, user_text='Оживи фото', enqueue_ts=time.time())
+    with bot._task_lock: bot._pending_journal[task.task_id] = task
+    threading.Thread(target=bot._consumer_loop, daemon=True).start()
+    bot._backend.push(task)
+    assert sent.wait(15)
+    assert bot._store.get(101).video_plan_request == 'Новый запрос'
+    assert bot._store.get(101).video_plan_ok == ['Новый план']
 
 
 def test_video_plan_persists_and_clears_its_continuation(tmp_path):

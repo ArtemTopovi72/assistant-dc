@@ -758,6 +758,7 @@ class TaskRunnerMixin:
         # see each other's picture or cancel each other's request.
         _cancel = threading.Event()
         ctx = tg_bot._scoped_ctx(_shared, cancel_event=_cancel)
+        ctx.video_silence_prechecked = None
         import intent
         intent.current_turn().cancel_context = ctx
         ctx.media_transcript = getattr(task, "media_transcript", "")
@@ -1211,6 +1212,37 @@ class TaskRunnerMixin:
                             request == _tg_links.without_link_notes(sess.voice_pending))
         plan_replay = bool(sess.video_plan_ok and
                            request == _tg_links.without_link_notes(sess.video_plan_request))
+        preset = task.user_text.startswith(("[animate]", "animate this photo"))
+        pending_continuation = bool(getattr(sess, 'continue_tail', '') and task.user_text.startswith(
+            ('animate this photo', 'continue this video')))
+        if plan_replay or voice_replay or (preset and (sess.voice_choice or sess.anim_voices)) or pending_continuation:
+            # Decide before consuming a plan, voice, or continuation; a failed read must not erase them.
+            fields = ('video_plan', 'video_plan_request', 'video_plan_ok', 'video_plan_image', 'video_plan_images',
+                      'video_plan_continuation', 'video_plan_requested_seconds', 'voice_choice', 'anim_voices',
+                      'voice_pending', 'voice_pending_images', 'continue_tail', 'continue_src', 'continue_people')
+            before = {name: _copy_mod.deepcopy(getattr(sess, name)) for name in fields}
+            from prompt_guard import user_words
+            import video as _video_mod
+            sound_request = user_words(task.user_text).strip()
+            if plan_replay:
+                sound_request += ('\nApproved video plan (takes precedence for explicit changes):\n'
+                                  + '\n'.join(str(p) for p in sess.video_plan_ok))
+            verdict = dep(ctx, 'video_silence_check', _video_mod.explicit_silence)(ctx, sound_request)
+            if self._is_cancelled(task.task_id) or self._stop_requested_after(task):
+                return
+            if verdict is None:
+                message = ('Не удалось определить настройки звука. Укажи в плане или новом запросе, нужны ли речь '
+                           'и фон, затем запусти видео снова.' if lang == 'ru' else
+                           'Could not determine the audio setting. Specify whether speech and background sound '
+                           'are wanted in the plan or a new request, then start the video again.')
+                self._send_text(chat_id, message)
+                return
+            if any(getattr(sess, name) != value for name, value in before.items()):
+                message = ('План или настройки голоса изменились. Запусти видео ещё раз.' if lang == 'ru'
+                           else 'The plan or voice settings changed. Please start the video again.')
+                self._send_text(chat_id, message)
+                return
+            ctx.video_silence_prechecked = (sound_request, verdict)
         plan_continuation = dict(getattr(sess, 'video_plan_continuation', {}) or {}) if plan_replay else {}
         if plan_continuation and (not os.path.isfile(plan_continuation.get('tail', ''))
                                   or not os.path.isfile(plan_continuation.get('src', ''))):
@@ -1227,7 +1259,6 @@ class TaskRunnerMixin:
             primary = tg_bot._image_by_id(sess, sess.video_plan_image if plan_replay else sess.turn_image)
             replay_images = [((primary or {}).get('path') or ''), *(sess.turn_album or [])]
         replay_images = [p for p in dict.fromkeys(replay_images) if p and os.path.exists(p)]
-        preset = task.user_text.startswith(("[animate]", "animate this photo"))
         ctx.voice_choice = (getattr(sess, "voice_choice", "") or "") if voice_replay or plan_replay or preset else ""
         if ctx.voice_choice or (getattr(sess, "anim_voices", None) and
                                 task.user_text.startswith(("[animate]", "animate this photo"))):
