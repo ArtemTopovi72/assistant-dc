@@ -25,6 +25,7 @@ model stack into every import of the tool table.
 """
 import contextlib
 import functools
+import hashlib
 import logging
 import math
 import os
@@ -42,6 +43,11 @@ from tool_context import _edit_source, _remember, _set_current_image
 from seams import choice, complaint_kinds, dep, module, intent_read, text_model, vision_model, yes_no
 
 logger = logging.getLogger("assistant.tools")
+
+
+def _file_hash(path):
+    with open(path, "rb") as source:
+        return hashlib.file_digest(source, "sha256").digest()
 
 
 def _typography_only(ctx, state):
@@ -705,7 +711,7 @@ def _handle_transfer_image(ctx, state, args: dict) -> str:
     # own sweater -- twice the time, twice the damage.
     def _key(p):
         try:
-            return os.path.getsize(p), open(p, "rb").read(65536)
+            return _file_hash(p)
         except OSError:
             return p
     seen = {_key(target)}
@@ -1436,7 +1442,7 @@ def _current_image_paths(ctx, state) -> list:
             continue
         seen_paths.add(p)
         try:
-            key = (os.path.getsize(p), open(p, "rb").read(65536))
+            key = _file_hash(p)
         except OSError:
             continue
         if key in seen_content:

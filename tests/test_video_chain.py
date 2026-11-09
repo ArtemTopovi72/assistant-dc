@@ -115,6 +115,16 @@ class _Ctx:
     def memory_text(self): return ""
 
 
+def test_video_references_keep_distinct_files_with_the_same_prefix(tmp_path):
+    first, second, duplicate = (tmp_path / name for name in ('a.png', 'b.png', 'copy.png'))
+    prefix = b'header' * 11000
+    first.write_bytes(prefix + b'A')
+    second.write_bytes(prefix + b'B')
+    duplicate.write_bytes(first.read_bytes())
+    state = {'image_paths': [str(first), str(second), str(duplicate)]}
+    assert H._current_image_paths(_Ctx(), state) == [str(first), str(second)]
+
+
 def _old_join(*a):
     raise AssertionError("a chain is joined by the stitch node, not the old join")
 

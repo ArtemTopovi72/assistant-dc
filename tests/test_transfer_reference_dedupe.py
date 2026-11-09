@@ -10,6 +10,24 @@ os.environ.setdefault("F5_TEST_RUN", "1")
 import tool_image_handlers as H  # noqa: E402
 
 
+def test_transfer_keeps_distinct_reference_with_same_file_prefix(tmp_path):
+    target, reference = tmp_path / 'target.jpg', tmp_path / 'reference.jpg'
+    prefix = b'header' * 11000
+    target.write_bytes(prefix + b'A')
+    reference.write_bytes(prefix + b'B')
+    got = {}
+    def fake(ctx, target, refs, instr):
+        got['refs'] = [r.path for r in refs]
+        return None
+    class C:
+        deps = types.SimpleNamespace(plan_and_execute_transfer=fake)
+        reference_images = [str(reference), str(target)]
+        last_image_path = str(target)
+        def set_stage(self, *_): pass
+    H._handle_transfer_image(C(), {'image_path': str(target)}, {'instructions': 'transfer style'})
+    assert got['refs'] == [str(reference)]
+
+
 def test_transfer_drops_a_byte_copy_of_the_target_from_references(tmp_path, monkeypatch):
     """The _working_input_* copy of the person photo came back as a
     clothing reference -> two passes, the first re-dressing her in her own sweater."""
