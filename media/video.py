@@ -653,6 +653,9 @@ SPEECH_WORDS_PER_PART = int((frames_to_seconds(VIDEO_MAX_FRAMES_AUTO) - 1.0 - 1.
 
 def fit_canvas(width: int, height: int) -> tuple[int, int]:
     """A port of the node's adapt_canvas: 768 short edge, 1MP cap, /32 per axis."""
+    m = VIDEO_CANVAS_MULTIPLE
+    if VIDEO_MAX_PIXELS < m * m:
+        raise ValueError(f"VIDEO_MAX_PIXELS must be at least {m * m}")
     width = max(1, int(width or 1))
     height = max(1, int(height or 1))
     ratio = width / height
@@ -663,8 +666,15 @@ def fit_canvas(width: int, height: int) -> tuple[int, int]:
     if nom_w * nom_h > VIDEO_MAX_PIXELS:
         s = math.sqrt(VIDEO_MAX_PIXELS / (nom_w * nom_h))
         nom_w, nom_h = nom_w * s, nom_h * s
-    m = VIDEO_CANVAS_MULTIPLE
-    return (max(m, round(nom_w / m) * m), max(m, round(nom_h / m) * m))
+    # ComfyUI's H3 inputs cap either axis at MAX_RESOLUTION (16384).
+    w = min(16384, max(m, round(nom_w / m) * m))
+    h = min(16384, max(m, round(nom_h / m) * m))
+    if w * h > VIDEO_MAX_PIXELS:
+        if w >= h:
+            w = max(m, (VIDEO_MAX_PIXELS // h // m) * m)
+        else:
+            h = max(m, (VIDEO_MAX_PIXELS // w // m) * m)
+    return w, h
 
 
 # Named shapes for callers that think in aspect ratios rather than pixels.

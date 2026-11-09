@@ -113,6 +113,23 @@ check("an oversized source is scaled down, not passed through",
       w * h <= C.VIDEO_MAX_PIXELS and w % 32 == 0, (w, h))
 check("a degenerate 0x0 source does not crash or divide by zero",
       V.fit_canvas(0, 0)[0] > 0)
+for size in ((20, 83), (83, 20), (1, 10**9), (10**9, 1)):
+    w, h = V.fit_canvas(*size)
+    check(f"extreme source {size} stays on grid and under cap",
+          w % 32 == h % 32 == 0 and max(w, h) <= 16384
+          and w * h <= C.VIDEO_MAX_PIXELS, (w, h))
+_old_pixel_cap = V.VIDEO_MAX_PIXELS
+try:
+    V.VIDEO_MAX_PIXELS = 1000
+    try:
+        V.fit_canvas(20, 83)
+        check("an impossible pixel cap is rejected", False)
+    except ValueError:
+        check("an impossible pixel cap is rejected", True)
+    V.VIDEO_MAX_PIXELS = 1024
+    check("the smallest valid pixel cap is respected", V.fit_canvas(20, 83) == (32, 32))
+finally:
+    V.VIDEO_MAX_PIXELS = _old_pixel_cap
 
 print()
 print("=" * 70)
