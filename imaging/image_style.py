@@ -315,10 +315,7 @@ def restyle(ctx, image_path: str, instructions: str, *, seed=None, timeout=None)
     logger.info("style: target=%s instr=%r", target, instr[:160])
     if target == "drawn":
         # Klein turned anime/oil/3D into photo filters; Fibo draws the style (tmp/fibo/style, 2026-10-24)
-        if (image_path and os.path.isfile(image_path) and re.search(
-                r'(?:preserv\w*|keep|retain|сохран\w*|остав\w*).{0,180}'
-                r'(?:background|lighting|palette|colou?rs?|фон\w*|освещен\w*|цвет\w*|палитр\w*)',
-                instructions, re.I | re.S)):
+        if image_path and os.path.isfile(image_path):
             instr = fibo.structured_edit_prompt(ctx, image_path, instr)
         out = dep(ctx, "fibo_edit", fibo.edit)(ctx, [image_path], instr.replace("picture 1", "<image_1>"), **kw)
         if out:

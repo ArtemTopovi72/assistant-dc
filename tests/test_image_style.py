@@ -50,6 +50,17 @@ def test_preservation_restyle_passes_source_and_does_not_force_seed(monkeypatch,
     assert '<image_1>' in seen['instruction']
 
 
+def test_plain_restyle_grounds_scene_without_explicit_preserve(monkeypatch, tmp_path):
+    source = tmp_path / 'photo.png'
+    source.write_bytes(b'test image')
+    seen = {}
+    monkeypatch.setattr(IS, 'build', lambda *a: ('Turn picture 1 into anime', 'drawn', 0.0))
+    monkeypatch.setattr(IS.fibo, 'structured_edit_prompt', lambda ctx, path, text: seen.update(source=path) or text)
+    ctx = deps_ctx(fibo_edit=lambda ctx, images, instr, **kw: 'out.png')
+    assert IS.restyle(ctx, str(source), 'Make anime') == 'out.png'
+    assert seen['source'] == str(source)
+
+
 def _run(monkeypatch, instructions, *, expand=None, who="a man with a black mustache"):
     seen = {}
 
