@@ -154,12 +154,7 @@ def test_mixed_album_video_failure_keeps_photo_and_reports_problem(tmp_path, fai
              'caption': 'Compare the photo and video.'}
     photo = {'file_id': 'photo', 'caption': ''}
     bot._resolve_and_push(chat, [{'type': 'mixed_album', 'items': [video, photo]}])
-    if failure == 'long':
-        assert len(pushed) == 1 and pushed[0].image_is_photo
-        assert open(pushed[0].image_path, 'rb').read() == b'photo bytes'
-        assert 'Compare the photo and video.' in user_words(pushed[0].user_text)
-    else:
-        assert not pushed
+    assert not pushed
     assert any('видео' in text.lower() or 'video' in text.lower() for text in sent)
 
 

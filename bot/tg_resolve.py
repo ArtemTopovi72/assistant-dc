@@ -1385,6 +1385,11 @@ class ResolveMixin:
                     import tg_video as _tv
                     if _tv.is_long(sess, item.get("seconds") or 0):
                         if item.get('_album_material'):
+                            if _photo_upload:
+                                self._send_text(chat_id, 'Видео слишком длинное для общего анализа. Пришли фото вместе с коротким фрагментом видео.'
+                                                if lang == 'ru' else
+                                                'The video is too long for combined analysis. Please resend the photo with a shorter clip.')
+                                return
                             self._send_text(chat_id, 'Одно видео слишком длинное для общего анализа; пришли короткий фрагмент отдельно.'
                                             if lang == 'ru' else
                                             'One video is too long for this combined analysis; please send a shorter clip separately.')
