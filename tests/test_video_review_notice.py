@@ -45,6 +45,17 @@ def test_video_review_notice_does_not_report_uncertain_findings_as_facts():
     assert 'possible differences' in _video_review_notice('Done!', 'uncertain', 'Animate the balloon')
 
 
+def test_failed_video_review_is_not_reported_as_a_detected_problem():
+    answer = _video_review_notice('Готово!', 'The video could not be checked against the request.',
+                                  'Оживи фото')
+    assert 'Не удалось автоматически проверить' in answer
+    assert 'заметила возможные отличия' not in answer
+    both = _video_review_notice('Готово!',
+        'The video could not be checked against the request. The background may have changed unexpectedly.',
+        'Оживи фото')
+    assert 'Не удалось автоматически проверить' in both and 'возможные отличия' in both
+
+
 def test_inset_review_identifies_the_possible_problem():
     answer = _video_review_notice('Готово!', 'A person may cross the boundary of an inset without being asked.',
                                   'Продолжи видео')

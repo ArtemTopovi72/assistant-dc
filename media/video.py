@@ -151,9 +151,16 @@ _QUOTED = re.compile(r'''«([^»]*)»|"([^"]*)"|“([^”]*)”|(?<!\w)'([^'\n]+
 _KIND_SYS = (
     "Each numbered line is one sentence of a video shot script. Sort each sentence:\n"
     "\"look\" -- how the whole clip looks or sounds; nobody in the story does anything in "
-    "it: sound or music (\"Sound: wind.\", \"Soundscape: waves\"), light, colour, style, mood, "
+    "it: sound or music (\"Sound: wind.\", \"Soundscape: waves\", "
+    "\"The audio is his calm voice with subtle ambient studio sounds.\"), light, colour, style, mood, "
     "quality (\"Quality: 4K\"), \"The camera is handheld\", weather or scenery in the background "
-    "(\"Rain falls outside the window\").\n"
+    "(\"Rain falls outside the window\"). An already silent, still listener is ongoing "
+    "scene context, not a separate action: 'The listener stays silent, looking at the speaker' "
+    "and 'The person is silent and looks towards them' are look. An unchanged expression or "
+    "lip movement already synchronized to speech is context, not a separate shot. "
+    "A person becoming silent, stopping or changing "
+    "posture is an action when the change itself is described. Smiling, nodding, "
+    "blinking or turning are actions even while a listener stays quiet.\n"
     "\"camera\" -- only what the CAMERA does or how the clip opens: \"The camera pans up to "
     "the man\", \"The camera follows the dog closely (tracking shot)\", \"The scene begins with "
     "a close-up of a letter\", \"The video continues from the first frame\".\n"
@@ -165,6 +172,9 @@ _BEAT_SYS = (
     "says «…»\" is 3; \"затем он открывает дверь и выходит\" is 2; one action is 1).\n"
     "hold -- true when an action lasts or repeats for a while (for several seconds, for some "
     "time, какое-то время, keeps barking).\n"
+    "Speaking with synchronized lips or facial movement is one action, not extra beats; "
+    "a person already sitting and a stationary background are not additional actions. "
+    "Do not mark speech as a hold merely because it continues over the line.\n"
     "camera, rest -- only when the sentence joins a camera move to a different subject's "
     "action with as / while / when (\"the camera pans up as the kite soars high\"): the camera "
     "move and the action as two sentences; otherwise both \"\".\n"
@@ -306,7 +316,10 @@ def estimate_seconds(description: str, capped: bool = True, reads=None) -> float
         text = text.replace(rule, "")
     # Sound/light/camera lines ride every part (split_script) and take no screen time;
     # counted as beats, five of them pushed every part of a 5-part plan to the 10.1 s cap.
-    sents = [s.strip() for s in _SENT.split(text) if s and s.strip()]
+    chunks = re.split(r'''(«[^»]*»|"[^"]*"|“[^”]*”|(?<!\w)'[^'\n]+'(?!\w))''', text)
+    for i in range(0, len(chunks), 2):
+        chunks[i] = chunks[i].replace(';', ',')
+    sents = [s.strip() for s in _SENT.split(''.join(chunks)) if s and s.strip()]
     acts = [(s, r) for s, r in zip(sents, read_sentences(sents, reads)) if r["kind"] == "action"]
     spoken = []
     for s, row in acts:
@@ -358,13 +371,174 @@ def _spoken_words(text: str) -> int:
     return sum(len(next(g for g in m.groups() if g is not None).split()) for m in _QUOTED.finditer(text))
 
 
-def fit_speech(parts: list) -> list:
+def count_speakers(ctx, request: str, description: str) -> int:
+    """Count distinct speaking people, excluding written labels."""
+    from utils import safe_json_from_llm
+    try:
+        reply = text_model(ctx)(ctx, 'Count the distinct people who speak aloud in this video. '
+                                'Multiple lines from the same person count once. Writing on signs, '
+                                'clothes and screens is not speech: a sign that says "OPEN" '
+                                'beside a silently waving person has zero speakers. Return only JSON '
+                                '{"speakers": 1}; use 0 when nobody speaks or the count is unclear.',
+                                f'USER: {request}\nSCRIPT: {description}', temperature=0, max_tokens=40) or ''
+        count = (safe_json_from_llm(reply, ['speakers']) or {}).get('speakers')
+        return min(count, MAX_REF_AUDIOS) if isinstance(count, int) and not isinstance(count, bool) and count > 0 else 0
+    except Exception:
+        logger.warning('video: could not count speakers', exc_info=True)
+        return 0
+
+
+def ground_spoken_script(ctx, request: str, script: str) -> str:
+    """Remove invented changes only when a second read confirms requested details survive."""
+    guide = ('Edit the VIDEO SCRIPT to remove only added actions, music, camera moves or lighting '
+             'changes that the USER did not request. Keep every explicitly requested action, its '
+             'order, all characters, the existing scene and every quoted line exactly as written. '
+             'Speaking includes lip motion. If the user requests jazz, keep jazz; if they request '
+             'a smile, keep the smile; if they ask for rain, keep the rain. Do not add actions. '
+             'Keep static scene details and all signs. Return only the edited script.')
+    verify = ('Use the USER request as the sole authority. Compare it to EDITED. Are all the '
+              'persons, actions, words, sounds and their order explicitly requested by the USER '
+              'present and correctly assigned in EDITED? Details present only in ORIGINAL are '
+              'NOT requirements and may be removed, including unrequested ambience, expression '
+              'or music. Answer YES if all USER requirements remain; NO if any are missing or '
+              'changed. Reply YES or NO only.')
+    try:
+        model = text_model(ctx)
+        candidate = (model(ctx, guide, f'USER: {request}\nVIDEO SCRIPT: {script}',
+                           temperature=0, max_tokens=900) or '').strip()
+        missing = _lost_lines(script, candidate)
+        extra = _lost_lines(candidate, script)
+        if not candidate or missing or extra:
+            logger.info('video: grounded script rejected (empty=%s, missing quotes=%d, extra quotes=%d)',
+                        not bool(candidate), len(missing), len(extra))
+            return ''
+        verdict = (model(ctx, verify, f'USER: {request}\nORIGINAL: {script}\nEDITED: {candidate}',
+                         temperature=0, max_tokens=20) or '').strip().upper()
+        if verdict != 'YES':
+            logger.info('video: grounded script verification returned %r', verdict[:80])
+        return candidate if verdict == 'YES' else ''
+    except Exception:
+        logger.warning('video: could not check requested actions', exc_info=True)
+        return ''
+
+
+def replace_translated_speech(script: str, speech: str, reads=None, ctx=None) -> str:
+    """Replace only a confidently identified spoken quote, never lettering."""
+    matches = list(_QUOTED.finditer(script))
+    if not matches or not speech:
+        return ''
+    ids = iter(range(len(matches)))
+    masked = _QUOTED.sub(lambda m: f'"VIDEOTEXT{next(ids)}"', script)
+    spoken = read_sentences([masked], reads)[0].get('spoken')
+    if (not isinstance(spoken, list) or len(spoken) != 1) and ctx is not None:
+        from utils import safe_json_from_llm
+        try:
+            answer = text_model(ctx)(ctx, 'Identify the ONE quoted VIDEOTEXT tag spoken aloud by a person. '
+                                     'Exclude writing on signs, clothes or screens. If there is no single '
+                                     'clear spoken tag, return an empty string. Return only JSON '
+                                     '{"spoken":"VIDEOTEXT0"} or {"spoken":""}.',
+                                     masked, temperature=0, max_tokens=80) or ''
+            tag = (safe_json_from_llm(answer, ['spoken']) or {}).get('spoken')
+            spoken = [tag] if isinstance(tag, str) and tag else []
+        except Exception:
+            logger.warning('video: could not identify spoken quote', exc_info=True)
+            return ''
+    if not isinstance(spoken, list) or len(spoken) != 1:
+        return ''
+    tag = re.fullmatch(r'VIDEOTEXT(\d+)', spoken[0])
+    if not tag or int(tag.group(1)) >= len(matches):
+        return ''
+    match = matches[int(tag.group(1))]
+    return script[:match.start()] + match.group(0)[0] + speech + match.group(0)[-1] + script[match.end():]
+
+
+def dictated_speaker(ctx, script: str, said: str) -> str:
+    """Select only a named, visible speaker supported by script and user request."""
+    from utils import safe_json_from_llm
+    select = ('List every DISTINCT visible person who actually speaks quoted dialogue. '
+              'Copy each identifier exactly from the script. Exclude silent people, '
+              'narrators and off-screen voices. Return JSON {"speakers": [...]}.')
+    try:
+        model = text_model(ctx)
+        raw = model(ctx, select, script, temperature=0, max_tokens=200) or ''
+        candidates = (safe_json_from_llm(raw, ['speakers']) or {}).get('speakers')
+        if not isinstance(candidates, list) or len(candidates) != 1 or not isinstance(candidates[0], str):
+            return ''
+        speaker = candidates[0].strip()
+        if not speaker or len(speaker) > 120 or speaker.casefold() not in script.casefold():
+            return ''
+        judge = ('Answer YES only if exactly one visible person says ALL quoted speech and '
+                 'the candidate identifies that person unambiguously. Answer NO for multiple '
+                 'speakers, a group, narrator, off-screen speech or uncertainty. Only YES or NO.')
+        if (model(ctx, judge, f'Script: {script}\nCandidate: {speaker}', temperature=0, max_tokens=20) or '').strip().upper() != 'YES':
+            return ''
+        agree = ('Answer YES only if the user explicitly assigns the quoted words in the '
+                 'proposed script to this same visible speaker. The user may have other '
+                 'speakers for other lines. If these words are assigned to someone else, '
+                 'to an off-screen narrator, or the speaker is unspecified, answer NO. Only YES or NO.')
+        user = f'USER REQUEST: {said}\nPROPOSED SCRIPT: {script}\nSPEAKER: {speaker}'
+        if (model(ctx, agree, user, temperature=0, max_tokens=20) or '').strip().upper() != 'YES':
+            return ''
+        return speaker
+    except Exception:
+        logger.warning('video: could not verify dictated speaker', exc_info=True)
+        return ''
+
+
+def split_dictated_speech(sentence: str, speech: str, speaker: str = '', reads=None) -> list:
+    """Split a self-contained speaker sentence without replacing its speaker."""
+    quotes = list(_QUOTED.finditer(sentence))
+    matches = [m for m in quotes if _flat_line(next(g for g in m.groups() if g is not None)) == _flat_line(speech)]
+    if len(matches) != 1 or not speech or len(speech.split()) <= SPEECH_WORDS_PER_PART:
+        return [sentence]
+    match = matches[0]
+    prefix, suffix = sentence[:match.start()], sentence[match.end():]
+    if speaker and speaker.casefold() not in prefix.casefold():
+        return [sentence]
+    words = next(g for g in match.groups() if g is not None).split()
+    sample = ' '.join(words[:8])
+    trial = prefix + match.group(0)[0] + sample + match.group(0)[-1] + suffix
+    overhead = estimate_seconds(trial, capped=False, reads=reads) - len(sample.split()) / 2.3
+    cap = frames_to_seconds(VIDEO_MAX_FRAMES_AUTO)
+    first_cap = max(1, min(SPEECH_WORDS_PER_PART, math.floor((cap - overhead) * 2.3)))
+    later_cap = SPEECH_WORDS_PER_PART
+    while first_cap > 0 and later_cap > 0:
+        count = 1 + math.ceil(max(0, len(words) - first_cap) / later_cap)
+        first_width = min(first_cap, math.ceil(len(words) / count))
+        base, extra = divmod(len(words) - first_width, count - 1)
+        chunks, widths, i = [], [], 0
+        for part in range(count):
+            width = first_width if part == 0 else base + (part - 1 < extra)
+            intro = prefix if not speaker or i == 0 else speaker + ' says: '
+            chunks.append(intro + match.group(0)[0] + ' '.join(words[i:i + width]) + match.group(0)[-1] + '.')
+            widths.append(width)
+            i += width
+        chunks[-1] = chunks[-1][:-1] + suffix
+        oversized = next((n for n, chunk in enumerate(chunks)
+                          if estimate_seconds(chunk, capped=False, reads=reads) > cap), None)
+        if oversized is None:
+            return chunks
+        if oversized == 0:
+            first_cap = min(first_cap, widths[0] - 1)
+        else:
+            later_cap = min(later_cap, widths[oversized] - 1)
+    return [sentence]
+
+
+def fit_speech(parts: list, speech: str = "", speaker: str = "") -> list:
     """Every part carries the speech one clip can say. A part whose quotes outlast the
     longest clip lost its opening lines (two quotes, ~44 words, rode one 10 s part and
     the voice began mid-speech: live 2026-10-19), whoever made the part. Cut at sentence
     ends; the part's own action stays with its first piece."""
     out = []
     for p in parts:
+        split = split_dictated_speech(p, speech, speaker)
+        if len(split) > 1:
+            out.extend(split)
+            continue
+        if any(len(line.split()) > SPEECH_WORDS_PER_PART for line in quoted_lines(p)):
+            out.append(p)
+            continue
         if _spoken_words(p) <= SPEECH_WORDS_PER_PART:
             out.append(p)
             continue
@@ -373,7 +547,7 @@ def fit_speech(parts: list) -> list:
         def _hide(m):
             quotes.append(m.group(0))
             return f"\x00{len(quotes) - 1}\x00"
-        text = _QUOTED.sub(_hide, _QUOTED.sub(lambda m: _cut_long_quote(m, SPEECH_WORDS_PER_PART / 2.3), p))
+        text = _QUOTED.sub(_hide, p)
         back = lambda t: re.sub(r"\x00(\d+)\x00", lambda m: quotes[int(m.group(1))], t)
         cur = ""
         for piece in (x for x in _SENT.split(text) if x and x.strip()):
@@ -386,28 +560,6 @@ def fit_speech(parts: list) -> list:
         if cur:
             out.append(back(cur))
     return out
-
-
-def _cut_long_quote(m, top: float) -> str:
-    """One quote that alone outlasts a part, as consecutive quotes of about a part's
-    speech each, cut at sentence ends and each its own sentence of the script
-    («He says: "A." He goes on: "B."»), so the split can make a part of every one."""
-    inner = next(g for g in m.groups() if g is not None)
-    open_q, close_q = m.group(0)[0], m.group(0)[-1]
-    sents = [x.strip() for x in _SENT.split(inner) if x and x.strip()]
-    # A part is rendered at ~50 s per clip second: chunks fill the longest clip the
-    # model makes (85 words in 10 parts was a 66-minute plan, owner 2026-10-19).
-    budget = SPEECH_WORDS_PER_PART
-    if len(inner.split()) <= int(top * 2.3) or len(sents) < 2:
-        return m.group(0)
-    chunks = []
-    for x in sents:
-        if chunks and len((chunks[-1] + " " + x).split()) <= budget:
-            chunks[-1] += " " + x
-        else:
-            chunks.append(x)
-    return " ".join(f"{open_q}{c}{close_q}." if i == 0 else f"He goes on: {open_q}{c}{close_q}."
-                    for i, c in enumerate(chunks))
 
 
 def split_script(description: str, max_seconds: float = 0.0, reads=None) -> list:
@@ -426,9 +578,8 @@ def split_script(description: str, max_seconds: float = 0.0, reads=None) -> list
     def _hide(m):
         quotes.append(m.group(0))
         return f"\x00{len(quotes) - 1}\x00"
-    # A monologue longer than a part is cut at its own sentence ends: 85 words of speech
-    # rode one 10 s part, and the clip said the first two sentences (live 2026-10-19).
-    hidden = _QUOTED.sub(_hide, _QUOTED.sub(lambda m: _cut_long_quote(m, top), text))
+    # Leave long quotes intact until their speaker can be verified.
+    hidden = _QUOTED.sub(_hide, text)
     restore = lambda t: re.sub(r"\x00(\d+)\x00", lambda m: quotes[int(m.group(1))], t)
     raw = [x for x in _SENT.split(hidden) if x and x.strip()]
     pieces = []
@@ -1423,6 +1574,11 @@ _STYLE_LOCK_SUFFIX = (
     " Consistency applies to WHO they are -- identity, clothing, colors, style -- "
     "the subjects move or stay still as requested above.")
 
+_CONTINUITY_LOCK_SUFFIX = (
+    " Keep the visual style and composition of the preceding frames, except for changes "
+    "explicitly requested. A person shown inside an inset or screen stays inside that same "
+    "inset or screen unless the request says otherwise; do not create an inset if none exists.")
+
 
 def _asks_new_style(description: str, ctx=None) -> bool:
     """«оживи в стиле аниме»: the style lock would fight the request itself."""
@@ -1582,6 +1738,10 @@ def _made_up_lines(description: str, prompt: str) -> list:
 
 def _flat_line(t: str) -> str:
     return re.sub(r"[\W_]+", " ", (t or "").lower().replace("́", "").replace("ё", "е")).strip()
+
+
+def _literal_line(t: str) -> str:
+    return ' '.join((t or '').casefold().split())
 
 
 _SAYS = r"(?:,?\s*(?:and\s+|then\s+)?(?:says?|saying|shouts?|whispers?|mutters?|exclaims?)\s*:?\s*)?"
@@ -2047,13 +2207,17 @@ def dictated_speech(said: str, description: str, ctx=None) -> str:
     flat = _flat_line(out)
     if len(flat.split()) < 3 or flat not in _flat_line(said) or flat in _flat_line(description):
         return ""
+    for line in quoted_lines(said):
+        if _flat_line(line) == flat:
+            return line
     return out
 
 
 def lost_sentences(speech: str, parts: Sequence[str]) -> list:
     """The sentences of `speech` that no part says, word for word."""
     have = _flat_line(" ".join(parts))
-    return [x for x in re.split(r"(?<=[.!?…])\s+", speech or "") if _flat_line(x) and _flat_line(x) not in have]
+    quoted = _flat_line(" ".join(line for part in parts for line in quoted_lines(part)))
+    return [x for x in re.split(r"(?<=[.!?…])\s+", speech or "") if _flat_line(x) and _flat_line(x) not in have and _flat_line(x) not in quoted]
 
 
 def speech_is_users(description: str, said: str) -> bool:
@@ -2124,7 +2288,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             ("COMPOSITION -- Preserve the spatial relationship of all visible layers in "
              "<Picture 1>. If a person appears inside an inset or screen, keep them inside "
              "that same inset; do not place them physically in its surrounding background. "
-             "If no inset exists, do not invent one.\n" if images and n_videos else "") +
+             "If no inset exists, do not invent one.\n" if images else "") +
             "ACTION RULES -- ONE action arc per shot: the "
             "subject starts one action and it develops; do not invent an ending "
             "or a new event unless the user asked for it -- do not stack several "
@@ -2256,24 +2420,50 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
     if not out or not all(f in out for f in need) or "non_diegetic_music" not in out:
         logger.info("Context-IR rewrite rejected (missing fields); keeping the plain prompt")
         return description
-    if ref and images and n_videos:
+    if images:
         def layout_check(candidate):
-            return (vision_model(ctx)(
+            verdict = (vision_model(ctx)(
                 ctx, image_paths=[('Source frame:', images[0])], temperature=0.0, max_tokens=2048,
                 user_text=('CHECK THE LAYOUT: compare the source frame with this proposed continuation. '
                            'Does it put a person or object in a different visual layer or location '
                            'than the source, without the request asking for that change? A person '
                            'inside a video inset is not physically in the surrounding scene. '
+                           'A prompt that places them in that surrounding scene is a MISMATCH '
+                           'even if it also says they remain in the inset. '
                            'Respect changes explicitly requested. Reply OK, UNKNOWN, or MISMATCH: '
                            'followed by the specific contradiction.\nRequest: ' + str(request)[:1200]
-                           + '\nProposed prompt: ' + candidate[:5000])) or '').strip()
+                           + '\nProposed prompt: ' + candidate[:5000])) or '').strip().lstrip('*` ')
+            if not re.match(r'^OK\b', verdict, re.I):
+                return verdict
+            source = (vision_model(ctx)(
+                ctx, image_paths=[('Source frame:', images[0])], temperature=0.0, max_tokens=200,
+                user_text=('SOURCE LAYERS: Is any person inside a separate video inset or screen? '
+                           'Answer YES or NO first, then briefly describe where each person is, '
+                           'including whether anyone is physically in the surrounding scene.')) or '').strip().lstrip('*` ')
+            if re.match(r'^NO\b', source, re.I):
+                return verdict
+            if not re.match(r'^YES\b', source, re.I):
+                return 'UNKNOWN: the source layers could not be checked.'
+            check = (text_model(ctx)(
+                ctx, 'Compare the source layout with the video prompt. Does the prompt place a '
+                     'person in a different visual layer without the user requesting it? A person '
+                     'in a video inset is not physically in the background. A prompt placing them '
+                     'in the background as well as on the inset is inconsistent. Reply YES if '
+                     'inconsistent, NO if consistent, UNKNOWN if unsure. Reply with one word only.',
+                'SOURCE: ' + source + '\nUSER REQUEST: ' + str(request)[:1200]
+                + '\nVIDEO PROMPT: ' + candidate[:5000], temperature=0.0, max_tokens=30) or '').strip().lstrip('*` ')
+            if re.match(r'^YES\b', check, re.I):
+                return 'MISMATCH: the prompt places a person in the wrong visual layer.'
+            if not re.match(r'^NO\b', check, re.I):
+                return 'UNKNOWN: the inset layout could not be checked.'
+            return verdict
         try:
             verdict = layout_check(out)
             if not re.match(r'^(?:OK|MISMATCH)\b', verdict, re.I):
                 logger.info('Context-IR layout could not be verified: %s', verdict[:100] or 'no answer')
-            if re.match(r'^MISMATCH\b', verdict, re.I):
-                logger.warning('Context-IR layout contradicts source: %s', verdict[:250])
-                again = clean(ask(user + '\n\nThe previous prompt contradicted the source layout: '
+            if not re.match(r'^OK\b', verdict, re.I):
+                logger.warning('Context-IR layout not confirmed: %s', verdict[:250])
+                again = clean(ask(user + '\n\nThe previous prompt may contradict the source layout: '
                                   + verdict[:500] + '\nCorrect this without adding actions or changing the request.'))
                 if again and all(f in again for f in need) and 'non_diegetic_music' in again \
                         and not _lost_lines(speech_source, again) \
@@ -2284,6 +2474,7 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                     return str(request) + ' Preserve the source composition and its separate visual layers.'
         except Exception:
             logger.warning('Context-IR layout check unavailable', exc_info=True)
+            return str(request) + ' Preserve the source composition and its separate visual layers.'
     lost = _lost_lines(speech_source, out)
     if lost:
         logger.info("Context-IR rewrite lost %d spoken line(s); put back", len(lost))
@@ -2489,6 +2680,8 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
         description = _with_lock(description, _HEAD_START_LOCK_SUFFIX if keyframe else _START_LOCK_SUFFIX)
         if not restyle:
             description = _with_lock(description, _STYLE_LOCK_SUFFIX)
+    if asked.startswith(CONTINUE_CTX_PREFIX):
+        description = _with_lock(description, _CONTINUITY_LOCK_SUFFIX)
     if eng.VIDEO_SPEECH_STRESS:
         description = eng.mark_speech_stress(ctx, description)
     # OCR on a tilted start frame can read SOL as S0Z, then the script writer
@@ -3019,6 +3212,27 @@ def with_scene(part: str, scene: str) -> str:
     return part + _SCENE_NOTE.format(scene[:700]) if scene else part
 
 
+def guard_chain_layout(ctx, first_shot: str, prompt: str, part: str) -> str:
+    """Do not send a continuation that contradicts the previous shot's visual layers."""
+    try:
+        verdict = (text_model(ctx)(
+            ctx, 'Compare the source layout with the video prompt. Does the prompt place a '
+                 'person in a different visual layer without the user requesting it? A person '
+                 'in a video inset is not physically in the background. A prompt placing them '
+                 'in the background as well as on the inset is inconsistent. Reply YES if '
+                 'inconsistent, NO if consistent, UNKNOWN if unsure. Reply with one word only.',
+            'SOURCE: ' + first_shot[:1500] + '\nUSER REQUEST: ' + str(getattr(ctx, 'video_request', '') or '')[:1200]
+            + '\nVIDEO PROMPT: ' + prompt[:5000], temperature=0.0, max_tokens=30) or '').strip().lstrip('*` ')
+        if re.match(r'^NO\b', verdict, re.I):
+            return prompt
+        logger.warning('video chain: continuation layout not confirmed: %s', verdict[:80] or 'no answer')
+    except Exception:
+        logger.warning('video chain: continuation layout check failed', exc_info=True)
+    fallback = _lock_framing_unless_requested(CONTINUE_CTX_PREFIX + part, ctx)
+    fallback = _with_lock(fallback, _CONTINUITY_LOCK_SUFFIX)
+    return mark_speech_stress(ctx, fallback) if _eng(ctx).VIDEO_SPEECH_STRESS else fallback
+
+
 def bridge_part(ctx, last_frame: str, part: str) -> str:
     """The next part of a long script with one bridging sentence in front, so it starts
     from `last_frame` (where the previous part really ended). A part that names a place or
@@ -3064,7 +3278,7 @@ def bridge_script(ctx, parts: list) -> list:
     (bridge_part) the vision model was loaded back onto the card between every two parts of
     a chain -- 18 GB beside H3, ~10 min a part, and the turn deadline saw an idle ComfyUI in
     the gap and abandoned the job. Any failure keeps the parts as they were."""
-    if len(parts) < 2:
+    if len(parts) < 2 or all(quoted_lines(p) for p in parts[1:]):
         return list(parts)
     guide = ("A video script is split into numbered parts rendered one after another; each part "
              "starts exactly where the previous one ended. For every part from 2 on: if its FIRST "
@@ -3091,6 +3305,8 @@ def bridge_script(ctx, parts: list) -> list:
     out = [parts[0]]
     for part, b in zip(parts[1:], got + [""] * len(parts)):
         b = str(b or "").strip()
+        if quoted_lines(part):
+            b = ""
         # «He pushes himself up and stands. Then he stands up from his seat»: told «never the
         # action itself», the bridge still was the part's own first action (live 2026-10-17)
         if b and yes_no(ctx)("A video script part: {text}\n\nIs this sentence the same movement as "
@@ -3202,7 +3418,9 @@ _JUDGE = ("You are a strict editor of a video script split into numbered parts; 
           "is BAD when: (a) it holds more than one distinct visible action or more than one "
           "camera move (small motions of one body flowing into each other -- stretches and "
           "yawns, turns and smiles -- are ONE action; talking is never a second action: a "
-          "head tilt while saying a line is ONE); (b) nothing in it moves or acts visibly (only effects, light, mood, camera) "
+          "head tilt while saying a line is ONE). Speaking is itself a visible action: a person "
+          "speaking must not be marked motionless or given an invented gesture. "
+          "(b) nothing in it moves or acts visibly (only effects, light, mood, camera) "
           "-- a thing that moves as the story says (a kite climbing high, a ball rolling, a door slamming) IS "
           "an action, and so is a face changing (a smile spreading, a frown, eyes widening), and so is a "
           "camera move that brings a NEW view the script asks for (the orbit ends on a close-up of the "
@@ -3222,6 +3440,31 @@ _JUDGE = ("You are a strict editor of a video script split into numbered parts; 
           "part's only problem is (a) and each of its actions is a step of the story, not filler. "
           'Reply as JSON only: {"bad": [{"part": 2, "why": "short reason", "drop": false, "split": false}]} '
           "-- an empty list when all are fine.")
+
+
+def _changes_camera_work(before: str, after: str) -> bool:
+    patterns = (r'\b(?:(?:camera|shot|view)\s+(?:cuts?|switches?)|'
+                r'(?:cuts?|switch(?:es)?|transitions?)\s+(?:to|back|away)|смен\w*\s+кадр\w*)\b',
+                r'\b(?:close[- ]up|крупн\w*\s+план\w*)\b',
+                r'\b(?:camera\s+zooms?|zooms?\s+(?:in|out))\b',
+                r'\b(?:camera\s+pans?|pans?\s+(?:left|right|up|down))\b',
+                r'\b(?:camera\s+tilts?|tilts?\s+(?:up|down))\b',
+                r'\bcamera\s+(?:\w+\s+){0,2}(?:moves?|tracks?|follows?|orbits?|dollies|cranes?|'
+                r'rotates?|pulls?|pushes?|zooms?|pans?|tilts?)\b')
+    old, new = _QUOTED.sub('', before), _QUOTED.sub('', after)
+    if any(len(re.findall(pattern, new, re.I)) != len(re.findall(pattern, old, re.I)) for pattern in patterns):
+        return True
+    camera_sentences = lambda text: [' '.join(s.casefold().split()) for s in _SENT.split(text)
+                                     if any(re.search(pattern, s, re.I) for pattern in patterns)]
+    if camera_sentences(old) != camera_sentences(new):
+        return True
+    for verb in ('pan', 'tilt', 'zoom'):
+        direction = rf'\b{verb}(?:s|ning|ting|ing)?\s+(?:slowly\s+)?(?:to\s+(?:the\s+)?)?(left|right|up|down|in|out)\b'
+        if {x.casefold() for x in re.findall(direction, new, re.I)} != {x.casefold() for x in re.findall(direction, old, re.I)}:
+            return True
+    target = r'\bcuts?\s+to\s+([^,.!?;]+)'
+    return ({x.casefold().strip() for x in re.findall(target, new, re.I)}
+            != {x.casefold().strip() for x in re.findall(target, old, re.I)})
 
 
 def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> list:
@@ -3248,7 +3491,8 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
         # cat sits», camera and sound only) was rewritten into a copy of the next part,
         # and the next then cut down to «the cat walks» (live 2026-10-17): drop it.
         drop = {int(b["part"]) for b in got if b.get("drop") is True
-                and not _QUOTED.search(parts[int(b["part"]) - 1])}
+                and not _QUOTED.search(parts[int(b["part"]) - 1])
+                and not _changes_camera_work(parts[int(b["part"]) - 1], '')}
         if drop and len(drop) < len(parts):
             logger.info("validate_script: parts %s dropped (%s)", sorted(drop),
                         "; ".join(bad[n] for n in sorted(drop))[:200])
@@ -3293,7 +3537,8 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
             # departure board» was dropped and the clip ended before the asked end (2026-10-21)
             room = max(2, (max_parts or 99) - len(parts) + 1)
             lines = lines[:room - 1] + [" ".join(lines[room - 1:])] if len(lines) > room else lines
-            if len(lines) >= 2 and not _lost_lines(parts[n - 1], " ".join(lines)):
+            if (len(lines) >= 2 and not _lost_lines(parts[n - 1], " ".join(lines))
+                    and not _changes_camera_work(parts[n - 1], " ".join(lines))):
                 logger.info("validate_script: part %d split into %d", n, len(lines))
                 parts[n - 1:n] = lines
                 grown = True
@@ -3309,7 +3554,8 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
                     "Rewrite ONE part of a video script so it is a single clear visible action by "
                     "the people or things in it, concrete and physical, in English. Fix the problem named. "
                     "Keep every quoted spoken line character for character, in its language. Add no "
-                    "sparks, glow, mood words or camera work the part does not ask for; a camera move "
+                    "gestures, reactions, sparks, glow, mood words or camera work the part does not ask for; "
+                    "speaking is a visible action on its own. A camera move "
                     "that is the part's own step stays. The part before and after it are given "
                     "only for continuity: do not repeat them. Never swap the part's action for one "
                     "it does not ask for: when it repeats the part before, keep only what is new in "
@@ -3324,7 +3570,8 @@ def validate_script(ctx, parts: list, rounds: int = 2, max_parts: int = 0) -> li
                 continue
             # nor gains one: the next part's «Не может быть…» was pulled in, and then said in
             # three parts running (2026-10-17)
-            if len(new) >= 15 and not _lost_lines(before, new) and not _lost_lines(new, before):
+            if (len(new) >= 15 and not _lost_lines(before, new) and not _lost_lines(new, before)
+                    and not _changes_camera_work(before, new)):
                 logger.info("validate_script: part %d (%s): %s -> %s", n, why, before[:80], new[:80])
                 parts[n - 1] = new
     return parts

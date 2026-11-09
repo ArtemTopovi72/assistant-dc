@@ -247,6 +247,21 @@ def test_continue_on_a_chain_clip_goes_on_from_its_latent(tmp_path):
     assert rig.stitched == [("h3_continuous/chY", 3)] and rig.kept[-1][1:] == ("h3_continuous/chY", 3)
 
 
+def test_continuation_does_not_replace_speech_with_a_sign(tmp_path):
+    rig, ctx, _ = _continued(tmp_path)
+    H._handle_generate_video(ctx, {'user_input_original': 'Пусть он говорит привет рядом с вывеской «СТОП».'},
+                             {'description': 'He says "привет".'})
+    assert rig.renders() and 'привет' in rig.renders()[0][0]
+    assert 'СТОП' not in rig.renders()[0][0]
+
+
+def test_continuation_does_not_overwrite_a_sign_with_speech(tmp_path):
+    rig, ctx, _ = _continued(tmp_path)
+    result = H._handle_generate_video(ctx, {'user_input_original': 'Пусть он скажет «привет».'},
+                                      {'description': 'The sign reads "STOP".'})
+    assert '[TOOL ERROR]' in result and not rig.renders()
+
+
 def test_continuation_reads_requested_duration_when_tool_omits_it(tmp_path, monkeypatch):
     monkeypatch.setattr(H, 'intent_read', lambda ctx: lambda *a: {'song_seconds': 25})
     rig, ctx, _ = _continued(tmp_path, video_plan_ask=True)
@@ -386,6 +401,37 @@ def test_multipart_chain_preparation_uses_the_native_conditioning_family(tmp_pat
     assert "Mode: image to video" in result
 
 
+def test_voice_context_does_not_create_a_missing_picture_reference(tmp_path):
+    prepared = []
+    rig = _Rig(tmp_path, prepare_prompt=lambda ctx, d, **kw: prepared.append(d) or (d, 6.0),
+               voices_of=lambda p: 'The man in <Picture 1> speaks in a low voice.',
+               drawn_over=lambda *a: False)
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'image')
+    H._handle_generate_video(rig.ctx(text_model=lambda *a, **kw: '', speech_ok=lambda *a: True),
+                             {'image_path': str(still)},
+                             {'description': LONG.replace('«', '').replace('»', ''), 'use_current_images': True})
+    assert len(prepared) > 1
+    assert '<Picture 1>' not in prepared[1]
+    assert 'the same person' in prepared[1]
+
+
+def test_writer_added_picture_reference_is_bound_to_the_opening_frame(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'image')
+    def prepare(ctx, description, **kw):
+        return ('The person from <Picture 1> continues.' if kw.get('mode') == 't2va' else description, 6.0)
+    rig = _Rig(tmp_path, prepare_prompt=prepare, guard_chain_layout=lambda ctx, src, prompt, part: prompt,
+               drawn_over=lambda *a: False)
+    ctx = rig.ctx(text_model=lambda *a, **kw: '', speech_ok=lambda *a: True,
+                  video_plan_parts=['The person speaks.', 'The person continues.'])
+    H._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': 'Animate the person.'},
+                             {'description': 'The person speaks.', 'use_current_images': True})
+    assert len(rig.renders()) >= 2
+    assert '<Picture 1>' not in rig.renders()[1][0]
+    assert 'same subjects from the previous shot' in rig.renders()[1][0]
+
+
 def test_later_parts_see_the_hero_reference():
     """Parts 2-5 of the BAR clip ran with no picture and each had another man."""
     ctx = types.SimpleNamespace(video_engine=Over(V, _upload=lambda p, k="image": "hero.jpg"))
@@ -434,6 +480,31 @@ def test_the_judge_rewrites_bad_parts_and_never_a_quoted_line():
         '{"bad": [{"part": 1, "why": "x"}]}' if s.startswith("You are a strict")
         else "He smiles warmly and whispers «Не может быть…»."))
     assert V.validate_script(ctx3, silent) == silent
+
+
+def test_script_rewrite_cannot_invent_camera_cut():
+    parts = ['The person on the left speaks.', 'The person on the right replies "Да, я помню".']
+    def model(ctx, system, user, **kw):
+        if system.startswith('You are a strict'):
+            return '{"bad": [{"part": 2, "why": "unclear"}]}'
+        return 'The camera cuts to a close-up. The person on the right replies "Да, я помню".'
+    assert V.validate_script(types.SimpleNamespace(text_model=model), parts, rounds=1) == parts
+    assert not V._changes_camera_work('The camera cuts to a close-up.', 'The camera cuts to a close-up.')
+    assert V._changes_camera_work('The camera pans left.', 'The camera cuts to the man.')
+    assert not V._changes_camera_work('He says "cut to the chase".', 'He says "cut to the chase".')
+    assert V._changes_camera_work('The camera pans left.', 'The camera pans right.')
+    assert V._changes_camera_work('The camera pans left as Alice waves.', 'Alice waves.')
+    assert V._changes_camera_work('The camera slowly moves left.', '')
+    assert V._changes_camera_work('The camera slowly pans across the room.', '')
+    assert V._changes_camera_work('The camera cuts to Alice.', 'The camera cuts to Bob.')
+    assert V._changes_camera_work('The camera cuts to Alice.', 'The camera cuts to Alice. The camera cuts to Bob.')
+
+
+def test_judge_cannot_drop_requested_camera_move():
+    parts = ['The camera pans left.', 'The man waves.']
+    def model(ctx, system, user, **kw):
+        return '{"bad": [{"part": 1, "why": "camera only", "drop": true}]}' if system.startswith('You are a strict') else 'The camera pans left.'
+    assert V.validate_script(types.SimpleNamespace(text_model=model), parts, rounds=1) == parts
 
 
 def test_two_story_steps_in_one_part_are_split_not_cut_to_one():

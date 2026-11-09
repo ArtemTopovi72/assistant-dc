@@ -48,6 +48,11 @@ def _run(tmp_path, args, condensed="", state=None, ctx_kw=None, **eng):
 
     fakes = dict(AUTO_MAX_PARTS=2, generate_video=fake_gen, engine_available=lambda ctx: (True, ""),
                  herrgott_on=lambda: False, motion_context_on=lambda: False,
+                 count_speakers=lambda *a: 0,
+                 ground_spoken_script=lambda ctx, request, script: script,
+                 dictated_speaker=lambda ctx, script, said: 'An old man',
+                 replace_translated_speech=lambda script, speech, reads=None, ctx=None: V._QUOTED.sub(
+                     lambda m: '"' + speech + '"', script, count=1),
                  mark_inserts=lambda ctx, ps: ps, validate_script=lambda ctx, ps, **k: ps,
                  condense_script=lambda *a, **k: condensed,
                  join_continuation=lambda a, b, **k: str(tmp_path / "joined.mp4"),
@@ -83,18 +88,28 @@ def test_a_where_it_continues_from_line_is_not_a_part_of_its_own():
     assert V.split_script(d) == [d]
 
 
-def test_long_monologue_is_cut_into_parts_at_sentence_ends():
+def test_long_monologue_is_split_only_after_speaker_is_identified():
     """85 words in one pair of quotes rode a single 10 s part: the clip said the first two
     sentences and the rest of the user's speech was lost (live 2026-10-19)."""
     speech = ("Ах, вот и ты. Хорошо. Ну, единственное хорошее — что ты здесь. У нас проблема. Большая. "
               "Емкость для хранения заготовок переполнена. Нет места — нет хруща. Серьезно, это критично "
               "для нашего выживания. Тебе нужно освободить нам место в холодильнике и забрать банки. "
               "Нам нужен твой морозильник. Слушай, просто будь с рюкзачком, хорошо?")
-    parts = V.split_script(f'The caretaker speaks to the camera: "{speech}"')
+    script = f'The caretaker says: "{speech}"'
+    parts = V.split_dictated_speech(script, speech, 'The caretaker')
     assert len(parts) >= 3
     said = " ".join(w for p in parts for q in V._QUOTED.finditer(p) for w in next(g for g in q.groups() if g).split())
     assert said == speech.replace(" — ", " — ")
     assert all(V.estimate_seconds(p) <= 10.2 for p in parts)
+
+
+def test_another_speakers_long_line_never_becomes_he_goes_on():
+    long_line = ('one ' * 20) + '. ' + ('two ' * 20) + '.'
+    script = f'Alice says "hello there friend". Bob says "{long_line}".'
+    parts = V.split_script(script)
+    fitted = V.fit_speech(parts, speech='hello there friend', speaker='Alice')
+    assert 'He goes on' not in ' '.join(fitted)
+    assert long_line in ' '.join(fitted)
 
 
 def test_users_dictated_speech_is_not_the_bots_script_to_condense():
@@ -103,6 +118,270 @@ def test_users_dictated_speech_is_not_the_bots_script_to_condense():
     assert V.speech_is_users(mine, said)
     assert not V.speech_is_users('He says: "Привет, дружище, как дела?"', said)      # the bot's own line
     assert not V.speech_is_users("He waves.", said)
+
+
+def test_dictated_speech_uses_the_user_quote_not_model_extra_punctuation():
+    line = ' '.join(f'слово{i}' for i in range(20))
+    said = f'Пусть человек произнесёт «{line}».'
+    ctx = _Ctx(text_model=lambda *a, **k: line + '».' )
+    assert V.dictated_speech(said, '', ctx) == line
+
+
+def test_replace_translated_speech_preserves_unrelated_quoted_labels():
+    script = 'The man in a "SOL" shirt says "Good morning" next to a "TERRA" sign.'
+    reads = lambda sentences: {'sentences': [{'kind': 'action', 'beats': 1, 'spoken': ['VIDEOTEXT1']} for _ in sentences]}
+    out = V.replace_translated_speech(script, 'Доброе утро', reads=reads)
+    assert out == 'The man in a "SOL" shirt says "Доброе утро" next to a "TERRA" sign.'
+    assert V.replace_translated_speech(script, 'Доброе утро', reads=lambda x: None) == ''
+
+
+def test_long_speech_keeps_the_original_speaker_in_each_piece():
+    line = ' '.join(f'word{i}' for i in range(V.SPEECH_WORDS_PER_PART + 12))
+    text = f'The woman on the left says "{line}".'
+    parts = V.split_dictated_speech(text, line)
+    assert len(parts) == 2
+    assert all('The woman on the left says' in part for part in parts)
+    assert all(V._spoken_words(part) <= V.SPEECH_WORDS_PER_PART for part in parts)
+    assert ' '.join(V.quoted_lines(' '.join(parts))) == line
+    with_background = V.split_dictated_speech(text + ' The background is gray.', line)
+    assert len(with_background) == 2
+    assert with_background[-1].endswith('The background is gray.')
+
+
+def test_speaker_selection_rejects_invented_or_mismatched_names():
+    script = 'The man on the left says "Hello". The woman on the right listens.'
+    said = 'Мужчина слева говорит «Hello», женщина справа слушает.'
+    replies = iter(['{"speakers":["The man on the left"]}', 'YES', 'YES'])
+    ctx = _Ctx(text_model=lambda *a, **k: next(replies))
+    assert V.dictated_speaker(ctx, script, said) == 'The man on the left'
+    replies = iter(['{"speakers":["The man on the right"]}'])
+    assert V.dictated_speaker(_Ctx(text_model=lambda *a, **k: next(replies)), script, said) == ''
+    replies = iter(['{"speakers":["The man on the left"]}', 'YES', 'NO'])
+    assert V.dictated_speaker(_Ctx(text_model=lambda *a, **k: next(replies)), script, said) == ''
+
+
+def test_explicit_speaker_is_carried_into_each_split_quote():
+    line = ' '.join(f'word{i}' for i in range(V.SPEECH_WORDS_PER_PART + 12))
+    parts = V.split_dictated_speech(f'The man on the left says: "{line}".', line, 'The man on the left')
+    assert len(parts) == 2
+    assert all('The man on the left' in p for p in parts)
+    assert ' '.join(V.quoted_lines(' '.join(parts))) == line
+
+
+def test_split_does_not_repeat_an_opening_action():
+    line = ' '.join(f'word{i}' for i in range(V.SPEECH_WORDS_PER_PART + 12))
+    original = f'The man on the left walks to the door and says "{line}".'
+    parts = V.split_dictated_speech(original, line, 'The man on the left')
+    assert len(parts) == 2
+    assert 'walks to the door' in parts[0]
+    assert 'walks to the door' not in parts[1]
+    assert 'The man on the left' in parts[1]
+
+
+def test_split_balances_words_to_avoid_a_tiny_last_clip():
+    line = ' '.join(f'word{i}' for i in range(37))
+    parts = V.split_dictated_speech(f'The man says "{line}".', line, 'The man')
+    words = [next(g for g in m.groups() if g is not None).split()
+             for part in parts for m in V._QUOTED.finditer(part)]
+    assert [word for chunk in words for word in chunk] == line.split()
+    assert max(map(len, words)) <= V.SPEECH_WORDS_PER_PART
+    assert max(map(len, words)) - min(map(len, words)) <= 1
+
+
+def test_split_reserves_time_for_the_opening_action():
+    line = ' '.join(f'word{i}' for i in range(33))
+    reads = lambda sentences: {'sentences': [
+        {'kind': 'action', 'beats': 2 if 'smiles' in s else 1} for s in sentences]}
+    parts = V.split_dictated_speech(f'The man smiles and says "{line}".', line, 'The man', reads=reads)
+    assert all(V.estimate_seconds(p, capped=False, reads=reads) <= V.frames_to_seconds(V.VIDEO_MAX_FRAMES_AUTO)
+               for p in parts)
+    assert ' '.join(V.quoted_lines(p)[0] for p in parts) == line
+    assert 'smiles' in parts[0] and all('smiles' not in p for p in parts[1:])
+
+
+def test_speaking_and_lip_sync_are_estimated_as_one_scene():
+    seen = []
+    def reads(sentences):
+        seen.extend(sentences)
+        return {'sentences': [{'kind': 'action', 'beats': 1, 'hold': False,
+                               'spoken': V.quoted_lines(s)} for s in sentences]}
+    text = 'The man sits; his lips move as he speaks; he says "one two three four five six seven eight".'
+    V.estimate_seconds(text, capped=False, reads=reads)
+    assert len(seen) == 1
+    assert 'one two three four five six seven eight' in seen[0]
+
+
+def test_speech_split_rechecks_real_chunks_when_estimate_changes():
+    line = ' '.join(f'word{i}' for i in range(21))
+    def reads(sentences):
+        rows = []
+        for s in sentences:
+            quotes = V.quoted_lines(s)
+            n = len(quotes[0].split()) if quotes else 0
+            rows.append({'kind': 'action', 'beats': 2 if n > 10 else 1,
+                         'hold': n > 10, 'spoken': quotes})
+        return {'sentences': rows}
+    parts = V.split_dictated_speech(f'The man says "{line}".', line, 'The man', reads=reads)
+    assert len(parts) >= 2
+    assert all(V.estimate_seconds(p, capped=False, reads=reads) <= V.frames_to_seconds(V.VIDEO_MAX_FRAMES_AUTO)
+               for p in parts)
+    assert ' '.join(V.quoted_lines(p)[0] for p in parts) == line
+
+
+def test_split_rejects_a_line_reassigned_to_another_person():
+    line = ' '.join(f'word{i}' for i in range(20))
+    sentence = f'The person on the right says "{line}".'
+    assert V.split_dictated_speech(sentence, line, 'The person on the left') == [sentence]
+
+
+def test_speech_continuation_does_not_invent_a_bridge():
+    parts = ['The man speaks: "First words."', 'The man speaks: "More words."']
+    def fail(*args, **kwargs):
+        raise AssertionError('speech continuation does not need a bridge')
+    assert V.bridge_script(_Ctx(text_model=fail), parts) == parts
+
+
+def test_bridge_is_not_inserted_into_a_spoken_part():
+    parts = ['The man sits.', 'He says "Hello there."', 'He lifts a cup.']
+    ctx = _Ctx(text_model=lambda *args, **kwargs: '{"bridges":["He walks to a window.", ""]}')
+    assert V.bridge_script(ctx, parts)[1] == parts[1]
+
+
+def test_a_rewritten_wrong_speaker_recovers_the_original_line(tmp_path):
+    line = ' '.join(f'word{i}' for i in range(33))
+    raw = f'An old man smiles, then says "{line}".'
+    def wrong_speaker(ctx, parts, **kwargs):
+        return [f'The woman says "{line}".']
+    calls = _run(tmp_path, {'description': raw},
+                 state={'user_input_original': f'Сними видео: {line}'},
+                 dictated_speech=lambda *args: line, validate_script=wrong_speaker)
+    spoken = [p for p in calls if V.quoted_lines(p)]
+    assert spoken and all('An old man' in p for p in spoken)
+    assert all('The woman' not in p for p in spoken)
+    assert ' '.join(V.quoted_lines(p)[0] for p in spoken) == line
+
+
+def test_overlong_unresolved_dialogue_is_not_rendered(tmp_path):
+    line = ' '.join(f'word{i}' for i in range(V.SPEECH_WORDS_PER_PART + 3))
+    calls = _run(tmp_path, {'description': f'The woman says "{line}".'},
+                 state={'user_input_original': 'Сними видео'},
+                 dictated_speech=lambda *args: '')
+    assert calls == []
+
+
+def test_long_dialogue_is_split_with_its_speaker(tmp_path):
+    line = ' '.join(f'word{i}' for i in range(20))
+    reads = lambda sentences: {'sentences': [
+        {'kind': 'action', 'beats': 1, 'spoken': V.quoted_lines(s)} for s in sentences]}
+    calls = _run(tmp_path, {'description': f'An old man says "{line}".'},
+                 state={'user_input_original': f'Сними видео: {line}'},
+                 ctx_kw={'deps': types.SimpleNamespace(script_read=reads)},
+                 dictated_speech=lambda *args: '')
+    spoken = [p for p in calls if V.quoted_lines(p)]
+    assert len(spoken) == 2
+    assert all('An old man' in p for p in spoken)
+    assert ' '.join(V.quoted_lines(p)[0] for p in spoken) == line
+
+
+def test_long_dialogue_can_be_checked_when_speech_read_is_unavailable(tmp_path):
+    line = ' '.join(f'word{i}' for i in range(20))
+    calls = _run(tmp_path, {'description': f'An old man says "{line}".'},
+                 state={'user_input_original': f'Сними видео: {line}'},
+                 dictated_speech=lambda *args: '')
+    spoken = [p for p in calls if V.quoted_lines(p)]
+    assert len(spoken) == 2
+    assert ' '.join(V.quoted_lines(p)[0] for p in spoken) == line
+
+
+def test_long_written_label_is_not_mistaken_for_dialogue(tmp_path):
+    label = ' '.join(f'word{i}' for i in range(20))
+    reads = lambda sentences: {'sentences': [
+        {'kind': 'action', 'beats': 1, 'spoken': []} for _ in sentences]}
+    calls = _run(tmp_path, {'description': f'An old man points to a sign reading "{label}".'},
+                 state={'user_input_original': f'Сними видео: {label}'},
+                 ctx_kw={'deps': types.SimpleNamespace(script_read=reads)},
+                 dictated_speech=lambda *args: '')
+    assert len(calls) == 1
+    assert label in calls[0]
+
+
+def test_two_speakers_keep_their_own_lines_when_one_is_long(tmp_path):
+    first = ' '.join(f'word{i}' for i in range(20))
+    second = 'answer0 answer1 answer2'
+    reads = lambda sentences: {'sentences': [
+        {'kind': 'action', 'beats': 1, 'spoken': V.quoted_lines(s)} for s in sentences]}
+    raw = f'An old man says "{first}". A woman replies "{second}".'
+    calls = _run(tmp_path, {'description': raw},
+                 state={'user_input_original': f'Сними видео: {first}. {second}.'},
+                 ctx_kw={'deps': types.SimpleNamespace(script_read=reads)},
+                 dictated_speech=lambda *args: '')
+    first_parts = [p for p in calls if 'word' in p]
+    answer_parts = [p for p in calls if second in p]
+    assert len(first_parts) == 2 and len(answer_parts) == 1
+    assert all('An old man' in p for p in first_parts)
+    assert 'A woman' in answer_parts[0]
+    assert ' '.join(V.quoted_lines(p)[0] for p in first_parts) == first
+
+
+def test_dialogue_with_a_translated_or_missing_quote_is_not_rendered(tmp_path, monkeypatch):
+    monkeypatch.setattr(V, 'dictated_speaker', lambda *args: '')
+    said = 'Человек слева говорит «Раз два три четыре пять», справа отвечает «Шесть семь восемь девять десять».'
+    raw = 'The person on the left says "One two three four five". The other says "Шесть семь восемь девять десять".'
+    assert not _run(tmp_path, {'description': raw}, state={'user_input_original': said},
+                    dictated_speech=lambda *args: '')
+    short = 'Слева «Идём?», справа «Да, пойдем гулять в парк».'
+    missing_short = 'The woman says "Да, пойдем гулять в парк".'
+    assert not _run(tmp_path, {'description': missing_short}, state={'user_input_original': short},
+                    dictated_speech=lambda *args: '')
+
+
+def test_image_ocr_text_is_not_an_extra_dialogue_quote(tmp_path):
+    line = 'Раз два три четыре пять'
+    said = ('Оживи видео, он говорит «' + line + '». '
+            '[Text written on picture 1 (OCR, exact letters; sign «ON AIR», so name it.]')
+    calls = _run(tmp_path, {'description': f'The man says "{line}".'},
+                 state={'user_input_original': said}, dictated_speech=lambda *args: line)
+    assert calls
+
+
+def test_spoken_quote_fallback_keeps_signs_unchanged():
+    raw = 'The sign reads "ON AIR". The man says "A translated sentence".'
+    reads = lambda sentences: {'sentences': [{'kind': 'action', 'beats': 1} for _ in sentences]}
+    ctx = _Ctx(text_model=lambda *a, **k: '{"spoken":"VIDEOTEXT1"}')
+    result = V.replace_translated_speech(raw, 'Русские слова здесь', reads=reads, ctx=ctx)
+    assert result == 'The sign reads "ON AIR". The man says "Русские слова здесь".'
+    ctx.text_model = lambda *a, **k: '{"spoken":""}'
+    assert not V.replace_translated_speech(raw, 'Русские слова здесь', reads=reads, ctx=ctx)
+
+
+def test_speaker_count_uses_model_not_number_of_quoted_signs():
+    ctx = _Ctx(text_model=lambda *a, **k: '{"speakers":1}')
+    script = 'A man says "Hello" next to signs "LIVE" and "ON AIR".'
+    assert V.count_speakers(ctx, 'Пусть мужчина говорит', script) == 1
+    ctx.text_model = lambda *a, **k: '{"speakers":true}'
+    assert V.count_speakers(ctx, 'Пусть мужчина говорит', script) == 0
+
+
+def test_script_grounding_requires_quote_and_action_verification():
+    raw = 'The man says "Привет". The neon sign flickers.'
+    replies = iter(['The man says "Привет".', 'YES'])
+    ctx = _Ctx(text_model=lambda *a, **k: next(replies))
+    assert V.ground_spoken_script(ctx, 'Пусть скажет «Привет»', raw) == 'The man says "Привет".'
+    ctx.text_model = lambda *a, **k: 'The man says "Пока".'
+    assert not V.ground_spoken_script(ctx, 'Пусть скажет «Привет»', raw)
+    replies = iter(['The man says "Привет".', 'NO'])
+    ctx.text_model = lambda *a, **k: next(replies)
+    assert not V.ground_spoken_script(ctx, 'Под музыку скажет «Привет»', raw)
+
+
+def test_dictated_speech_already_in_script_is_not_condensed_when_it_has_a_sign(tmp_path):
+    speech = " ".join(f"Это важная фраза номер {i}, которую нужно сказать полностью." for i in range(8))
+    desc = f'He wears a shirt marked "SOL". He says: "{speech}"'
+    condensed = []
+    _run(tmp_path, {"description": desc}, state={"user_input_original": "Сделай видео, пусть скажет: " + speech},
+         dictated_speech=lambda *a: speech,
+         condense_script=lambda *a, **k: condensed.append(True) or "He waves.")
+    assert not condensed
 
 
 
@@ -115,6 +394,24 @@ def test_a_dictated_monologue_stays_whole_when_the_agent_retold_it_in_english(tm
                  dictated_speech=lambda said, raw, ctx: speech)
     assert len(calls) > 2
     assert not any("Listen carefully" in c for c in calls)
+
+
+def test_dictated_yo_is_not_silently_changed_to_e(tmp_path):
+    calls = _run(tmp_path, {'description': 'The man says "все хорошо".'},
+                 state={'user_input_original': 'Сделай видео, пусть он скажет «всё хорошо».'},
+                 dictated_speech=lambda *args: '')
+    assert any('всё хорошо' in call for call in calls)
+    assert not any('все хорошо' in call for call in calls)
+
+
+def test_sign_quoted_near_unquoted_speech_is_not_the_spoken_line():
+    assert H._explicit_spoken_quote('Пусть он говорит привет рядом с вывеской «СТОП».', V) == ''
+    assert H._explicit_spoken_quote('Animate the man silently waving beside a sign that says "STOP".', V) == ''
+    assert H._explicit_spoken_quote('Animate the man silently waving beside a sign above him that says "STOP".', V) == ''
+    assert H._explicit_spoken_quote('A sign above the man that says "STOP".', V) == ''
+    assert H._explicit_spoken_quote('A sign above the man says "STOP".', V) == ''
+    assert H._explicit_spoken_quote('Beside the sign, the man says "Hello".', V) == 'Hello'
+    assert H._explicit_spoken_quote('Пусть он скажет «Всё хорошо».', V) == 'Всё хорошо'
 
 
 def test_no_sentence_of_a_dictated_monologue_is_lost_on_the_way_to_the_parts(tmp_path):
@@ -191,7 +488,7 @@ def test_a_talking_heads_part_one_that_did_not_say_its_lines_is_taken_again(tmp_
                  ctx_kw={"deps": types.SimpleNamespace(_current_image_paths=lambda ctx, st: [str(still)]),
                          "vision_model": lambda ctx, **kw: "NONE",
                          "speech_ok": lambda ctx, clip, lines: next(heard)})
-    n_parts = len(V.fit_speech([f'An old man says: "{speech}"']))
+    n_parts = len(V.split_dictated_speech(f'An old man says: "{speech}"', speech, 'An old man'))
     assert len(calls) == n_parts + 1, (len(calls), n_parts)      # part 1 twice, the rest once
 
 

@@ -1890,7 +1890,7 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
         frame_dir = Path(tempfile.mkdtemp(prefix="actcheck_"))
         frames = look.extract_frames(path, look.sample_times(duration, every=1.5, max_frames=10), frame_dir)
         if len(frames) < 2:
-            return ""
+            return "The video could not be checked against the request."
         ans = " ".join((vision_model(ctx)(
             ctx, temperature=0.0, max_tokens=200,
             image_paths=[(f"Video at {t:.1f}s:", str(f)) for t, f in frames]
@@ -1912,8 +1912,10 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
                       "sound cannot be seen: ignore them. Answer NONE when every action is visible.") or "").split())
     except Exception:
         logger.warning("video actions: the check failed", exc_info=True)
-        return ""
+        return "The video could not be checked against the request."
     logger.info("video actions: checked against the request -> %s", ans[:200] or "no answer")
+    if not ans:
+        return "The video could not be checked against the request."
     inset_frames = frames
     start = getattr(ctx, 'video_review_start', 0.0) or 0.0
     if references and 0 < start < duration:
@@ -1960,6 +1962,24 @@ def _says_none(ans: str) -> bool:
 def video_mod_rules(ctx) -> tuple:
     v = _video(ctx)
     return tuple(r for r in (getattr(v, "CAUSE_RULE", ""), getattr(v, "RU_SPEECH", "")) if r)
+
+
+def _explicit_spoken_quote(text: str, video_mod) -> str:
+    lines = video_mod.quoted_lines(text)
+    if len(lines) != 1:
+        return ''
+    cue = (r'\b(?:скажет|сказал|скажи|говорит|произносит|произнес[её]т|произнеси|'
+           r'шепчет|кричит|отвечает|ответит|says?|say|speak|whispers?|shouts?|replies?)'
+           r'\s*[:—-]?\s*[«"“]')
+    match = re.search(cue, text, re.I)
+    if not match:
+        return ''
+    prefix = text[max(0, match.start() - 90):match.start()]
+    if (re.search(r'\b(?:sign|poster|screen|label|banner|вывеск\w*|надпис\w*|табличк\w*|экран\w*)'
+                  r'[^.!?;«»"“”]{0,100}$', prefix, re.I)
+            and not re.search(r'[,;.!?]\s*(?:the\s+)?(?:man|woman|person|he|she|он|она)\s*$', prefix, re.I)):
+        return ''
+    return lines[0]
 
 
 def _handle_generate_video(ctx, state, args: dict) -> str:
@@ -2215,11 +2235,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 logger.warning("generate_video: the voice link could not be used", exc_info=True)
     anim = [p for p in slots if p]
     speakers = int(args.get("speakers") or 0)
-    if not speakers:
-        # The model forgets `speakers` (two quoted lines, speakers=0,
-        # no voice question). Spoken lines in quotes are a fact, not a guess.
-        speakers = min(len(re.findall(r'«[^»]{2,}»|"[^"]{2,}"|“[^”]{2,}”',
-                                      args.get("description") or "")), video_mod.MAX_REF_AUDIOS)
+    if (not speakers and not anim and not continuing and not args.get("use_my_voice")
+            and getattr(ctx, "voice_choice", None) == ""):
+        speakers = video_mod.count_speakers(ctx, ctx.video_request, args.get("description") or "")
     # a continuation speaks with the clip's own voices: its tail is the reference
     if (speakers and not anim and not continuing and not args.get("use_my_voice")
             and getattr(ctx, "voice_choice", None) == ""):
@@ -2277,30 +2295,60 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     _said = str((state or {}).get("user_input_original") or (state or {}).get("user_input") or "")
     if continuing and getattr(ctx, "attached_video_path", ""):
         _said = user_words(_said)
-    if continuing and re.search(r"говор|скаж|сказ|произнес|произнёс|озвуч|says?|speaks?", _said, re.I):
-        original_lines = video_mod.quoted_lines(_said)
+    explicit_line = _explicit_spoken_quote(_said, video_mod) if continuing else ''
+    if explicit_line:
+        original_lines = [explicit_line]
         draft_lines = video_mod.quoted_lines(raw)
         if len(original_lines) == 1 and len(draft_lines) <= 1:
             line = original_lines[0]
-            if not draft_lines or video_mod._flat_line(draft_lines[0]) != video_mod._flat_line(line):
-                corrected = (video_mod._QUOTED.sub(lambda _: '"' + line + '"', raw, count=1)
-                             if draft_lines else raw + ' The speaker says: "' + line + '".')
+            if not draft_lines or video_mod._literal_line(draft_lines[0]) != video_mod._literal_line(line):
+                quote = video_mod._QUOTED.search(raw) if draft_lines else None
+                if quote and re.search(
+                        r'\b(?:sign|poster|screen|label|banner|вывеск\w*|надпис\w*|табличк\w*|экран\w*)'
+                        r'[^.!?;«»"“”]{0,100}\s+'
+                        r'(?:reads?|says?|shows?|гласит|показывает)\s*[:—-]?\s*$',
+                        raw[:quote.start()], re.I):
+                    return ('[TOOL ERROR] Could not distinguish the spoken line from quoted writing. '
+                            'No video was sent; ask the user to clarify the line.')
+                if not draft_lines:
+                    corrected = raw + ' The speaker says: "' + line + '".'
+                elif _explicit_spoken_quote(raw, video_mod):
+                    corrected = video_mod._QUOTED.sub(lambda _: '"' + line + '"', raw, count=1)
+                else:
+                    corrected = video_mod.replace_translated_speech(raw, line, reads=dep(ctx, 'script_read', None), ctx=ctx)
+                if not corrected:
+                    return ('[TOOL ERROR] Could not distinguish the spoken line from quoted writing. '
+                            'No video was sent; ask the user to clarify the line.')
                 description = description.replace(raw, corrected, 1) if raw in description else description + " " + corrected
                 raw = corrected
     own_script = False
-    dictated = False
     speech = ""             # the words the user dictated, whole: what every part together must say
     if not continuing:
         speech = video_mod.dictated_speech(_said, "", ctx)
+        user_lines = [line for line in video_mod.quoted_lines(user_words(_said)) if video_mod._literal_line(line)]
+        explicit_speech = _explicit_spoken_quote(user_words(_said), video_mod)
+        if explicit_speech:
+            speech = explicit_speech
         ctx.video_speech = speech
-        words = speech if speech and video_mod._flat_line(speech) not in video_mod._flat_line(raw) else ""
+        if speech and not getattr(ctx, 'video_plan_parts', None) and not video_mod.numbered_script(user_words(_said)):
+            grounded = video_mod.ground_spoken_script(ctx, user_words(_said), raw)
+            if not grounded:
+                return ('[TOOL ERROR] Could not verify that the video script keeps the requested actions. '
+                        'No video was sent; rewrite the script without adding or removing actions.')
+            logger.info('generate_video: checked spoken script against user request (changed=%s)', grounded != raw)
+            description = description.replace(raw, grounded, 1) if raw in description else grounded
+            raw = grounded
+        if len(user_lines) > 1 and any(video_mod._literal_line(line) not in video_mod._literal_line(raw)
+                                       for line in user_lines):
+            return ('[TOOL ERROR] The script changed or omitted quoted user text. '
+                    'No video was sent; preserve each quoted line exactly before rendering.')
+        words = speech if speech and video_mod._literal_line(speech) not in video_mod._literal_line(raw) else ""
         if words:
             logger.info("generate_video: the user's own speech added to the script (%d words)", len(words.split()))
-            # The agent's own quoting of that speech goes: it is the same speech retold (in
-            # English, cut short), so it would be said twice -- and it made the script look
-            # like the bot's own, condensed to 2 parts and rendered as one (live 2026-10-20).
-            dictated = True
-            said_it = f'{video_mod._QUOTED.sub("", raw)} The person says, word for word: "{words}"'.strip()
+            said_it = video_mod.replace_translated_speech(raw, words, reads=dep(ctx, "script_read", None), ctx=ctx)
+            if not said_it:
+                return ('[TOOL ERROR] Could not identify which quoted text is the spoken line. '
+                        'No video was sent; ask the user to clarify the spoken line.')
             description = description.replace(raw, said_it, 1) if raw and raw in description else said_it
             raw = said_it
     if not continuing:
@@ -2346,7 +2394,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     want = float(args.get("seconds") or 0)
     # The words the user dictated are never condensed or cut to the bot's own 2-part cap:
     # an 85-word monologue came out as its first sentence (live 2026-10-19).
-    speech_theirs = dictated or video_mod.speech_is_users(raw, _said)
+    speech_theirs = bool(speech) or video_mod.speech_is_users(raw, _said)
     # Over one clip's 15 s the parts follow the script: «на 30 секунд» was capped to one
     # 15 s clip and delivered without a word (2026-10-13).
     if getattr(ctx, "video_plan_parts", None) or (args.get("seconds") and float(args["seconds"]) <= 15.0):
@@ -2449,7 +2497,25 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             parts = video_mod.validate_script(ctx, video_mod.mark_inserts(ctx, parts),
                                               max_parts=math.ceil(want / 5.2) if want else (len(parts) if speech_theirs else video_mod.AUTO_MAX_PARTS))
         parts = video_mod.dedupe_quotes(video_mod.strip_translations(parts))
-    fitted = video_mod.fit_speech(parts)
+    speaker = ''
+    if speech and len(speech.split()) > video_mod.SPEECH_WORDS_PER_PART:
+        speaker = video_mod.dictated_speaker(ctx, raw, _said)
+        if not speaker:
+            return ('[TOOL ERROR] Could not establish which visible person says the long line. '
+                    'No video was sent. Ask the user to identify the speaker explicitly.')
+        full_speech_parts = [part for part in parts if any(
+            video_mod._flat_line(line) == video_mod._flat_line(speech)
+            for line in video_mod.quoted_lines(part))]
+        if not full_speech_parts or any(
+                speaker.casefold() not in part.casefold()
+                or video_mod.dictated_speaker(ctx, part, _said).casefold() != speaker.casefold()
+                for part in full_speech_parts):
+            recovered = video_mod.split_dictated_speech(raw, speech, speaker)
+            if len(recovered) < 2:
+                return ('[TOOL ERROR] Could not preserve the speaker while splitting the line. '
+                        'No video was sent; ask the user to clarify the scene.')
+            parts = recovered
+    fitted = video_mod.fit_speech(parts, speech=speech, speaker=speaker)
     if len(fitted) > len(parts):
         logger.info("generate_video: parts with more speech than a clip says were cut: %d -> %d", len(parts), len(fitted))
         parts = fitted
@@ -2458,7 +2524,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         # Two of the user's sentences never reached the plan (live 2026-10-20); which model
         # step dropped them is not the point -- the user's words are all said, as written.
         logger.warning("generate_video: the parts lost the user's words %s; re-cut from the script as written", gone)
-        parts = video_mod.fit_speech(video_mod.split_script(raw, reads=dep(ctx, "script_read", None)))
+        parts = video_mod.fit_speech(video_mod.split_script(raw, reads=dep(ctx, "script_read", None)), speech=speech, speaker=speaker)
+    if speaker and any(video_mod._flat_line(line) == video_mod._flat_line(speech)
+                       for part in parts for line in video_mod.quoted_lines(part)):
+        return ('[TOOL ERROR] Could not divide the long spoken line safely. '
+                'No video was sent; ask the user to break the line into shorter sentences.')
     if want > 15 and getattr(ctx, "video_plan_ask", False) and not getattr(ctx, "video_plan_parts", None):
         cap = video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO)
         # shortcut: at most 12 generated parts; longer requests remain visibly short in the plan.
@@ -2485,6 +2555,37 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         description = (description.replace(cur, approved[0], 1) if cur and cur in description
                        else approved[0])
         parts = video_mod.fit_speech(approved)
+    if talking is None and len(parts) > 1 and images and not videos and not continuing:
+        talking = bool(len(images) == 1 and video_mod.is_talking_head(ctx, raw, _said, spoken=bool(speech)))
+    safe_parts = []
+    for part in parts:
+        if video_mod._spoken_words(part) <= video_mod.SPEECH_WORDS_PER_PART:
+            safe_parts.append(part)
+            continue
+        row = video_mod.read_sentences([part], dep(ctx, 'script_read', None))[0]
+        spoken = row.get('spoken')
+        candidates = spoken if spoken is not None else video_mod.quoted_lines(part)
+        long_lines = [line for line in candidates if len(line.split()) > video_mod.SPEECH_WORDS_PER_PART]
+        if spoken is not None and not long_lines:
+            safe_parts.append(part)
+            continue
+        if len(long_lines) == 1 and video_mod._flat_line(long_lines[0]) in video_mod._flat_line(_said):
+            who = video_mod.dictated_speaker(ctx, part, _said)
+            split = video_mod.split_dictated_speech(part, long_lines[0], who) if who else []
+            if len(split) > 1:
+                safe_parts.extend(split)
+                continue
+        return ('[TOOL ERROR] Could not safely split a long spoken line. '
+                'No video was sent; ask the user to clarify the speaker and line.')
+    if safe_parts and safe_parts[0] != parts[0]:
+        description = (description.replace(parts[0], safe_parts[0], 1)
+                       if parts[0] in description else safe_parts[0])
+    parts = safe_parts
+    cap = video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO)
+    if any(video_mod.quoted_lines(p) and video_mod.estimate_seconds(
+            p, capped=False, reads=dep(ctx, 'script_read', None)) > cap for p in parts):
+        return ('[TOOL ERROR] A video part cannot fit its dialogue and action in one segment. '
+                'No video was sent; ask the user to shorten the part.')
     # An asked length the script falls short of: each part plays longer, up to one clip's cap.
     secs = ([float(s) for s in approved_seconds]
             if approved and parts == approved and len(approved_seconds) == len(parts)
@@ -2499,6 +2600,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # the clip of Лёха flexing under the track had to repeat without a jump (2026-10-22).
     loop = bool(args.get("loop") and images and not videos and not continuing)
     if loop:
+        if len(parts) > 1:
+            return ('[TOOL ERROR] This loop needs more than one video segment. '
+                    'No video was sent; ask for a shorter loop.')
         if re.search(r"<Picture \d+>", description):
             return "[TOOL ERROR] A loop cannot safely use numbered picture references. Ask the user to select one image for the loop."
         images, parts = [images[-1], images[-1]], [raw]    # newest last: [0] animated an older picture
@@ -2572,14 +2676,24 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         prepped = [video_mod.prepare_prompt(ctx, description, images=images, seconds=secs[0] if secs else 0.0,
                                            mode="i2va" if images and chain_idx <= 1 else "t2va")]
         voices = video_mod.voices_of(prepped[0][0])
+        voices = re.sub(r'<Picture \d+>', 'the same person', voices)
         voices = f"Voices so far, the same if they speak again: {voices} " if voices else ""
         for i, p in enumerate(parts[1:], start=1):
             ctx.video_part_request = p
-            setting = (" Background context only (do not restore earlier clothing or poses): "
-                       + str(state.get('vision_summary') or '')[:600]) if images else ''
-            prepped.append(video_mod.prepare_prompt(
+            setting = ''
+            if images:
+                first_shot = prepped[0][0].split('overall_soundscape:', 1)[0]
+                first_shot = re.sub(r'<d>.*?</d>', '', first_shot, flags=re.S)
+                first_shot = first_shot.split('integrated_multimodal_description:', 1)[-1]
+                first_shot = re.sub(r'<Picture \d+>', 'the opening frame', first_shot)
+                setting = (' Visual continuity: keep the visual style and layout of the first shot, '
+                           'unless this part explicitly changes them. First shot: ' + first_shot[:450])
+            next_prompt, next_seconds = video_mod.prepare_prompt(
                 ctx, video_mod.CONTINUE_CTX_PREFIX + video_mod.with_scene(p, setting + voices + " ".join(parts[:i])),
-                seconds=secs[i] if i < len(secs) else 0.0, mode="t2va"))
+                seconds=secs[i] if i < len(secs) else 0.0, mode="t2va")
+            if images:
+                next_prompt = video_mod.guard_chain_layout(ctx, first_shot, next_prompt, p)
+            prepped.append((next_prompt, next_seconds))
     # With voices the first picture rides every part too: each part starts from the last
     # frame of the one before, and the face drifted a little further every time.
     # ...and so do all of them: with two heroes on two pictures, parts 2+ saw only the first
@@ -2604,6 +2718,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     logger.info("Tool: generate_video(mode=%s, %d image(s), %d video(s)) %s",
                 display_mode, len(images), len(videos), description[:80])
 
+    first_prompt = prepped[0][0] if prepped else description
+    watch = bool(chain_id and images and not continuing
+                 and _preserves_static_scene(ctx, ctx.video_request or first_prompt))
+    if chain_id and ctx.video_request and getattr(ctx, 'video_text_overlay_allowed', True):
+        video_mod._onscreen_text_words(ctx, ctx.video_request)
     # The whole chain holds the card: no model call runs between its parts (the bridges
     # were written above), so the chat model stays out instead of being loaded back for
     # every gap -- and the turn deadline sees the card in use, not an idle ComfyUI.
@@ -2616,12 +2735,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         ctx.video_part = f"1/{len(parts)}" if len(parts) > 1 else ""
         ctx.video_part_request = parts[0] if len(parts) > 1 else ""
         ctx.set_stage(f"Generating a video ({ctx.video_part})" if ctx.video_part else "Generating a video")
-        first_prompt = prepped[0][0] if prepped else description
         # A static shot opening a chain on a photo: H3 sometimes covers it with drawn flowers
         # or anime faces, and every later part inherits them from the latent. Caught here by
         # the frame edges, redrawn with another seed.
-        watch = bool(chain_id and images and not continuing
-                     and _preserves_static_scene(ctx, ctx.video_request or first_prompt))
         best_eyes = None
         speech_unverified = False
         framing_unverified = False
@@ -2655,8 +2771,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 p = result.get("path")
                 look = watch and p and os.path.exists(p)
                 drawn = video_mod.drawn_over(p, images[0]) if look else None
-                # Whole-frame edge drift also measures the requested subject's movement.
-                # Treat it as fatal only when a fixed frame was explicitly requested.
+                # Edge drift also measures subject motion, so only gate a fixed frame or talking head.
                 fixed_frame = re.search(
                     r'\b(?:stationary|static|locked|fixed)\s+(?:camera|shot|frame)\b|'
                     r'\b(?:camera|shot|frame)\s+(?:stays?\s+|is\s+)?(?:stationary|static|locked|fixed)\b|'
@@ -2664,7 +2779,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                     r'камер\w*.{0,30}(?:неподвижн\w*|статичн\w*|не двигает\w*|без движен\w*)|'
                     r'без движен\w* камер\w*',
                     (state.get('user_input_original') or '') + '\n' + (ctx.video_request or ''), re.I)
-                drift = video_mod.overlay_drift(p) if p and fixed_frame and (look or static_hold) else None
+                drift = video_mod.overlay_drift(p) if p and (fixed_frame or talking) and (look or static_hold) else None
                 drift_bad = drift is not None and drift > video_mod.OVERLAY_DRIFT_MAX
                 eyes = video_mod.eye_drift(images[0], p, light=False) if head and not static_hold and p and os.path.exists(p) else None
                 # part 1 had no speech check: its last word, cut by the clip's end, went to the user
@@ -2759,7 +2874,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
 
         if chain_id:
             if len(parts) > 1:
-                _chain_reference = images[0] if images and re.search(r'<Picture 1>', ctx.video_request or '', re.I) else ''
+                needs_reference = re.search(r'<Picture 1>', ctx.video_request or '', re.I) or any(
+                    re.search(r'<Picture 1>', prompt, re.I) for prompt, _ in prepped[1:])
+                _chain_reference = images[0] if images and needs_reference else ''
                 expected_chain_idx = chain_idx + len(parts) - 1
                 chain_idx = _render_chain_parts(ctx, path, prepped, args, chain_id, chain_idx,
                                                 reference=_chain_reference)
@@ -2889,9 +3006,11 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         + ("What the clip shows is ONLY these approved plan parts (anything else in the "
            "request, such as parts the user removed, was NOT made -- never describe it): "
            + " | ".join(approved) + "\n" if approved else "")
-        + ("A review of a few sampled frames suggests possible issues: " + ctx.video_action_note
-           + ". This review can misread motion between frames. Tell the user these are possible issues, "
-           "not confirmed failures, and let them judge the clip.\n" if getattr(ctx, "video_action_note", "") else "")
+        + (("The visual check did not complete; do not claim the clip was verified.\n"
+            if 'The video could not be checked against the request.' in ctx.video_action_note else
+            "A review of a few sampled frames suggests possible issues: " + ctx.video_action_note
+            + ". This review can misread motion between frames. Tell the user these are possible issues, "
+              "not confirmed failures, and let them judge the clip.\n") if getattr(ctx, "video_action_note", "") else "")
         + ("A visual check suggests possible issues at a join: " + ctx.video_join_note + ". Tell the "
            "user these are possible issues, not confirmed failures; do NOT call the clip seamless.\n"
            if getattr(ctx, "video_join_note", "") else "") +

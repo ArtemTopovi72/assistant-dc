@@ -48,7 +48,7 @@ check("NONE means all shown", H._check_actions(ctx_for("NONE"), "x.mp4", script)
 # reasoning first, the verdict last: the reply was told an action was missing (live 2026-10-20)
 r = H._check_actions(ctx_for("The frames show his face and lips. Speech cannot be seen. **NONE**."), "x.mp4", script)
 check("a NONE at the end means all shown too", r == "", r)
-check("a failing model never blocks the clip", H._check_actions(ctx_for(RuntimeError("x")), "x.mp4", script) == "")
+check("a failing model reports that review was unavailable", H._check_actions(ctx_for(RuntimeError("x")), "x.mp4", script) == "The video could not be checked against the request.")
 check("no script, no call", H._check_actions(ctx_for("anything"), "x.mp4", ["ok"]) == "")
 
 print(f"\n{OK} passed, {BAD} failed")

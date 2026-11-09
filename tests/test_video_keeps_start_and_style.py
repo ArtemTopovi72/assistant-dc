@@ -65,3 +65,27 @@ def test_text_only_or_a_set_of_references_gets_no_start_lock():
 def test_an_asked_new_style_is_not_fought():
     p = _run([_img()], "оживи её в стиле аниме", restyle=True)
     assert V._START_LOCK_SUFFIX in p and V._STYLE_LOCK_SUFFIX not in p
+
+
+def test_chain_continuation_keeps_style_and_inset_without_inventing_one():
+    ctx = types.SimpleNamespace(yes_no=lambda *a, **kw: False,
+                                video_engine=Over(V, _context_ir_on=lambda: False))
+    prompt, _ = V.prepare_prompt(ctx, V.CONTINUE_CTX_PREFIX + 'The speaker continues.', seconds=5)
+    assert V._CONTINUITY_LOCK_SUFFIX in prompt
+    assert 'unless the request says otherwise' in prompt
+    assert 'do not create an inset if none exists' in prompt
+
+
+def test_chain_drops_conflicting_layout_but_keeps_spoken_words():
+    source = 'A man is inside the inset; the surrounding studio is empty.'
+    part = 'The man says: "Hello there".'
+    bad = 'A man sits inside the studio and says: "Hello there".'
+    engine = Over(V, VIDEO_SPEECH_STRESS=False)
+    ctx = types.SimpleNamespace(video_engine=engine, video_request=part,
+        yes_no=lambda *a, **kw: False, text_model=lambda *a, **kw: 'YES')
+    result = V.guard_chain_layout(ctx, source, bad, part)
+    assert 'sits inside the studio' not in result
+    assert '"Hello there"' in result
+    assert V._CONTINUITY_LOCK_SUFFIX in result
+    ctx.text_model = lambda *a, **kw: 'NO'
+    assert V.guard_chain_layout(ctx, source, bad, part) == bad

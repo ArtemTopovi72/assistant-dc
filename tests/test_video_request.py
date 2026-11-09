@@ -19,6 +19,8 @@ def test_reference_continuation_rewrites_prompt_when_source_layout_is_wrong():
     calls = []
     def vision(ctx, **kw):
         calls.append(kw)
+        if 'SOURCE LAYERS' in kw.get('user_text', ''):
+            return 'NO'
         if 'CHECK THE LAYOUT' in kw.get('user_text', ''):
             return 'MISMATCH: the person is inside the inset' if len(calls) == 2 else 'OK'
         return bad if len(calls) == 1 else good
@@ -26,8 +28,52 @@ def test_reference_continuation_rewrites_prompt_when_source_layout_is_wrong():
     out = video.to_context_ir(ctx, 'The person reaches for a cup.', mode='ref2va', seconds=6,
                               images=['source.png'], n_videos=1)
     assert 'person stays in the inset' in out
-    assert len(calls) == 4
+    assert len(calls) == 5
     assert calls[1]['max_tokens'] >= 2048
+
+
+def test_image_animation_repairs_inset_layout_before_render():
+    bad = ('integrated_multimodal_description: the person sits in the studio\n'
+           'overall_soundscape: room\nnon_diegetic_music: N/A')
+    good = bad.replace('sits in the studio', 'speaks inside the inset')
+    checks = iter(['MISMATCH: the person is inside an inset', 'OK'])
+    drafts = iter([bad, good])
+    def vision(ctx, **kw):
+        if 'SOURCE LAYERS' in kw.get('user_text', ''):
+            return 'NO'
+        return next(checks) if 'CHECK THE LAYOUT' in kw.get('user_text', '') else next(drafts)
+    ctx = SimpleNamespace(vision_model=vision, video_request='Animate the person speaking.')
+    out = video.to_context_ir(ctx, ctx.video_request, mode='i2va', seconds=6, images=['source.png'])
+    assert 'speaks inside the inset' in out
+
+
+def test_uncertain_image_layout_is_not_sent_to_renderer():
+    bad = ('integrated_multimodal_description: person sits in the background\n'
+           'overall_soundscape: room\nnon_diegetic_music: N/A')
+    def vision(ctx, **kw):
+        return 'UNKNOWN: the prompt may contradict the inset' if 'CHECK THE LAYOUT' in kw.get('user_text', '') else bad
+    ctx = SimpleNamespace(vision_model=vision, video_request='Animate the person speaking.')
+    out = video.to_context_ir(ctx, ctx.video_request, mode='i2va', seconds=6, images=['source.png'])
+    assert 'person sits in the background' not in out
+    assert out.startswith(ctx.video_request)
+
+
+def test_inset_second_check_catches_a_false_ok():
+    bad = ('integrated_multimodal_description: man sits in the studio\n'
+           'overall_soundscape: room\nnon_diegetic_music: N/A')
+    good = bad.replace('man sits in the studio', 'man speaks inside the inset')
+    drafts = iter([bad, good])
+    def vision(ctx, **kw):
+        if 'CHECK THE LAYOUT' in kw.get('user_text', ''):
+            return 'OK'
+        if 'SOURCE LAYERS' in kw.get('user_text', ''):
+            return 'YES: a man is inside an inset; the studio is empty.'
+        return next(drafts)
+    def text(ctx, guide, user, **kw):
+        return 'YES' if 'man sits in the studio' in user else 'NO'
+    ctx = SimpleNamespace(vision_model=vision, text_model=text, video_request='Animate the man speaking.')
+    out = video.to_context_ir(ctx, ctx.video_request, mode='i2va', seconds=6, images=['source.png'])
+    assert 'man speaks inside the inset' in out
 
 
 def test_reference_continuation_falls_back_when_layout_repair_fails():
@@ -184,7 +230,7 @@ def test_context_ir_sees_authoritative_request_separately_from_tool_draft():
             "overall_soundscape: room tone.\n\nnon_diegetic_music: N/A")
     ctx = SimpleNamespace(
         video_request=REQUEST,
-        vision_model=lambda ctx, **kw: seen.update(kw) or good,
+        vision_model=lambda ctx, **kw: 'NO' if 'SOURCE LAYERS' in kw.get('user_text', '') else 'OK' if 'CHECK THE LAYOUT' in kw.get('user_text', '') else seen.update(kw) or good,
     )
     assert video.to_context_ir(ctx, DRAFT, mode="i2va", seconds=5.17, images=["source.png"])
     assert REQUEST in seen["user_text"]
@@ -284,6 +330,15 @@ def test_large_background_change_is_reported_when_vision_says_none(tmp_path):
     assert 'possible issues' in result
 
 
+def test_missing_vision_answer_is_reported_as_unverified(tmp_path):
+    look = SimpleNamespace(duration_seconds=lambda path: 5.0,
+                           sample_times=lambda *a, **kw: [0.0, 3.0],
+                           extract_frames=lambda path, times, dest: [(t, Path(dest) / f'{t}.png') for t in times])
+    ctx = _Rig(tmp_path).ctx(vision_model=lambda *a, **kw: '', modules={'video_look': look},
+                             video_request='Animate the person speaking to the camera.')
+    assert handlers._check_actions(ctx, 'video.mp4', []) == 'The video could not be checked against the request.'
+
+
 def test_motion_and_background_problems_are_both_reported(tmp_path, monkeypatch):
     still = tmp_path / 'source.png'
     still.write_bytes(b'source')
@@ -351,6 +406,22 @@ def test_chain_does_not_continue_from_corrupted_first_part(tmp_path):
     assert '[TOOL ERROR]' in result
     assert len([call for call in rig.calls if call[0] != 'PREP']) == 3
     assert not rig.stitched
+
+
+def test_talking_head_chain_retries_background_corruption_without_explicit_static_camera(tmp_path):
+    still = tmp_path / 'source.png'
+    still.write_bytes(b'source')
+    scores = iter([64.0, 5.0])
+    rig = _Rig(tmp_path, drawn_over=lambda *a: 0.0, is_talking_head=lambda *a, **kw: True,
+               overlay_drift=lambda path: next(scores), OVERLAY_DRIFT_MAX=35)
+    ctx = rig.ctx(text_model=lambda *a, **kw: '', vision_model=lambda *a, **kw: 'NONE',
+                  yes_no=lambda *a, **kw: False,
+                  video_plan_parts=['The man says "Hello".', 'The man says "Goodbye".'],
+                  deps=SimpleNamespace(asks_for_video=lambda *a: True))
+    handlers._handle_generate_video(ctx, {'image_path': str(still), 'user_input_original': 'Animate the man speaking.'},
+                                    {'description': 'The man says "Hello".', 'seconds': 12, 'use_current_images': True})
+    renders = rig.renders()
+    assert len(renders) >= 2 and renders[0][1]['chain'] == renders[1][1]['chain']
 
 
 def test_chain_with_requested_person_motion_does_not_reject_edge_motion(tmp_path):
@@ -439,7 +510,7 @@ def test_context_ir_ask_carries_the_style_anchor_and_one_action_arc():
             "overall_soundscape: room tone.\n\nnon_diegetic_music: N/A")
     ctx = SimpleNamespace(
         video_request="Дедушка какает в свой кулачок левой руки",
-        vision_model=lambda ctx, **kw: seen.update(kw) or good,
+        vision_model=lambda ctx, **kw: 'NO' if 'SOURCE LAYERS' in kw.get('user_text', '') else 'OK' if 'CHECK THE LAYOUT' in kw.get('user_text', '') else seen.update(kw) or good,
     )
     assert video.to_context_ir(ctx, DRAFT, mode="i2va", seconds=5.17, images=["source.png"])
     assert "STYLE AND ACTION RULES" in seen["user_text"]
@@ -516,7 +587,7 @@ def test_start_lock_no_longer_contradicts_a_described_camera_move():
             "overall_soundscape: room tone.\n\nnon_diegetic_music: N/A"),
     )
     seen = {}
-    ctx.vision_model = lambda ctx, **kw: seen.update(kw) or (
+    ctx.vision_model = lambda ctx, **kw: 'NO' if 'SOURCE LAYERS' in kw.get('user_text', '') else 'OK' if 'CHECK THE LAYOUT' in kw.get('user_text', '') else seen.update(kw) or (
         "integrated_multimodal_description: [Shot 1] A red balloon sways.\n\n"
         "overall_soundscape: room tone.\n\nnon_diegetic_music: N/A")
     result = video.to_context_ir(ctx, DRAFT, mode="i2va", seconds=5.17, images=["source.png"])
