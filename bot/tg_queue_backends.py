@@ -298,7 +298,7 @@ class RedisBackend(_Backend):
         self._push_sha = self._r.register_script(self._PUSH_LUA)
         self._pop_sha  = self._r.register_script(self._POP_LUA)
         self._requeue_sha = self._r.register_script(self._REQUEUE_LUA)
-        logger.info("RedisBackend connected: %s", url)
+        logger.info("RedisBackend connected")
 
     def _chats(self) -> list[str]:
         try:
