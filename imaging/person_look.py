@@ -33,7 +33,7 @@ _FROM_WEB = (
     "forehead, eyes, face shape, typical age and clothing. Only appearance. Output "
     "the description alone.")
 
-_CACHE: "OrderedDict[str, str]" = OrderedDict()
+_CACHE: "OrderedDict[tuple, str]" = OrderedDict()
 _LOCK = threading.Lock()
 # Suites hand in, on the context: person_look(text) -> (person, look), and
 # person_search(query) -> search text.
@@ -47,17 +47,21 @@ def _ask(text: str, ctx=None) -> tuple:
         return "", ""
     from llm import call_llm_simple
     from utils import safe_json_from_llm
-    out = text_model(ctx)(None, _SYSTEM, "Request: " + text[:1500], temperature=0.0,
+    out = text_model(ctx)(ctx, _SYSTEM, "Request: " + text[:1500], temperature=0.0,
                           max_tokens=200, prefill="<think></think>")
-    data = safe_json_from_llm(out or "", ["person", "look"]) or {}
+    data = safe_json_from_llm(out or "", ["person", "look"])
+    if not isinstance(data, dict) or not all(isinstance(data.get(k), str) for k in ('person', 'look')):
+        raise ValueError('person appearance read did not return a valid result')
     return str(data.get("person") or "").strip(), str(data.get("look") or "").strip()
 
 
 def _search(ctx, query: str) -> str:
+    if ctx is None or not getattr(ctx, "web_search_enabled", True):
+        return ""
     own = dep(ctx, "person_search", None)
     if own is not None:
         return own(query)
-    if os.getenv("F5_TEST_RUN") or ctx is None or not getattr(ctx, "web_search_enabled", True):
+    if os.getenv("F5_TEST_RUN"):
         return ""
     import search
     # A lookup for the drawing, not an answer: the reply under the picture
@@ -83,7 +87,7 @@ def _look_from_web(ctx, person: str) -> str:
         if own is not None:
             return own("WEB:" + found)[1]
         from llm import call_llm_simple
-        return (text_model(ctx)(None, _FROM_WEB.format(person=person), found[:4000],
+        return (text_model(ctx)(ctx, _FROM_WEB.format(person=person), found[:4000],
                                 temperature=0.0, max_tokens=160,
                                 prefill="<think></think>") or "").strip()
     except Exception:
@@ -96,23 +100,30 @@ def note(text: str, ctx=None) -> str:
     text = (text or "").strip()
     if not text:
         return ""
+    from config import MODEL_NAME
+    web = ctx is not None and getattr(ctx, 'web_search_enabled', True)
+    key = (text, getattr(ctx, 'model_name', '') or MODEL_NAME,
+           bool(getattr(ctx, 'no_think', False)), bool(web))
     with _LOCK:
-        if text in _CACHE:
-            return _CACHE[text]
+        if key in _CACHE:
+            return _CACHE[key]
     try:
         person, look = _ask(text, ctx=ctx)
     except Exception:
         logger.warning("person look: model read failed", exc_info=True)
         return ""
-    if person:
-        look = _look_from_web(ctx, person) or look
+    web_look = _look_from_web(ctx, person) if person and web else ''
+    if len(web_look.split()) < 3:
+        web_look = ''
+    look = web_look or look
     look = " ".join(look.split())[:400]
     line = (f"{person} must be recognisable as the real {person}: {look}."
             if person and len(look.split()) >= 3 else "")
-    with _LOCK:
-        _CACHE[text] = line
-        while len(_CACHE) > 256:
-            _CACHE.popitem(last=False)
+    if not person or (line and (not web or web_look)):
+        with _LOCK:
+            _CACHE[key] = line
+            while len(_CACHE) > 256:
+                _CACHE.popitem(last=False)
     if line:
         logger.info("person look: %s", line[:200])
     return line
