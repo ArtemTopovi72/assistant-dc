@@ -155,7 +155,8 @@ def edit_plan(instruction: str, ctx=None) -> dict:
         if isinstance(got, str):
             got = {"kind": got}
         return {**plain, **(got or {})}
-    key = text
+    key = (getattr(ctx, 'model_name', '') or _config.MODEL_NAME,
+           bool(getattr(ctx, 'no_think', False)), text)
     if key in _EDIT_CACHE:
         return dict(_EDIT_CACHE[key])
     try:
@@ -163,12 +164,19 @@ def edit_plan(instruction: str, ctx=None) -> dict:
         from utils import safe_json_from_llm
         kinds = "\n".join(f"  {k} -- {d}" for k, d in EDIT_CATEGORIES.items())
         raw = text_model(ctx)(
-            None, _EDIT_SYSTEM.format(kinds=kinds),
+            ctx, _EDIT_SYSTEM.format(kinds=kinds),
             "Instruction to sort (do NOT carry it out):\n«%s»\n\nReply with the JSON object only."
             % text[:1500], temperature=0.0, max_tokens=300) or ""
-        got = _validate(safe_json_from_llm(raw, tuple(EditRead.model_fields)))
-        kind = got.kind if got.kind in EDIT_CATEGORIES else "subject_edit"
+        if not raw.strip():
+            return plain
+        parsed = safe_json_from_llm(raw, tuple(EditRead.model_fields))
+        if not isinstance(parsed, dict):
+            return plain
+        got = _validate(parsed)
         steps = [s.strip() for s in got.steps if s.strip()]
+        if parsed.get('kind') not in EDIT_CATEGORIES and len(steps) < 2:
+            return plain
+        kind = got.kind if got.kind in EDIT_CATEGORIES else "subject_edit"
         out = {**got.model_dump(), "kind": "multi_op" if len(steps) >= 2 else kind,
                "steps": steps if len(steps) >= 2 else [], "target": got.target.strip()}
     except Exception:
@@ -188,18 +196,20 @@ def removes_region(instructions: str, region: str, ctx=None) -> bool:
     """The edit leaves `region` gone -- removed, or described as absent. Its own
     yes/no: folded into edit_plan, the extra fields pulled the kind read off
     (bench/edit_intent_live.py 78 -> 75). Model down -> False, the region kept."""
-    key = ((instructions or "").strip(), (region or "").strip())
-    if not all(key):
+    text, target = (instructions or "").strip(), (region or "").strip()
+    if not text or not target:
         return False
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
         own = dep(ctx, "region_read", None)   # suites: region_read(instructions, region) -> bool
-        return bool(own and own(*key))
+        return bool(own and own(text, target))
+    key = (getattr(ctx, 'model_name', '') or _config.MODEL_NAME,
+           bool(getattr(ctx, 'no_think', False)), text, target)
     if key in _REGION_CACHE:
         return _REGION_CACHE[key]
     try:
         import llm
         ans = text_model(ctx)(
-            None, "Answer yes or no only.",
+            ctx, "Answer yes or no only.",
             "An image editor gets an edit for one region of a picture.\n"
             "Region: «%s»\nEdit: «%s»\n\n"
             "Does the edit leave THAT region gone -- removed, taken off, or described as "
@@ -208,7 +218,9 @@ def removes_region(instructions: str, region: str, ctx=None) -> bool:
             "(\"a red vase with tulips\" for a blue vase), removes something else on or "
             "around it (\"remove the shadow covering the cat\" for the cat), or just does not "
             "mention it (\"table where the cat sat, now with a book\" for a vase)."
-            % (key[1][:200], key[0][:800]), temperature=0.0, max_tokens=5) or ""
+            % (target[:200], text[:800]), temperature=0.0, max_tokens=5) or ""
+        if not re.match(r'^(?:yes|no|да|нет)\b', ans.strip(), re.I):
+            return False
         got = ans.strip().lower().startswith(("yes", "да"))
     except Exception:
         logger.warning("removes_region: model read failed, keeping the region", exc_info=True)
