@@ -5,7 +5,7 @@ Real ffmpeg on a synthetic 4 s clip (test pattern, a red block appears at 3.3 s 
 silence for 2 s then a tone). The flow: button -> video -> "what happens next" -> the animate request -> generate_video with the
 tail as its reference video -> the joined clip.
 """
-import os, sys, time, threading, tempfile, subprocess
+import os, sys, time, threading, tempfile, subprocess, types
 os.environ.setdefault("F5_TEST_RUN", "1")
 os.environ.setdefault("VIDEO_AUTO_MAX_PARTS", "99")   # long chains are tested here; the 2-part cap has its own test
 try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -75,6 +75,7 @@ class StubGraph:
         INVOKES.append(base.get("user_input", ""))
         return {"final_answer": "echo", "messages": base.get("messages", [])}
 SHARED = FakeCtx()
+SHARED.deps = types.SimpleNamespace(video_silence_check=lambda ctx, request: False)
 bot = T.TelegramBot("123:TEST", lambda: SHARED, lambda: object(), lambda: {"messages": []}, silent_mode=True)
 bot.graph_builder = lambda ctx: StubGraph(ctx)
 bot._backend = T.InMemoryBackend(); bot.sent = []
@@ -138,7 +139,8 @@ check("...the first clip stays the one continued",
       and os.path.exists(s_.continue_people[0]), (s_.continue_src, s_.continue_people))
 bot._dispatch(m(text="они выходят из комнаты и смеются"))
 check("the text becomes the animate request",
-      wait(lambda: any(t.startswith("continue this video: они выходят") for t in INVOKES), 15), INVOKES[-2:])
+      wait(lambda: any(t.startswith("continue this video: они выходят") for t in INVOKES), 15),
+      {"invokes": INVOKES[-2:], "queued": [t.user_text for t in PUSHED[-2:]], "sent": bot.sent[-4:]})
 check("the state is cleared", bot._get_session(CID).continue_state == "")
 check("the task carries the clip's start frame, not the chat's stale picture",
       bool(PUSHED) and PUSHED[-1].image_id == _seed_id and PUSHED[-1].image_id != _stale_id,
@@ -147,7 +149,6 @@ check("the task carries the clip's start frame, not the chat's stale picture",
 # ---- the tool: the tail becomes <Video 1>, the result is the joined clip ----
 import tool_image_handlers as H
 H._check_joins = lambda ctx, pairs: ""
-import types
 from fakes import Over
 # What the handler is handed on each TCtx: the video engine's fakes (_E), the handlers'
 # own helpers (_DEPS) and the text model (_TM[0], None = the real one).
@@ -158,6 +159,7 @@ def fake_gen(ctx, description, **kw):
     return {"path": NEW, "status": "success", "seconds": 3.0, "width": 320, "height": 240}
 _E["generate_video"] = fake_gen
 _E["engine_available"] = lambda ctx=None: (True, "")
+_E["explicit_silence"] = lambda ctx, request: False
 _E["motion_context_on"] = lambda: False             # the reference-tail path first
 _DEPS["asks_for_video"] = lambda ctx, state: True
 _DEPS["_render_budget_exhausted"] = lambda *a, **k: None
