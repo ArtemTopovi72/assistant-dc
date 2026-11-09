@@ -125,8 +125,8 @@ try:
 finally:
     _T[0] = None
 
-check("the model never saw the Cyrillic literal",
-      _calls and "Добро пожаловать" not in _calls[0], _calls)
+check("the translation model never saw the Cyrillic literal",
+      _calls and "Добро пожаловать" not in _calls[-1], _calls)
 check("the translated turn keeps the lettering in Russian",
       "«Добро пожаловать»" in out, out)
 check("the instruction itself is English", "draw a poster" in out, out)

@@ -47,6 +47,30 @@ def test_entry_translation_rejects_story_generated_instead_of_request(monkeypatc
     assert language._translate_to_english(SimpleNamespace(), request) == request
 
 
+def test_entry_translation_preserves_long_dialogue_and_rejects_lost_literals(monkeypatch):
+    import graph_compose
+    monkeypatch.setattr(language, '_read', lambda *a, **k: {'translate': False, 'wants': []})
+    monkeypatch.setattr(graph_compose, '_word_count_note', lambda *a, **k: '')
+    line = 'Сегодня мы спокойно обсуждаем наши планы на вечер и вспоминаем как гуляли по городу когда светило солнце и было очень тепло и уютно.'
+    request = f'Оживи фото: слева говорят «{line}», справа отвечают «Да, я помню».'
+    monkeypatch.setattr(language, 'text_model', lambda ctx: lambda *a, **k: 'Animate photo: left says ⟦KEEP0⟧ and right says ⟦KEEP1⟧.')
+    assert language._translate_to_english(SimpleNamespace(), request) == f'Animate photo: left says «{line}» and right says «Да, я помню».'
+    for broken in ('Animate photo: left says ⟦KEEP0⟧.', 'Animate photo: ⟦KEEP0⟧ ⟦KEEP0⟧ ⟦KEEP1⟧.',
+                   'Animate photo: left says ⟦KEEP1⟧ and right says ⟦KEEP0⟧.'):
+        monkeypatch.setattr(language, 'text_model', lambda ctx: lambda *a, **k: broken)
+        assert language._translate_to_english(SimpleNamespace(), request) == request
+
+
+def test_literal_order_follows_source_not_placeholder_creation(monkeypatch):
+    import graph_compose
+    monkeypatch.setattr(language, '_read', lambda *a, **k: {'translate': False, 'wants': []})
+    monkeypatch.setattr(graph_compose, '_word_count_note', lambda *a, **k: '')
+    monkeypatch.setattr(language, '_protect_literals', lambda *a, **k: (
+        'Надпись ⟦KEEP1⟧, потом фраза ⟦KEEP0⟧', {'⟦KEEP0⟧': '«Привет»', '⟦KEEP1⟧': 'Мир'}))
+    monkeypatch.setattr(language, 'text_model', lambda ctx: lambda *a, **k: 'Show the sign ⟦KEEP1⟧ first, and then the person clearly says ⟦KEEP0⟧.')
+    assert language._translate_to_english(SimpleNamespace(), 'Надпись Мир, потом фраза «Привет»') == 'Show the sign Мир first, and then the person clearly says «Привет».'
+
+
 def test_russian_product_list_with_long_urls_is_not_translated(monkeypatch):
     monkeypatch.setattr(language, '_read', lambda *a, **k: {'reply_language': '', 'translate': False, 'language_mode': ''})
     monkeypatch.setattr(language, 'text_model', lambda ctx: lambda *a, **k: 'Обрезанный ответ')

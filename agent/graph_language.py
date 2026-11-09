@@ -65,11 +65,11 @@ _TRANSLATE_IN_PROMPT = (
 # Paired quotes only. A lone apostrophe is punctuation ("don't"), and treating it
 # as an opener swallowed the rest of the message.
 _QUOTED_LITERAL_RE = re.compile(
-    r"[«][^»]{1,120}[»]"          # Russian guillemets
-    r"|[„][^“”]{1,120}[“”]"   # German-style „…“
-    r"|[“][^”]{1,120}[”]"               # curly “…”
-    r"|\"[^\"]{1,120}\""                               # straight "…"
-    r"|(?<!\w)'[^'\n]{1,120}'(?!\w)"   # 'бабуль, а пирожки скоро?' came back as "grandma, ..." and the clip spoke English
+    r"[«][^»]+[»]"          # Russian guillemets
+    r"|[„][^“”]+[“”]"   # German-style „…“
+    r"|[“][^”]+[”]"               # curly “…”
+    r"|\"[^\"]+\""                               # straight "…"
+    r"|(?<!\w)'[^'\n]+'(?!\w)"   # quoted dialogue must stay in its original language
 )
 
 
@@ -390,6 +390,9 @@ def _translate_to_english(ctx, text: str, context: str = "") -> str:
         # literals we are about to put back in their own alphabet, so counting
         # the restored Cyrillic here would reject a perfectly good translation.
         if out and sum(ch.isascii() for ch in out) / len(out) > 0.9:
+            if re.findall(r'⟦KEEP\d+⟧', out) != re.findall(r'⟦KEEP\d+⟧', protected):
+                logger.warning("Entry translation changed literal order or count — keeping the original")
+                return t
             out = _restore_literals(out, keep)
             if "⟦KEEP" in out:
                 # a placeholder the model made up stands for words it dropped: «одномк5бъет»

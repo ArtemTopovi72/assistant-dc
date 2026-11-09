@@ -148,7 +148,15 @@ def read(ctx, reply: str, user: str = "") -> dict:
     try:
         from utils import safe_json_from_llm
         raw = text_model(ctx)(ctx, SYSTEM, msg, temperature=0.0, max_tokens=400) or ""
-        out = _validate(safe_json_from_llm(raw, FIELDS)).model_dump()
+        parsed = safe_json_from_llm(raw, FIELDS)
+        if not parsed or not any(k in parsed for k in FIELDS):
+            logger.warning("reply_read: model returned no usable reading")
+            return dict(NOTHING)
+        validated = _validate(parsed)
+        if not validated.model_fields_set:
+            logger.warning("reply_read: model returned invalid fields")
+            return dict(NOTHING)
+        out = validated.model_dump()
         # A claim is only what the reply says: the quoted words must be in it.
         flat = " ".join(reply.lower().split())
         said = lambda w: bool(w.strip()) and " ".join(w.lower().split()) in flat
