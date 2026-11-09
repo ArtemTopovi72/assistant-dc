@@ -89,12 +89,15 @@ def test_bad_sort_is_rejected_by_schema(pages):
     assert "[TOOL ERROR]" in _call("ozon_search", query="x", sort="cheap")
 
 
-def test_blocked_network_is_reported_not_retried():
+def test_blocked_network_is_reported_without_guessing_the_cause(monkeypatch):
+    import tool_ozon_handlers
+    monkeypatch.setattr(tool_ozon_handlers, '_indexed_ozon_links', lambda *a: '')
     def blocked(path):
         raise O.OzonBlocked("Ozon refuses this network")
     _WORLD["gw"] = Over(O, fetch_page=blocked)
     out = _call("ozon_search", query="чайник")
-    assert out.startswith("[TOOL ERROR]") and "do not retry" in out.lower() and "invent" in out
+    assert out.startswith("[TOOL ERROR]") and "cause and duration are not established" in out
+    assert "Do not invent products or prices" in out
 
 
 def test_reviews_feed_the_injection_guard():
@@ -127,12 +130,15 @@ def test_every_ozon_button_arms_a_prefix_that_keeps_the_ozon_keyboard():
         assert tg_bot._prompt_label(prefix, "ru") != prefix.rstrip(": "), key   # has a real hint
 
 
-def test_connection_timeout_is_a_block_not_a_retry_hint():
+def test_connection_timeout_does_not_claim_a_permanent_network_block(monkeypatch):
+    import tool_ozon_handlers
+    monkeypatch.setattr(tool_ozon_handlers, '_indexed_ozon_links', lambda *a: '')
     def dead(path):
         raise O.OzonBlocked("ozon.ru is unreachable from this server's network (net::ERR_CONNECTION_TIMED_OUT).")
     _WORLD["gw"] = Over(O, fetch_page=dead)
     out = _call("ozon_search", query="чайник")
-    assert "NOT a temporary" in out and "OZON_PROXY" in out
+    assert "[TOOL ERROR]" in out and "cause and duration are not established" in out
+    assert "NET::ERR_CONNECTION_TIMED_OUT" in out.upper()
 
 
 def test_cart_add_show_remove_clear(pages, tmp_path):

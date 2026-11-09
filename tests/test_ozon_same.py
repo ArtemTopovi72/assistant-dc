@@ -46,7 +46,7 @@ def page(widget, state):
 
 OFFERS = page("webSellerList", {"sellers": [seller("4871854018", 3831, 13), seller("4144291497", 4421, 10),
                                             seller("7000000001", 4000, 5)]})
-PHOTO = [{"sku": "3835949144", "price": 6450, "delivery": "12 ноября", "url": "u0", "name": "Рюкзак"},
+PHOTO = [{"sku": "3835949144", "price": 6450, "delivery": when(20), "url": "u0", "name": "Рюкзак"},
          {"sku": "5013603389", "price": 2500, "delivery": "Завтра", "url": "u1", "name": "Рюкзак"},
          {"sku": "5630013752", "price": 855, "delivery": "Завтра", "url": "u2", "name": "Наклейка"}]
 
@@ -184,6 +184,7 @@ def test_the_tool_names_the_cheaper_shop_outside_ozon():
 def test_the_eco_copy_is_rejected_and_the_real_twin_is_picked():
     seen = []
     ctx = ctx_for(seen)
+    JUDGED.clear()
     r = S.find_same(ctx, "3835949144")
     verdict = {c["sku"]: c["check"]["verdict"] for v in ("same", "different", "unclear") for c in r[v]}
     assert verdict["5013603389"] == "different", verdict          # Полиуретан, 39 cm
@@ -192,10 +193,10 @@ def test_the_eco_copy_is_rejected_and_the_real_twin_is_picked():
     assert verdict["7000000001"] == "different"
     assert verdict["5630013752"] == "different"
     assert "3835949144" not in verdict                             # the card itself is no candidate
-    assert r["source"]["delivery"] == "12 ноября"                  # ...but its tile gives its date
+    assert r["source"]["delivery"] == when(20)                    # ...but its tile gives its date
     eco = next(c for c in r["different"] if c["sku"] == "5013603389")
     assert "Полиуретан" in eco["check"]["why"], eco["check"]
-    shown = JUDGED[-1]
+    shown = next(s for s in reversed(JUDGED) if "Высота, см: 39" in s)
     assert "Материал: Кожа натуральная лакированная" in shown.split("LISTINGS")[0]   # the original's card
     assert "Высота, см: 39" in shown and "2500" not in shown and "₽" not in shown   # cards, never prices
     assert r["best"]["cheap"]["sku"] == "4871854018"

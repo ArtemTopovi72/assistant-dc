@@ -558,6 +558,7 @@ class _Browser:
         self._q: queue.Queue = queue.Queue()
         self._thread = None
         self._lock = threading.Lock()
+        self.pending = 0
         self.gen = 0                       # bumped by reset(): drop contexts, re-read the jar
 
     def reset(self):
@@ -802,15 +803,19 @@ def _hide_from_taskbar() -> None:
 
 _BROWSERS = [_Browser() for _ in range(OZON_WORKERS)]
 _BROWSER = _BROWSERS[0]                  # UI actions (the pickup point) run here
-_NEXT = [0]
 _NEXT_LOCK = threading.Lock()
 
 
 def fetch_page(path: str) -> dict:
     with _NEXT_LOCK:
-        b = _BROWSERS[_NEXT[0] % len(_BROWSERS)]
-        _NEXT[0] += 1
-    return b.fetch(path)
+        b = min(_BROWSERS, key=lambda worker: (
+            worker.pending, not (worker._thread and worker._thread.is_alive())))
+        b.pending += 1
+    try:
+        return b.fetch(path)
+    finally:
+        with _NEXT_LOCK:
+            b.pending -= 1
 
 
 def pmap(fn, items) -> list:
