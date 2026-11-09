@@ -1855,6 +1855,47 @@ def _check_inset_crossing(ctx, frames, references, script: str) -> str:
     return ''
 
 
+def _check_added_graphics(ctx, path: str, reference: str, request: str) -> str:
+    """Look for new graphic effects in sampled frames, compared to the source."""
+    import tempfile
+    from pathlib import Path
+    from PIL import Image
+    unverified = 'The video could not be checked against the request.'
+    try:
+        look = module(ctx, 'video_look')
+        duration = look.duration_seconds(path)
+        if not duration:
+            return unverified
+        with tempfile.TemporaryDirectory(prefix='graphiccheck_') as tmp:
+            folder = Path(tmp)
+            frames = look.extract_frames(path, [duration * f for f in (0.25, 0.5, 0.8)], folder)
+            if not frames:
+                return unverified
+            missing = len(frames) < 3
+            for i, (_, frame) in enumerate(frames):
+                with Image.open(frame) as image:
+                    if image.width < 1024:
+                        enlarged = folder / f'large_{i}.png'
+                        image.resize((1024, max(1, round(image.height * 1024 / image.width))), Image.Resampling.LANCZOS).save(enlarged)
+                        frame = enlarged
+                answer = vision_model(ctx)(
+                    ctx, temperature=0.0, max_tokens=180,
+                    image_paths=[('Source:', reference), ('Generated:', str(frame))],
+                    user_text=('Compare the source photo and generated frame. Are there NEW drawn graphics, such as '
+                               'stars, stickers, dots or subtitles, absent from the source and not requested by the user? '
+                               'Do not count changes to existing writing or real objects, movements or lighting as new '
+                               'graphics. Describe additions concretely; answer NONE if none are visible. '
+                               'User request: ' + (request or '')[:900])) or ''
+                answer = ' '.join(answer.split())
+                missing = missing or not answer
+                if answer and not _says_none(answer):
+                    return 'The video may contain unrequested graphic overlays: ' + answer[:250]
+        return unverified if missing else ''
+    except Exception:
+        logger.warning('video graphics review failed', exc_info=True)
+        return unverified
+
+
 def _check_actions(ctx, path: str, parts: list, references=()) -> str:
     """The current request against the finished clip, in ONE vision call on frames spread over it.
     The reply said «Готово! швыряет шапку» over a clip where the hat stayed on (live 2026-10-18),
@@ -2956,6 +2997,9 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         objects_note = ('The video may contain added objects or effects.'
                         if watch and drawn is not None and drawn > video_mod.DRAWN_OVER_MAX else '')
         ctx.video_action_note = ' '.join(note for note in (ctx.video_action_note, background_note, objects_note) if note)
+    if len(images) == 1 and not continuing:
+        graphic_note = _check_added_graphics(ctx, path, images[0], ctx.video_request or description)
+        ctx.video_action_note = ' '.join(note for note in (ctx.video_action_note, graphic_note) if note)
     audio_removed = False
     if video_mod.explicit_silence(ctx, ctx.video_request):
         muted = video_mod.mute_video(path)

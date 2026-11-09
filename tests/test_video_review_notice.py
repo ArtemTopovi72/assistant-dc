@@ -4,6 +4,15 @@ from types import SimpleNamespace
 import tool_image_handlers as handlers
 
 
+def test_graphic_and_inset_warnings_both_reach_user():
+    note = ('A person may cross the boundary of an inset without being asked. '
+            'The background may have changed unexpectedly. '
+            'The video may contain unrequested graphic overlays: Green stars.')
+    answer = _video_review_notice('Готово!', note, 'Оживи фото')
+    assert 'видеовставки' in answer and 'графические эффекты' in answer
+    assert 'возможные отличия' in answer
+
+
 def test_inset_review_reports_positive_only():
     frames = [(0, 'a.jpg'), (1, 'b.jpg'), (4, 'c.jpg')]
     yes = SimpleNamespace(vision_model=lambda *a, **kw: 'YES: the arm crosses into the studio')

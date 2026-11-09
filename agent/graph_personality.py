@@ -990,17 +990,25 @@ def _video_review_notice(answer: str, note: str, user_input: str) -> str:
     if not note:
         return answer
     notices = []
+    graphic = 'The video may contain unrequested graphic overlays:'
+    if graphic in note:
+        notices.append("⚠️ На видео могли появиться лишние графические эффекты или предметы. Проверь результат."
+                       if re.search(r'[А-Яа-яЁё]', user_input or '') else
+                       "⚠️ The video may contain unrequested graphic effects or objects. Please review it.")
+        note = note.split(graphic, 1)[0].strip(' .')
     if 'The video could not be checked against the request.' in note:
         notices.append("⚠️ Не удалось автоматически проверить видео по запросу. Посмотри результат сам."
                        if re.search(r'[А-Яа-яЁё]', user_input or '') else
                        "⚠️ The video could not be checked automatically. Please review the result.")
         note = note.replace('The video could not be checked against the request.', '').strip(' .')
-    if 'A person may cross the boundary of an inset without being asked.' in note:
+    inset = 'A person may cross the boundary of an inset without being asked'
+    if inset in note:
         message = ("⚠️ Возможно, человек выходит за рамку видеовставки. Проверь этот момент в ролике."
                    if re.search(r'[А-Яа-яЁё]', user_input or '') else
                    "⚠️ A person may cross the inset's boundary. Please check the video.")
         notices.append(message)
-    elif note:
+        note = note.replace(inset, '').strip(' .')
+    if note:
         message = ("⚠️ Проверка отдельных кадров заметила возможные отличия от запроса. "
                "Посмотри видео: оценка движения может ошибаться."
                if re.search(r'[А-Яа-яЁё]', user_input or '') else

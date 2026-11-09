@@ -2376,7 +2376,10 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
                "from another picture who comes in or out of somewhere comes WHOLE, walking on "
                "their own feet into full view, face visible, never just an arm or a hand, "
                "unless the request says so; each picture's person keeps its exact look "
-               "(hair, clothes, the colour of gloves) as seen in that picture. Every picture "
+               "(hair, clothes, the colour of gloves) as seen in that picture. Rely on the reference "
+               "for static appearance instead of describing it in words, except for details needed "
+               "to distinguish the people or explicitly requested changes; never guess or embellish. "
+               "Every picture "
                "after <Picture 1> is ONLY what a person looks like: never pasted into the shot, "
                "never part of the composition, its frame, border or background never shown; "
                "who they are (a man, a guy, a woman) is what the request calls them, not a "
@@ -2691,6 +2694,9 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
     if untrusted:
         from difflib import SequenceMatcher
         user_request = getattr(ctx, 'video_request', '') or ''
+        marker = '\ue000'
+        while marker in description or marker in user_request:
+            marker += '\ue000'
         def scrub_quoted_guess(match):
             word = match.group(2)
             if not word.isupper() or re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", user_request, re.I):
@@ -2705,7 +2711,7 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
                 candidate = guess.replace('0', 'O')
                 if (len(normalized) >= 3 and len(normalized) == len(candidate)
                         and SequenceMatcher(None, normalized, candidate).ratio() >= (len(normalized) - 1) / len(normalized)):
-                    return "the exact original lettering in the reference image"
+                    return marker
             return match.group(0)
         description = re.sub(r'''(["'])([A-Z0-9]{3,})\1''', scrub_quoted_guess, description)
         for piece in sorted(set(untrusted), key=len, reverse=True):
@@ -2716,7 +2722,12 @@ def prepare_prompt(ctx, description: str, *, images: Sequence[str] = (), videos:
                 if piece.isupper() or any(ch.isdigit() for ch in piece):
                     description = re.sub(pattern, lambda match: match.group(0) if re.search(
                         r"(?<!\w)" + re.escape(match.group(2) or match.group(3)) + r"(?!\w)", user_request, re.I)
-                        else "the exact original lettering in the reference image", description)
+                        else marker, description)
+        mark = re.escape(marker)
+        description = re.sub(r'(?:the\s+)?' + mark + r'(?:\s*(?:,\s*|and\s+)(?:the\s+)?' + mark + r')+(?:\s+lettering)?',
+                             lambda _: marker, description)
+        description = re.sub(r'\bthe\s+(?=' + mark + ')', '', description)
+        description = description.replace(marker, 'the exact original lettering in the reference image')
         guard = ("Preserve any visible lettering by copying its exact shapes from "
                  "the reference image; OCR transcriptions may be wrong. Do not invent "
                  "or respell letters.")

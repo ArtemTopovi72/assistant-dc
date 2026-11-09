@@ -187,7 +187,8 @@ def test_long_request_adds_visible_continuations_to_its_plan(tmp_path):
 
 
 @pytest.mark.parametrize("approved", [[], ["The red balloon sways."]])
-def test_finished_video_is_checked_against_request_or_approved_plan(tmp_path, approved):
+def test_finished_video_is_checked_against_request_or_approved_plan(tmp_path, approved, monkeypatch):
+    monkeypatch.setattr(handlers, '_check_added_graphics', lambda *a: '')
     still = tmp_path / "source.png"
     still.write_bytes(b"source")
     seen = []
@@ -282,7 +283,8 @@ def test_camera_instruction_comes_from_current_request_rather_than_old_draft():
     assert video._FRAMING_LOCK_SUFFIX in result
 
 
-def test_frame_review_is_reported_as_uncertain(tmp_path):
+def test_frame_review_is_reported_as_uncertain(tmp_path, monkeypatch):
+    monkeypatch.setattr(handlers, '_check_added_graphics', lambda *a: '')
     still = tmp_path / 'source.png'
     still.write_bytes(b'source')
     look = SimpleNamespace(duration_seconds=lambda path: 5.17,
@@ -314,7 +316,8 @@ def test_reference_continuation_checks_its_finished_frames(tmp_path, monkeypatch
     assert ctx.video_action_note == 'Inset changed'
 
 
-def test_large_background_change_is_reported_when_vision_says_none(tmp_path):
+def test_large_background_change_is_reported_when_vision_says_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(handlers, '_check_added_graphics', lambda *a: '')
     still = tmp_path / 'source.png'
     still.write_bytes(b'source')
     look = SimpleNamespace(duration_seconds=lambda path: 5.17,
@@ -339,6 +342,28 @@ def test_missing_vision_answer_is_reported_as_unverified(tmp_path):
     assert handlers._check_actions(ctx, 'video.mp4', []) == 'The video could not be checked against the request.'
 
 
+def test_graphics_review_samples_and_enlarges_frames(tmp_path):
+    from PIL import Image
+    seen, sampled = [], []
+    frame = tmp_path / 'frame.png'
+    Image.new('RGB', (320, 180)).save(frame)
+    look = SimpleNamespace(duration_seconds=lambda path: 10,
+                           extract_frames=lambda path, times, dest: sampled.extend(times) or [(t, frame) for t in times])
+    def vision(ctx, **kw):
+        seen.append(kw)
+        assert Image.open(kw['image_paths'][1][1]).width == 1024
+        return 'Green stars were added.'
+    ctx = _Rig(tmp_path).ctx(vision_model=vision, modules={'video_look': look})
+    note = handlers._check_added_graphics(ctx, 'video.mp4', 'source.png', 'Keep the background.')
+    assert 'Green stars' in note and sampled == [2.5, 5.0, 8.0]
+    assert seen[0]['image_paths'][0] == ('Source:', 'source.png')
+    assert 'Keep the background.' in seen[0]['user_text']
+    ctx.vision_model = lambda *a, **kw: 'NONE'
+    assert not handlers._check_added_graphics(ctx, 'video.mp4', 'source.png', 'Speak normally.')
+    ctx.vision_model = lambda *a, **kw: ''
+    assert handlers._check_added_graphics(ctx, 'video.mp4', 'source.png', 'Speak normally.') == 'The video could not be checked against the request.'
+
+
 def test_motion_and_background_problems_are_both_reported(tmp_path, monkeypatch):
     still = tmp_path / 'source.png'
     still.write_bytes(b'source')
@@ -353,6 +378,7 @@ def test_motion_and_background_problems_are_both_reported(tmp_path, monkeypatch)
 
 
 def test_final_failed_object_check_is_not_lost(tmp_path, monkeypatch):
+    monkeypatch.setattr(handlers, '_check_added_graphics', lambda *a: '')
     still = tmp_path / 'source.png'
     still.write_bytes(b'source')
     rig = _Rig(tmp_path, drawn_over=lambda *a: 0.9, DRAWN_OVER_MAX=0.5,

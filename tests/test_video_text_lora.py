@@ -57,6 +57,11 @@ try:
             ocr_ctx, 'Keep "SOL" and "ERRA" on the shirts. He says "hello".',
             images=['source.png'], seconds=5.2, mode='t2va')
         assert '"SOL"' not in prompt and '"ERRA"' not in prompt and '"hello"' in prompt
+        assert 'the exact original lettering in the reference image and the exact original lettering' not in prompt
+        words = 'the exact original lettering in the reference image and the exact original lettering in the reference image'
+        ocr_ctx.video_request = f'Пусть говорит «{words}»'
+        prompt, _ = video.prepare_prompt(ocr_ctx, f'He says "{words}".', images=['source.png'], seconds=5.2, mode='t2va')
+        assert f'"{words}"' in prompt
         ocr_ctx.video_request = 'Сохрани надпись ERRA и пусть он скажет «hello».'
         prompt, _ = video.prepare_prompt(
             ocr_ctx, "Keep SOZ and ERRA on shirts. He says 'hello'.",
