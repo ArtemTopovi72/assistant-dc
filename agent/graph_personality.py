@@ -1029,8 +1029,8 @@ def _approved_video_reply(ctx, answer: str, user_input: str) -> str:
         result = ('Видео получилось неполным; отправляю то, что удалось сохранить.' if ru else
                   'The video is incomplete; sending the part that was saved.')
     elif 'short' in warnings:
-        result = ('Видео получилось короче запрошенного, отправляю результат.' if ru else
-                  'The video is shorter than requested; sending the result.')
+        result = ('Видео получилось короче ожидаемого, отправляю результат.' if ru else
+                  'The video is shorter than expected; sending the result.')
     labels = ({'speech': 'речи', 'framing': 'кадре', 'flash': 'вспышке', 'join': 'стыке'} if ru else
               {'speech': 'speech', 'framing': 'framing', 'flash': 'flash', 'join': 'transition'})
     details = [labels[k] for k in ('speech', 'framing', 'flash', 'join') if k in warnings]
