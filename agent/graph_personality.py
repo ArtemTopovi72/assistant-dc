@@ -415,11 +415,22 @@ def _turn_inputs(ctx, state, text: str) -> tuple:
     return t, _previous_reply(state), att
 
 
+def _requests_ozon_reviews(user_text):
+    return (bool(re.search(r'отзыв|reviews?', user_text or '', re.I))
+            and not re.search(r'(?:без|не\s+(?:нуж\w*|показыва\w*|ищ\w*|чита\w*|изуча\w*|анализиру\w*|учитыва\w*))\s+отзыв|отзыв\w*\s+не\s+(?:нуж\w*|показыва\w*|ищ\w*|чита\w*|изуча\w*|анализиру\w*|учитыва\w*)|(?:without|no)\s+reviews?', user_text or '', re.I))
+
+
+def _single_card_reviews(user_text):
+    from ozon_client import product_links
+    return _requests_ozon_reviews(user_text) and len(product_links(user_text or '')) == 1
+
+
 def _forced_ozon_reviews(read, called, failures, tools, user_text='', products=()):
-    requested = (bool(re.search(r'отзыв|reviews?', user_text, re.I))
-                 and not re.search(r'(?:без|не\s+(?:нуж\w*|показыва\w*|ищ\w*))\s+отзыв|(?:without|no)\s+reviews?', user_text, re.I))
+    requested = _requests_ozon_reviews(user_text)
+    if re.search(r'отзыв|reviews?', user_text or '', re.I) and not requested:
+        return ''
     after_search = 'ozon_search' in called and products and requested
-    after_product = read.get('ok') and 'ozon_reviews' in read.get('wants', []) and 'ozon_product' in called
+    after_product = 'ozon_product' in called and (requested or (read.get('ok') and 'ozon_reviews' in read.get('wants', [])))
     if ((after_search or after_product) and 'ozon_reviews' not in called
             and 'ozon_shop' not in called
             and not any(name == 'ozon_reviews' and count for (name, _), count in failures.items())
@@ -509,9 +520,12 @@ def _forced_intent(ctx, state, text: str, has_image: bool, turn_tools, already_c
             return ""
     elif "ozon.ru/" in raw.lower():
         from ozon_client import product_links
-        tool = "ozon_shop" if len(product_links(raw)) >= 2 else _turn_intent(ctx, state, text)["must_call"]
+        tool = ("ozon_shop" if len(product_links(raw)) >= 2 else
+                "ozon_product" if _single_card_reviews(raw) else _turn_intent(ctx, state, text)["must_call"])
     else:
         tool = _turn_intent(ctx, state, text)["must_call"]
+    if tool == 'ozon_reviews' and re.search(r'отзыв|reviews?', text or '', re.I) and not _requests_ozon_reviews(text):
+        return ''
     if tool == "transcribe_media" and getattr(ctx, "media_transcript", ""):
         from tool_code_handlers import _needs_transcript_file
         if not _needs_transcript_file(raw):
@@ -1379,6 +1393,8 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
         _always = set(_always) | _button
         _read = _turn_intent(ctx, state, original_input or user_input)
         _review_text = _own_texts[-1] or _own_texts[0]
+        if _single_card_reviews(_review_text):
+            _always.update(('ozon_product', 'ozon_reviews'))
         _review_products = getattr(ctx, 'turn_products', None) or []
         if _forced_ozon_reviews(_read, tools_called_this_turn, failed_call_counts,
                                 turn_tools, _review_text, _review_products):

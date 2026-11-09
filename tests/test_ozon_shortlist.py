@@ -18,6 +18,22 @@ import graph_personality as personality
 URLS = [f"https://ozon.ru/t/card{i}" for i in range(7)]
 
 
+def test_single_card_review_request_overrides_stale_same_product_intent(monkeypatch):
+    monkeypatch.setattr(personality, '_turn_intent', lambda *a: {'must_call': 'ozon_same'})
+    tools = [{'function': {'name': name}} for name in ('ozon_product', 'ozon_reviews', 'ozon_same', 'ozon_shop')]
+    request = 'Изучи отзывы и характеристики этого рюкзака ' + URLS[0]
+    assert personality._forced_intent(SimpleNamespace(), {}, request, False, tools, set()) == 'ozon_product'
+    assert personality._forced_ozon_reviews({'ok': True, 'wants': ['ozon_same']}, {'ozon_product'}, {}, tools, request) == 'ozon_reviews'
+    assert personality._forced_intent(SimpleNamespace(), {}, 'Найди дешевле без отзывов ' + URLS[0], False, tools, set()) == 'ozon_same'
+    for request in ('Изучи характеристики, отзывы не читай ', 'Не анализируй отзывы ', 'Не учитывай отзывы '):
+        assert personality._forced_intent(SimpleNamespace(), {}, request + URLS[0], False, tools, set()) == 'ozon_same'
+        assert not personality._forced_ozon_reviews({'ok': True, 'wants': ['ozon_same']}, {'ozon_product'}, {}, tools, request + URLS[0])
+        assert not personality._forced_ozon_reviews({'ok': True, 'wants': ['ozon_reviews']}, {'ozon_product'}, {}, tools, request + URLS[0])
+    assert personality._forced_intent(SimpleNamespace(), {}, 'Сравни отзывы ' + URLS[0] + ' ' + URLS[1], False, tools, set()) == 'ozon_shop'
+    monkeypatch.setattr(personality, '_turn_intent', lambda *a: {'must_call': 'ozon_reviews'})
+    assert not personality._forced_intent(SimpleNamespace(), {}, 'Отзывы не читай ' + URLS[0], False, tools, set())
+
+
 def test_failed_review_lookup_cannot_be_reported_as_no_reviews():
     ctx = SimpleNamespace(turn_products=[{'name': 'Рюкзак', 'url': 'https://www.ozon.ru/product/item-123/', 'price': 5000}])
     answer = personality._guard_failed_ozon_reviews('Отзывов на данный товар нет.', ['ozon_product', 'ozon_reviews!'], ctx)
