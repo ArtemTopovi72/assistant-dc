@@ -229,7 +229,20 @@ FALLBACK = {"needs_tool": True, "wants": [], "must_call": "", "bare_ack": False,
             "song": "", "song_seconds": 0, "song_uses_previous_text": False, "weather": None, "undo": False,
             "complaint": False, "collage": False, "dedupe": False, "speak_aloud": False, "ok": False}
 
-_YES_CACHE: "OrderedDict[tuple, bool]" = OrderedDict()
+_YES_CACHE: "OrderedDict[tuple, bool | str]" = OrderedDict()
+
+
+def _question_context(ctx=None):
+    return ctx if ctx is not None else getattr(current_turn(), 'cancel_context', None)
+
+
+def _question_model_key(ctx):
+    from config import MODEL_NAME
+    return (getattr(ctx, 'model_name', '') or MODEL_NAME, bool(getattr(ctx, 'no_think', False)))
+
+
+def _question_cancelled(ctx):
+    return callable(getattr(ctx, 'is_cancelled', None)) and ctx.is_cancelled()
 
 
 def ask_choice(question: str, text: str, options: tuple, default: str = "") -> str:
@@ -242,14 +255,17 @@ def ask_choice(question: str, text: str, options: tuple, default: str = "") -> s
         return default
     if os.getenv("F5_TEST_RUN") and not os.getenv("INTENT_LIVE"):
         return default
+    ctx = _question_context()
+    if _question_cancelled(ctx):
+        return default
     options = tuple(options)              # the cache key; a caller's list raised TypeError
-    key = (question, text[:1500], options)
+    key = (_question_model_key(ctx), question, text[:1500], options)
     with _LOCK:
         if key in _YES_CACHE:
             return _YES_CACHE[key]
     try:
         import llm
-        ans = llm.call_llm_simple(None, "Answer with one word.",
+        ans = llm.call_llm_simple(ctx, "Answer with one word.",
                                   question.replace("{text}", "«%s»" % text[:1500])
                                   + "\nOne word: " + ", ".join(options) + ".",
                                   temperature=0.0, max_tokens=5) or ""
@@ -257,12 +273,18 @@ def ask_choice(question: str, text: str, options: tuple, default: str = "") -> s
         # answer starts with, not just its first word
         said = " ".join(re.sub(r"[^\w\s-]", " ", ans.lower()).split())
         hits = [o for o in options if said == o.lower() or said.startswith(o.lower() + " ")]
-        got = max(hits, key=len) if hits else default
+        if not hits:
+            return default
+        got = max(hits, key=len)
     except Exception:
         logger.warning("ask_choice: model read failed", exc_info=True)
         return default
+    if _question_cancelled(ctx):
+        return default
     with _LOCK:
         _YES_CACHE[key] = got
+        while len(_YES_CACHE) > 512:
+            _YES_CACHE.popitem(last=False)
     return got
 
 
@@ -274,9 +296,12 @@ def ask_yes(question: str, text: str, default: bool = False, wait: bool = True, 
     text = (text or "").strip()
     if not text:
         return default
+    ctx = _question_context(ctx)
+    if _question_cancelled(ctx):
+        return default
     if os.getenv("F5_TEST_RUN") and not (os.getenv("INTENT_LIVE") or dep(ctx, "live", False)):
         return default
-    key = (question, text[:1500])
+    key = (_question_model_key(ctx), question, text[:1500])
     with _LOCK:
         if key in _YES_CACHE:
             return _YES_CACHE[key]
@@ -289,7 +314,7 @@ def ask_yes(question: str, text: str, default: bool = False, wait: bool = True, 
             pass
     try:
         import llm
-        ans = dep(ctx, "call_llm_simple", llm.call_llm_simple)(None, "Answer yes or no only.",
+        ans = dep(ctx, "call_llm_simple", llm.call_llm_simple)(ctx, "Answer yes or no only.",
                                   # the question names the text in its own words: a bare
                                   # "Text:" label was read as the answer («the cat» ->
                                   # is it lettering? Yes)
@@ -301,6 +326,8 @@ def ask_yes(question: str, text: str, default: bool = False, wait: bool = True, 
         got = answer.group(1).lower() in ("yes", "да")
     except Exception:
         logger.warning("ask_yes: model read failed", exc_info=True)
+        return default
+    if _question_cancelled(ctx):
         return default
     with _LOCK:
         _YES_CACHE[key] = got
