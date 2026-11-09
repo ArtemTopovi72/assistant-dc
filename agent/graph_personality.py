@@ -1566,6 +1566,9 @@ def personality_node(ctx: Context, state: AgentState) -> AgentState:
             # Tm Тулий 168,93» and the table changed format.
             if "\n" in _part.rstrip():
                 _part = _part.rstrip()[:_part.rstrip().rfind("\n") + 1]
+            if not _part.strip():
+                response_message = dict(response_message, content="")
+                break
             _anchor = (_part.rstrip().rsplit("\n", 1)[-1])[-200:]
             _next = chat_model(ctx)(
                 ctx, _outbound + [{"role": "assistant", "content": _part},

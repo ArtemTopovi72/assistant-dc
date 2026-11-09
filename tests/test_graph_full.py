@@ -312,6 +312,26 @@ def test_answer_cut_at_token_cap_is_continued():
           and "«| 1 | H |»" in llm.calls[1]["last_content"], out["final_answer"])
 
 
+def test_reasoning_only_at_token_cap_does_not_continue_an_empty_table():
+    c = _ctx()
+    empty = dict(_asst(''), finish_reason='length', reasoning_only=True)
+    llm = LLM([empty, _asst('Поздравляю с победой на шахматном турнире!')])
+    out = _run(c, llm, Tools(), {'messages': [], 'user_input': 'Поздравь друга с победой'}, fastpath=False)
+    check('empty_reasoning_is_retried_without_fake_continuation',
+          'шахматном турнире' in out['final_answer']
+          and 'table columns' not in llm.calls[1]['last_content'], llm.calls[1]['last_content'])
+
+
+def test_cut_with_no_complete_line_does_not_continue_from_empty_anchor():
+    c = _ctx()
+    cut = dict(_asst('\nunfinished'), finish_reason='length')
+    llm = LLM([cut, _asst('Готовый ответ')])
+    out = _run(c, llm, Tools(), {'messages': [], 'user_input': 'Ответь'}, fastpath=False)
+    check('empty_anchor_is_retried_without_fake_continuation',
+          out['final_answer'] == 'Готовый ответ'
+          and 'table columns' not in llm.calls[1]['last_content'], llm.calls[1]['last_content'])
+
+
 def test_tool_batch_cap():
     c = _ctx()
     many = [_tc("calculate", {"expression": str(i)}, cid=f"c{i}") for i in range(10)]
