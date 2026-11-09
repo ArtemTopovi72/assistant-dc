@@ -53,6 +53,7 @@ _STAGES: dict[str, dict[str, str]] = {
     "Removing the lettering (logo)": {"ru": "Убираю надписи (логотип)"},
     "Looking at the image":        {"ru": "Смотрю на изображение"},
     "Looking at the video again":  {"ru": "Смотрю видео ещё раз"},
+    "Looking at the video":        {"ru": "Смотрю видео"},
     "Choosing the sound":          {"ru": "Подбираю звучание"},
     "Writing a response":          {"ru": "Пишу ответ"},
     "Speaking":                    {"ru": "Озвучиваю"},
@@ -75,6 +76,7 @@ _STAGES: dict[str, dict[str, str]] = {
     "Drawing a picture":           {"ru": "Рисую картинку"},
     "Preparing the picture":       {"ru": "Подготавливаю картинку"},
     "Checking the picture":        {"ru": "Проверяю картинку"},
+    "Restyling the captions":      {"ru": "Оформляю надписи"},
     "Checking the video":          {"ru": "Проверяю видео"},
     # draw_preview.py -- the plan's boxes as a sketch, checked before the render
     "Checking the layout":         {"ru": "Проверяю компоновку по эскизу"},
@@ -93,6 +95,7 @@ _STAGES: dict[str, dict[str, str]] = {
     "Changing style":              {"ru": "Меняю стиль"},
     # video.py — the slowest thing the assistant does; the user is watching this one
     "Generating a video":          {"ru": "Генерирую видео"},
+    "Preparing video":             {"ru": "Готовлю видео"},
     "Preparing the references":    {"ru": "Готовлю референсы"},
     "Encoding the video":          {"ru": "Кодирую видео"},
     # tool_image_handlers.py — the layout-first redraw paths

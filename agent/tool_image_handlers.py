@@ -2082,6 +2082,8 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
             "was made. Do NOT claim a video was created, and do not retry."
         )
 
+    ctx.set_stage("Preparing video")
+
     images, videos = [], []
     if args.get("use_current_images", True) or re.search(r"<Picture \d+>", description):
         images = dep(ctx, "_current_image_paths", _current_image_paths)(ctx, state)

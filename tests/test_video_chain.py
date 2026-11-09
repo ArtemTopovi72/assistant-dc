@@ -866,6 +866,22 @@ def test_failed_later_approved_part_is_not_claimed_as_rendered(tmp_path, monkeyp
     assert all('Last scene never rendered.' not in str(memory) for memory in memories)
     assert not checks
 
+
+def test_video_planning_reports_preparation_stage(tmp_path, monkeypatch):
+    from contextlib import nullcontext
+    monkeypatch.setattr(comfy_client, 'card_session', lambda *a, **k: nullcontext())
+    monkeypatch.setattr(comfy_client, 'this_thread_holds_card', lambda: True)
+    rig = _Rig(tmp_path)
+    stages = []
+    ctx = rig.ctx(video_plan_parts=['First scene.', 'Second scene.'])
+    ctx.set_stage = stages.append
+    ctx.deps = types.SimpleNamespace(script_read=_fakes.script_model, text_model=lambda *a, **kw: '')
+    monkeypatch.setattr(H, '_render_chain_parts', lambda ctx, path, parts, args, chain, idx, **kw: idx)
+    H._handle_generate_video(ctx, {}, {'description': LONG, 'use_current_images': False})
+    assert 'Preparing video' in stages
+    import stages as stage_labels
+    assert stage_labels.translate('Preparing video', 'ru') == 'Готовлю видео'
+
 @pytest.mark.parametrize('spoken', [False, True])
 def test_clip_speaker_is_checked_for_dialogue_not_quoted_sign(tmp_path, monkeypatch, spoken):
     monkeypatch.setitem(sys.modules, 'identity_metrics', types.SimpleNamespace(face_boxes=lambda _: [(0, 0, 1, 1)] * 2))

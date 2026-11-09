@@ -324,14 +324,14 @@ for path in sorted(os.path.join(d, f) for d in source_dirs() for f in os.listdir
 check("stage emitters were actually found in the source", len(emitted) >= 15,
       f"{len(emitted)} found")
 missing = sorted(s for s in emitted if s not in SKIP
-                 and s not in stages.known_stages())
+                 and s not in stages.known_stages() and not stages._GPU_QUEUE.fullmatch(s))
 check("every literal stage in the agent core has a translation",
       not missing, "; ".join(missing))
 
 # …and the reverse: a table entry for a stage nobody emits is dead weight that
 # will quietly rot out of date.
 BOT_OWNED = {"Deep Research", "Reading your documents", "Starting",
-             "Transcribing", "Searching documents", "Ready", "Translating"}
+             "Transcribing", "Searching documents", "Ready", "Translating", "In the GPU queue"}
 stale = sorted(s for s in stages._STAGES
                if s not in emitted and s not in BOT_OWNED)
 check("no translation exists for a stage nothing emits", not stale,
