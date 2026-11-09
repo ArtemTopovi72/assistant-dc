@@ -21,6 +21,58 @@ class _Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
 
+def _relay(client, remote, timeout=30, initial=b''):
+    peers = {client: remote, remote: client}
+    buffers = {client: bytearray(), remote: bytearray()}
+    buffers[remote].extend(initial)
+    readable = {client, remote}
+    shutdown = set()
+    for sock in peers:
+        sock.setblocking(False)
+    while readable or any(buffers.values()):
+        for source in peers:
+            dest = peers[source]
+            if source not in readable and not buffers[dest] and dest not in shutdown:
+                try:
+                    dest.shutdown(socket.SHUT_WR)
+                except OSError:
+                    logger.warning("Ozon relay half-close failed on %s side", "browser" if dest is client else "remote")
+                    raise
+                shutdown.add(dest)
+        reads = [source for source in readable if len(buffers[peers[source]]) < 262144]
+        writes = [dest for dest, pending in buffers.items() if pending]
+        try:
+            ready_read, ready_write, _ = select.select(reads, writes, (), timeout)
+        except OSError:
+            logger.warning("Ozon relay select failed")
+            raise
+        if not ready_read and not ready_write:
+            return
+        for source in ready_read:
+            try:
+                data = source.recv(65536)
+            except BlockingIOError:
+                continue
+            except OSError:
+                logger.warning("Ozon relay read failed on %s side", "browser" if source is client else "remote")
+                raise
+            if data:
+                buffers[peers[source]].extend(data)
+            else:
+                readable.remove(source)
+        for dest in ready_write:
+            try:
+                sent = dest.send(buffers[dest])
+            except BlockingIOError:
+                continue
+            except OSError:
+                logger.warning("Ozon relay write failed on %s side", "browser" if dest is client else "remote")
+                raise
+            if not sent:
+                return
+            del buffers[dest][:sent]
+
+
 class _Connect(socketserver.BaseRequestHandler):
     def handle(self):
         self.request.settimeout(20)
@@ -33,6 +85,8 @@ class _Connect(socketserver.BaseRequestHandler):
             if not part:
                 return
             head += part
+        if b"\r\n\r\n" not in head:
+            return
         fields = head.split(b"\r\n", 1)[0].decode("ascii", "replace").split()
         if len(fields) != 3 or fields[0] != "CONNECT":
             self.request.sendall(b"HTTP/1.1 405 Method Not Allowed\r\n\r\n")
@@ -51,17 +105,7 @@ class _Connect(socketserver.BaseRequestHandler):
                 logger.debug("Ozon direct tunnel connected to %s via interface %s", host,
                              self.server.ifindex)
                 self.request.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
-                remote.setblocking(False)
-                self.request.setblocking(False)
-                while True:
-                    readable, _, _ = select.select((self.request, remote), (), (), 30)
-                    if not readable:
-                        return
-                    for source in readable:
-                        data = source.recv(65536)
-                        if not data:
-                            return
-                        (remote if source is self.request else self.request).sendall(data)
+                _relay(self.request, remote, initial=head.split(b"\r\n\r\n", 1)[1])
             finally:
                 remote.close()
         except (OSError, ValueError) as exc:
