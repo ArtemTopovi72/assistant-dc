@@ -1321,6 +1321,10 @@ class ResolveMixin:
                         # its own lyric, three verses short (2026-10-22)
                         _head, _, _body = raw.partition("\n")
                         _topic = _head + "\n" + _tg_songs.LYRICS_MARK + _body
+                    elif _quoted_lyrics := _tg_songs.quoted_lyrics(raw):
+                        for _left, _right in (("«", "»"), ("“", "”"), ('"', '"')):
+                            _topic = _topic.replace(_left + _quoted_lyrics + _right, "", 1)
+                        _topic += "\n" + _tg_songs.LYRICS_MARK + "\n" + _quoted_lyrics
                     elif _last_song:
                         _topic = _tg_songs.followup_topic(raw, _last_song, ctx=self.reads)
                     elif _tg_songs.refers_to_previous_text(raw, ctx=self.reads):

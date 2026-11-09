@@ -64,6 +64,20 @@ def looks_like_lyrics(text: str) -> bool:
     return 3 <= len(lines) <= 60 and max(len(ln) for ln in lines) <= 90
 
 
+def quoted_lyrics(text: str) -> str:
+    """A single quoted passage explicitly requested as unchanged lyrics."""
+    text = text or ''
+    quotes = list(_re.finditer(r'«([^»]+)»|“([^”]+)”|"([^"]+)"', text))
+    if len(quotes) != 1:
+        return ''
+    instruction = text[:quotes[0].start()] + ' ' + text[quotes[0].end():]
+    if not (_re.search(r'\b(?:спой|исполн\w*|sing)\b', instruction, _re.I)
+            and _re.search(r'\b(?:строк\w*|слов\w*|текст\w*|стих\w*|lyrics)\b', instruction, _re.I)
+            and _re.search(r'\b(?:как\s+есть|дословно|слово\s+в\s+слово|без\s+изменени\w*|verbatim|exactly)\b', instruction, _re.I)):
+        return ''
+    return next(g for g in quotes[0].groups() if g is not None).strip()
+
+
 _SECTION_LABEL_RE = _re.compile(r"^\s*\[?\s*(?:intro|verse|pre-?chorus|chorus|bridge|outro|hook)\b[^\]:]*\]?\s*:?\s*$", _re.I)
 
 
