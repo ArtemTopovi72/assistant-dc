@@ -651,6 +651,7 @@ def _review(ctx, text: str, topic: str = "") -> dict:
             score = max(0, min(10, int(data["score"])))
             return {"valid": True, "source": sum(p["kind"] == "source" for p in issues),
                     "critical": critical, "score": min(score, 4) if critical else score,
+                    "style": sum(p["kind"] == "style" for p in issues),
                     "problems": probs, "critical_problems": probs[:critical]}
         except Exception:
             logger.warning("lyrics critic failed (budget %d)", budget, exc_info=True)
@@ -960,6 +961,20 @@ def _quality_key(assessment, rule):
     return assessment["valid"], -assessment.get("source", 0), -assessment["critical"], weighted
 
 
+def _tone_regression(ctx, original: str, revised: str, topic: str):
+    from seams import yes_no
+    question = ("Compare the original and revised lyric in {text}. Did the revision INTRODUCE a serious "
+                "shift to pompous, overly formal or solemn language inconsistent with the original tone? "
+                "Answer NO if that tone was already present, the change remains natural, "
+                "or the user's request explicitly asks for that tone.")
+    source = (("USER REQUEST AND ORIGINAL:\n" + original) if topic.strip() == original.strip()
+              else ("USER REQUEST:\n" + topic + "\nORIGINAL:\n" + original)) + "\nREVISION:\n" + revised
+    if len(source) > 1400:
+        question = question.replace('{text}', 'the complete text below') + '\n' + source
+        source = 'See the complete text above.'
+    return yes_no(ctx)(question, source, default=None)
+
+
 def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = "",
            topic: str = "") -> dict:
     """The check -> revise loop. {"text", "score", "rounds", "left": [problems],
@@ -981,6 +996,11 @@ def polish(ctx, text: str, rounds: int = ROUNDS, on_round=None, singer: str = ""
                     r, rule["score"], sense, total, len(problems))
         quality = _quality_key(assessment, rule)
         improved = best is None or quality > best["quality"]
+        if (improved and best is not None and assessment.get('style') and cur != text.strip()
+                and topic.strip() == text.strip()):
+            if dep(ctx, 'lyrics_tone_regression', _tone_regression)(ctx, text.strip(), cur, topic) is True:
+                logger.info("lyrics revision rejected: it changed the original register")
+                improved = False
         if improved:
             # the user reads what is left: rule findings in their language, by the caller
             best = {"text": cur, "score": total, "sense": sense, "quality": quality,

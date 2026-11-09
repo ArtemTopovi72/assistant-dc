@@ -213,6 +213,45 @@ def test_clean_meaning_allows_a_real_tradeoff_between_style_and_rhyme():
     assert L._quality_key(rhymed, {'score': 9}) > L._quality_key(plain, {'score': 1})
 
 
+def test_polish_rejects_a_higher_scoring_tone_regression(monkeypatch):
+    original = '[verse]\nКот ругается и смеётся.\nДруг рядом остаётся.'
+    candidate = original.replace('Друг рядом остаётся.', 'Твой лик — мой ценный клад.')
+    seen = []
+    monkeypatch.setattr(L, 'analyse', lambda text, ctx: {'score': 5 if text == original else 10, 'issues': [{'kind': 'test'}]})
+    monkeypatch.setattr(L, '_review', lambda ctx, text, topic: {
+        'valid': True, 'source': 0, 'critical': 0, 'score': 8,
+        'problems': ['tone'] if text == candidate else ['rhyme'],
+        'critical_problems': [], 'style': 1})
+    monkeypatch.setattr(L, 'describe', lambda issue: 'rhyme')
+    monkeypatch.setattr(L, 'fix_rhymes', lambda ctx, text, rule, lang: candidate)
+    monkeypatch.setattr(L, '_tone_regression', lambda ctx, before, after, topic: seen.append((before, after, topic)) or True)
+    result = L.polish(_C(), original, rounds=1)
+    assert result['text'] == original and seen == [(original, candidate, original)]
+
+
+def test_tone_check_preserves_the_end_of_a_long_song():
+    seen = []
+    ctx = types.SimpleNamespace(yes_no=lambda question, text, **kw: seen.append((question, text)) or False)
+    source = 'Куплет\n' * 400 + 'Финальная строка источника'
+    edited = 'Куплет\n' * 400 + 'Финальная строка правки'
+    assert L._tone_regression(ctx, source, edited, 'Торжественная песня') is False
+    assert 'Финальная строка источника' in seen[0][0] and 'Финальная строка правки' in seen[0][0]
+    assert 'Торжественная песня' in seen[0][0]
+
+
+def test_separate_user_theme_does_not_block_a_requested_tone_change(monkeypatch):
+    original = '[verse]\nМы шли домой под дождём.'
+    candidate = '[verse]\nО муза, ночь укроет древний свод.'
+    monkeypatch.setattr(L, 'analyse', lambda text, ctx: {'score': 5 if text == original else 10, 'issues': [{'kind': 'test'}]})
+    monkeypatch.setattr(L, '_review', lambda ctx, text, topic: {
+        'valid': True, 'source': 0, 'critical': 0, 'score': 8, 'problems': ['style'],
+        'critical_problems': [], 'style': 1})
+    monkeypatch.setattr(L, 'describe', lambda issue: 'rhyme')
+    monkeypatch.setattr(L, 'fix_rhymes', lambda ctx, text, rule, lang: candidate)
+    monkeypatch.setattr(L, '_tone_regression', lambda *args: pytest.fail('tone gate should not override the theme'))
+    assert L.polish(_C(), original, rounds=1, topic='Торжественный высокий стиль')['text'] == candidate
+
+
 def test_a_line_rhyme_patch_is_checked_before_another_rewrite():
     calls = []
     def llm(role, system, user):
