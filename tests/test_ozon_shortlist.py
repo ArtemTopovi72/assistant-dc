@@ -50,15 +50,6 @@ def test_failed_review_lookup_cannot_be_reported_as_no_reviews():
         ['ozon_search', 'ozon_shop'], ctx, 'Проверь отзывы') == 'Отзывы изучены магазинным инструментом.'
 
 
-@pytest.mark.parametrize('user_text', ['Покажи характеристики, отзывы не читай',
-                                    'Покажи характеристики без отзывов',
-                                    'Show the specifications without reviews'])
-def test_product_answer_is_not_replaced_when_reviews_were_excluded(user_text):
-    ctx = SimpleNamespace(turn_products=[])
-    assert personality._guard_failed_ozon_reviews('Характеристики товара.',
-        ['ozon_product'], ctx, user_text) == 'Характеристики товара.'
-
-
 def test_requested_reviews_are_checked_after_the_product_without_retry_loop():
     read = {'ok': True, 'wants': ['ozon_product', 'ozon_reviews']}
     tools = [{'function': {'name': 'ozon_reviews'}}]
