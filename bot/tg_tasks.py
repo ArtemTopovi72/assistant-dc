@@ -1330,9 +1330,9 @@ class TaskRunnerMixin:
                     img_bytes = fh.read()
             except Exception as exc:
                 tg_bot.logger.warning("img tmp read failed %s: %s", task.image_path, exc)
-        ctx.video_summary_overview_only = bool(
-            img_bytes and getattr(task, 'source_video_path', '') and not getattr(task, 'image_is_photo', False)
-            and _plain_video_summary(task.user_text))
+        ctx.image_data_is_video_sheet = bool(
+            img_bytes and getattr(task, 'source_video_path', '') and not getattr(task, 'image_is_photo', False))
+        ctx.video_summary_overview_only = bool(ctx.image_data_is_video_sheet and _plain_video_summary(task.user_text))
 
         status_id: Optional[int] = None
 

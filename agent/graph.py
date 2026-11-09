@@ -241,18 +241,24 @@ def vision_agent_node(ctx: Context, state: AgentState) -> AgentState:
     except Exception as exc:
         logger.warning("Could not persist sent image as working image: %s", exc)
 
-    ctx.set_stage("Looking at the image")
+    sheet = bool(getattr(ctx, 'image_data_is_video_sheet', False))
+    question = state.get("user_input") or ""
+    if sheet:
+        question = ("The original image is a sheet of consecutive frames from one video; this view may show part of it. "
+                    "Grid borders, gaps and timestamp labels are not part of the video. "
+                    "Describe the scene inside each frame, not the sheet layout. Request: " + question)
+    ctx.set_stage("Looking at the video" if sheet else "Looking at the image")
     response = vision_model(ctx)(
         ctx=ctx,
         image_bytes=proxy_bytes,  # analysis uses the proxy, not the original
-        user_text=state.get("user_input", ""),
+        user_text=question,
         system_prompt=VISION_PROMPT,
     )
     _pq = is_picture_question(ctx, state)
     if response and _pq and not getattr(ctx, 'video_summary_overview_only', False):
         # A question about the photo: the zoomed parts are read too, so the
         # label, the number, the thing in the hand make it into the answer.
-        response = _close_look(ctx, original_bytes, state.get("user_input", ""), response)
+        response = _close_look(ctx, original_bytes, question, response)
     vision_summary = response if response else "Failed to analyze image."
     vision_summary = _add_earlier_pictures(ctx, state, vision_summary)
     state["vision_summary"] = vision_summary

@@ -59,6 +59,35 @@ def test_storyboard_summary_keeps_overview_but_skips_extra_zoom(monkeypatch, tmp
     assert out['vision_summary'] == 'zoomed' and calls == ['zoom']
 
 
+def test_new_video_storyboard_is_identified_for_overview_and_detail(monkeypatch, tmp_path):
+    import io
+    from types import SimpleNamespace
+    from PIL import Image
+    import graph
+    calls = []
+    monkeypatch.setattr(graph, 'is_picture_question', lambda ctx, state: True)
+    monkeypatch.setattr(graph, '_add_earlier_pictures', lambda ctx, state, summary: summary)
+    monkeypatch.setattr(graph, '_close_look', lambda ctx, image, question, overview:
+                        calls.append(('detail', question)) or overview)
+    buf = io.BytesIO()
+    Image.new('RGB', (20, 20)).save(buf, format='PNG')
+    def vision(**kwargs):
+        calls.append(('overview', kwargs['user_text']))
+        return 'green'
+    ctx = SimpleNamespace(attached_video_path='clip.mp4', image_data_is_video_sheet=True, deps=SimpleNamespace(
+        downscale_image_bytes=lambda data: data, OUTPUT_DIR=tmp_path),
+        vision_model=vision, set_stage=lambda stage: None,
+        remember=lambda *args: None, memory_text=lambda: '')
+    graph.vision_agent_node(ctx, {'image_data': buf.getvalue(), 'user_input': 'Назови цвет видео'})
+    assert {name for name, _ in calls} == {'overview', 'detail'}
+    assert all('frames' in text.lower() and 'Назови цвет видео' in text for _, text in calls)
+    assert all('not part of the video' in text.lower() for _, text in calls)
+    calls.clear()
+    ctx.image_data_is_video_sheet = False
+    graph.vision_agent_node(ctx, {'image_data': buf.getvalue(), 'user_input': 'Опиши это фото'})
+    assert all('sheet of consecutive frames' not in text.lower() for _, text in calls)
+
+
 def test_video_comparison_drops_unsupported_viewer_guess_but_keeps_observations():
     reply = ('Визуальной связи между ними нет: на фото человек, а в видео монтаж. '
              'Как интерпретацию можно предположить, что это кадр человека, который смотрит такое видео во время отдыха.')
