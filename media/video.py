@@ -559,6 +559,12 @@ def split_dictated_speech(sentence: str, speech: str, speaker: str = '', reads=N
     while first_cap > 0 and later_cap > 0:
         count = 1 + math.ceil(max(0, len(words) - first_cap) / later_cap)
         first_width = min(first_cap, math.ceil(len(words) / count))
+        boundaries = [n for n in range(max(1, first_width - 2), min(first_cap, first_width + 2) + 1)
+                      if n <= len(words) - (count - 1)
+                      and len(words) - n <= later_cap * (count - 1)
+                      and re.search(r'[,;:.!?]$', words[n - 1])]
+        if boundaries:
+            first_width = min(boundaries, key=lambda n: abs(n - first_width))
         base, extra = divmod(len(words) - first_width, count - 1)
         chunks, widths, i = [], [], 0
         for part in range(count):

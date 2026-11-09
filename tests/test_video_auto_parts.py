@@ -189,6 +189,18 @@ def test_split_balances_words_to_avoid_a_tiny_last_clip():
     assert max(map(len, words)) - min(map(len, words)) <= 1
 
 
+def test_split_prefers_a_nearby_phrase_boundary():
+    line = ('Сегодня мы спокойно обсуждаем наши планы на вечер и вспоминаем, '
+            'как гуляли по городу когда светило солнце и было очень тепло')
+    parts = V.split_dictated_speech(f'The woman says "{line}".', line, 'The woman')
+    quotes = [V.quoted_lines(part)[0] for part in parts]
+    assert len(quotes) == 2
+    assert quotes[0].endswith('вспоминаем,')
+    assert ' '.join(quotes) == line
+    assert all(V.estimate_seconds(part, capped=False) <= V.frames_to_seconds(V.VIDEO_MAX_FRAMES_AUTO)
+               for part in parts)
+
+
 def test_split_reserves_time_for_the_opening_action():
     line = ' '.join(f'word{i}' for i in range(33))
     reads = lambda sentences: {'sentences': [
