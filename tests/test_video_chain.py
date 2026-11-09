@@ -81,6 +81,34 @@ def test_part_three_continues_part_two():
     assert wf[V.N_SAMPLER]["inputs"]["latent_image"] == [c, 1]
 
 
+def test_longer_context_only_for_safe_static_scene(tmp_path, monkeypatch):
+    import json
+    import torch
+    from safetensors.torch import save_file
+
+    monkeypatch.setattr(V, 'OUTPUT_DIR_COMFY', tmp_path)
+    folder = tmp_path / 'h3_continuous' / 'chX'
+    folder.mkdir(parents=True)
+    latent = folder / 'clip_00001.safetensors'
+    def save(end):
+        handover = {'available': True, 'frame_count': 175, 'handover_end_frame': end}
+        save_file({'video': torch.zeros(1)}, str(latent), metadata={'handover_json': json.dumps(handover)})
+    ctx = types.SimpleNamespace(video_chain_static=True)
+    save(140)
+    assert V._chain_context('h3_continuous/chX', 2, 1152, 576, ctx) == '90'
+    wf = V.build_chain_part('Two people speak.', chain='h3_continuous/chX', idx=2,
+                            width=1152, height=576, seconds=6, seed=5, ctx=ctx)
+    assert wf['cond']['inputs']['masked_context_frames'] == '90'
+    assert V._chain_context('h3_continuous/chX', 2, 1344, 768, ctx) == '39'
+    assert V._chain_context('h3_continuous/chX', 2, 1152, 576, None) == '39'
+    save(72)
+    assert V._chain_context('h3_continuous/chX', 2, 1152, 576, ctx) == '39'
+    latent.unlink()
+    assert V._chain_context('h3_continuous/chX', 2, 1152, 576, ctx) == '39'
+    latent.write_bytes(b'not a latent')
+    assert V._chain_context('h3_continuous/chX', 2, 1152, 576, ctx) == '39'
+
+
 def test_stitch_joins_the_whole_chain():
     s = V.build_chain_stitch("h3_continuous/chX", 3)["stitch"]["inputs"]
     assert s["latent_prefix"] == "h3_continuous/chX/clip" and (s["first_clip"], s["last_clip"]) == (1, 3)

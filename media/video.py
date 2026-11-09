@@ -398,6 +398,31 @@ def estimate_seconds(description: str, capped: bool = True, reads=None) -> float
     return round(min(top, max(frames_to_seconds(VIDEO_DEFAULT_FRAMES), secs)), 2)
 
 
+def confirm_approved_speech_timing(ctx, part: str, approved_seconds: float, cap: float) -> bool:
+    """Resolve a changed estimate only when the approved and independent reads both fit."""
+    if ctx is None or not 0 < approved_seconds < cap - 0.05:
+        return False
+    if callable(getattr(ctx, 'is_cancelled', None)) and ctx.is_cancelled():
+        return False
+    import copy
+    import intent
+    retry_ctx = copy.copy(ctx)
+    retry_ctx.no_think = True
+    def read(sentences):
+        result = _script_model(sentences)
+        if not result or result.get('_light_retry') or len(result.get('sentences') or []) != len(sentences):
+            raise ValueError('independent duration read failed')
+        return result
+    try:
+        with intent.turn_scope() as turn:
+            turn.cancel_context = retry_ctx
+            fits = estimate_seconds(part, capped=False, reads=read) <= cap
+            return fits and not (callable(getattr(ctx, 'is_cancelled', None)) and ctx.is_cancelled())
+    except Exception:
+        logger.warning('video: independent duration read failed', exc_info=True)
+        return False
+
+
 _SENT = re.compile(r"(?<=[.!?;])\s+|(?<=,)\s+(?=(?:then|after that|afterwards|затем|потом|после этого)\b)", re.I)
 
 
@@ -1379,6 +1404,28 @@ def new_chain() -> str:
     return f"{CHAIN_DIR}/ch{int(time.time())}_{random.randint(0, 1 << 20)}"
 
 
+def _chain_context(chain: str, idx: int, width: int, height: int, ctx=None) -> str:
+    # shortcut: 90 frames is validated only for static scenes up to 1152x576; expand after larger/moving-scene tests.
+    if not getattr(ctx, 'video_chain_static', False) or width * height > 1152 * 576 or idx <= 1:
+        return HERRGOTT_CONTEXT
+    try:
+        from safetensors import safe_open
+        root = Path(OUTPUT_DIR_COMFY).resolve()
+        folder = (root / chain).resolve()
+        folder.relative_to(root / CHAIN_DIR)
+        files = list(folder.glob(f'*_{idx - 1:05d}.safetensors'))
+        path = max(files, key=lambda p: p.stat().st_mtime)
+        with safe_open(str(path), framework='pt', device='cpu') as saved:
+            handover = json.loads((saved.metadata() or {}).get('handover_json', '{}'))
+        end = int(handover['handover_end_frame'])
+        frames = int(handover['frame_count'])
+        if handover.get('available') is True and 89 <= end < frames and (end + 1 - 90) % 17 == 0:
+            return '90'
+    except Exception:
+        pass
+    return HERRGOTT_CONTEXT
+
+
 def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: int,
                      seconds: float, seed: int, first_frame: str = "", reference: str = "", ctx=None) -> dict:
     """Part `idx` of `chain`: 1 starts it (optionally from a photo), 2+ continue the
@@ -1406,7 +1453,7 @@ def build_chain_part(prompt: str, *, chain: str, idx: int, width: int, height: i
     else:
         wf["prev"] = {"class_type": "H3ContinuousLoadLatent", "inputs": {"latent_path": chain, "clip_index": idx - 1}}
         wf["cond"] = {"class_type": "H3ContinuousContinueV14", "inputs": dict(
-            common, previous_latent=["prev", 0], handover=["prev", 3], masked_context_frames=HERRGOTT_CONTEXT,
+            common, previous_latent=["prev", 0], handover=["prev", 3], masked_context_frames=_chain_context(chain, idx, width, height, ctx),
             audio_feather_ticks=0, duration_mode="Net New Content", audio_tail_carryover="Full Previous Tail")}
         if reference:
             name = _eng(ctx)._upload(reference, "image")

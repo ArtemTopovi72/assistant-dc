@@ -4,6 +4,26 @@ import video
 import intent
 
 
+def test_approved_speech_timing_needs_an_independent_valid_read(monkeypatch):
+    part = 'The woman says "one two three four five six seven eight nine ten eleven".'
+    ctx = SimpleNamespace(model_name='test', no_think=False)
+    good = {'sentences': [{'kind': 'action', 'beats': 1, 'hold': False, 'spoken': [
+        'one two three four five six seven eight nine ten eleven']}], '_light_retry': False}
+    monkeypatch.setattr(video, '_script_model', lambda sentences: good)
+    assert video.confirm_approved_speech_timing(ctx, part, 7.1, 10.0)
+    assert not video.confirm_approved_speech_timing(ctx, part, 10.1, 10.0)
+    assert not video.confirm_approved_speech_timing(ctx, part, 10.0, 10.0)
+    good['sentences'][0]['hold'] = True
+    good['sentences'][0]['beats'] = 2
+    assert not video.confirm_approved_speech_timing(ctx, part, 7.1, 10.0)
+    good['sentences'][0].update(hold=False, beats=1)
+    monkeypatch.setattr(video, '_script_model', lambda sentences: None)
+    assert not video.confirm_approved_speech_timing(ctx, part, 7.1, 10.0)
+    good['_light_retry'] = True
+    monkeypatch.setattr(video, '_script_model', lambda sentences: good)
+    assert not video.confirm_approved_speech_timing(ctx, part, 7.1, 10.0)
+
+
 def test_video_script_reads_use_active_context():
     words = 'один два три четыре пять шесть семь восемь девять десять одиннадцать двенадцать'
     seen = []

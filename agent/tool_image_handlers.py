@@ -2632,10 +2632,15 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                        if parts[0] in description else safe_parts[0])
     parts = safe_parts
     cap = video_mod.frames_to_seconds(video_mod.VIDEO_MAX_FRAMES_AUTO)
-    if any(video_mod.quoted_lines(p) and video_mod.estimate_seconds(
-            p, capped=False, reads=dep(ctx, 'script_read', None)) > cap for p in parts):
-        return ('[TOOL ERROR] A video part cannot fit its dialogue and action in one segment. '
-                'No video was sent; ask the user to shorten the part.')
+    for i, p in enumerate(parts):
+        if not video_mod.quoted_lines(p) or video_mod.estimate_seconds(
+                p, capped=False, reads=dep(ctx, 'script_read', None)) <= cap:
+            continue
+        prior = (float(approved_seconds[i] or 0) if approved and parts == approved
+                 and len(approved_seconds) == len(parts) else 0)
+        if not video_mod.confirm_approved_speech_timing(ctx, p, prior, cap):
+            return ('[TOOL ERROR] A video part cannot fit its dialogue and action in one segment. '
+                    'No video was sent; ask the user to shorten the part.')
     # An asked length the script falls short of: each part plays longer, up to one clip's cap.
     secs = ([float(s) for s in approved_seconds]
             if approved and parts == approved and len(approved_seconds) == len(parts)
@@ -2789,6 +2794,7 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     first_prompt = prepped[0][0] if prepped else description
     watch = bool(chain_id and images and not continuing
                  and _preserves_static_scene(ctx, ctx.video_request or first_prompt))
+    ctx.video_chain_static = watch
     if chain_id and ctx.video_request and getattr(ctx, 'video_text_overlay_allowed', True):
         video_mod._onscreen_text_words(ctx, ctx.video_request)
     # The whole chain holds the card: no model call runs between its parts (the bridges
