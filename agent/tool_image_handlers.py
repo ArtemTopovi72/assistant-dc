@@ -2246,14 +2246,20 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
                 "Does this request include spoken dialogue for a person to say aloud? "
                 "Words only written on signs, screens, or clothing are not spoken dialogue. {text}",
                 ctx.video_request or description, default=True):
-            _speaker = video_mod.clip_speaker(ctx, cont_src, cont_tail)
+            _dictated = video_mod.dictated_speaker(ctx, description, _said_now)
+            _identified = bool(_dictated) or yes_no(ctx)(
+                'Does the user explicitly identify the speaker of the quoted speech '
+                '(for example, the woman on the right, a named person, or the second man)? '
+                'Answer NO if the request leaves the speaker unspecified. {text}',
+                _said_now, default=True)
+            _speaker = '' if _identified else video_mod.clip_speaker(ctx, cont_src, cont_tail)
             if _speaker:
                 logger.info("generate_video: the clip's own speaker says the line: %s",
                             _speaker[:80])
                 description += (f" The spoken line comes from {_speaker}, matching "
                                 "who was already talking in the clip; everyone "
                                 "else stays silent.")
-            else:
+            elif not _identified:
                 logger.info("generate_video: the clip's speaker could not be named "
                             "(multi-face clip); the model picks freely")
         if people:

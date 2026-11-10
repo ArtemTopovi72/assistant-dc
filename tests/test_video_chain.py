@@ -923,12 +923,44 @@ def test_clip_speaker_is_checked_for_dialogue_not_quoted_sign(tmp_path, monkeypa
         if 'spoken dialogue' in q:
             checked.append(t)
             return spoken
+        if 'explicitly identify the speaker' in q:
+            return False
         return default
     ctx.yes_no = yes
     text = 'He says "Hello".' if spoken else 'Keep the sign "GOOD TALKS" unchanged.'
     H._handle_generate_video(ctx, {'user_input_original': text}, {'description': text})
     assert bool(seen) is spoken
     assert checked and all(item == text for item in checked)
+
+
+def test_explicit_speaker_is_not_replaced_by_previous_clip_speaker(tmp_path, monkeypatch):
+    monkeypatch.setitem(sys.modules, 'identity_metrics', types.SimpleNamespace(face_boxes=lambda _: [(0, 0, 1, 1)] * 2))
+    seen = []
+    rig, ctx, _ = _continued(tmp_path, rig_kw={
+        'clip_speaker': lambda *a: seen.append(True) or 'the woman on the left',
+        'dictated_speaker': lambda *a: 'the woman on the right'})
+    seed = tmp_path / 'seed.jpg'
+    seed.write_bytes(b'image')
+    ctx.deps = types.SimpleNamespace(_current_image_paths=lambda c, s: [str(seed)], script_read=_fakes.script_model)
+    ctx.yes_no = lambda q, t, default=False, **kw: True
+    text = 'The woman on the right says "Hello".'
+    H._handle_generate_video(ctx, {'user_input_original': text}, {'description': text})
+    assert not seen
+
+
+def test_uncertain_speaker_assignment_does_not_override_request(tmp_path, monkeypatch):
+    monkeypatch.setitem(sys.modules, 'identity_metrics', types.SimpleNamespace(face_boxes=lambda _: [(0, 0, 1, 1)] * 2))
+    seen = []
+    rig, ctx, _ = _continued(tmp_path, rig_kw={
+        'clip_speaker': lambda *a: seen.append(True) or 'the woman on the left',
+        'dictated_speaker': lambda *a: ''})
+    seed = tmp_path / 'seed.jpg'
+    seed.write_bytes(b'image')
+    ctx.deps = types.SimpleNamespace(_current_image_paths=lambda c, s: [str(seed)], script_read=_fakes.script_model)
+    ctx.yes_no = lambda q, t, default=False, **kw: True if 'spoken dialogue' in q else default
+    text = 'The woman on the right says "Hello".'
+    H._handle_generate_video(ctx, {'user_input_original': text}, {'description': text})
+    assert not seen
 
 def test_silent_static_continuation_does_not_apply_voice(tmp_path):
     src, tail, seed = (tmp_path / name for name in ('original.mp4', 'tail.mp4', 'seed.jpg'))
