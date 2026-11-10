@@ -920,9 +920,10 @@ def _previous_request_for_redo(user_input: str, history, ctx=None) -> str:
         t = (t or "").strip()
         return (bool(t) and _user_read(t, ctx=ctx)["redo"] == "same"
                 and yes_no(ctx)(
-                    "Does {text} ONLY ask to repeat the previous task, without its own subject, "
-                    "scene, facts or requirements? A complete new request (even 'make a new video') "
-                    "is NO. A bare 'again' or 'заново' is YES.", t))
+                    'Does the message explicitly request to repeat a previous task, without '
+                    'specifying its own new style, content or requirement? "Make it in anime style" '
+                    'is NO: it gives a style and does not ask to repeat. "Again" and '
+                    '"do the same to this photo" are YES. Message: {text}', t))
     if not _bare(user_input, ctx=ctx):
         return ""
     for m in reversed(history or []):
