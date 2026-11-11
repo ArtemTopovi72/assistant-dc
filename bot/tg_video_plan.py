@@ -162,11 +162,21 @@ class VideoPlanMixin:
         script = " ".join(p["text"] for p in sess.video_plan)
         target = max(1, len(sess.video_plan) - 1)
         parts = []
+        spoken = video.quoted_lines(script)
+        original_speaker = (video.dictated_speaker(self.reads, script, sess.video_plan_request or script)
+                            if spoken else '')
+        if spoken and not original_speaker:
+            self._send_text(chat_id, tg_bot._t("vp_squeeze_fail", lang))
+            return
         # A rewrite the split cuts into as many parts as before condensed nothing: the
         # button once answered 4 parts with 4 parts (live 2026-10-13). One stricter try.
         for fit in (target * video.VIDEO_PART_MAX_S, target * video.VIDEO_PART_MAX_S * 0.7):
             out = video.condense_script(script, sum(p["sec"] for p in sess.video_plan), fit,
                                         sentences=target, ctx=self.reads)
+            if out and (video._lost_lines(script, out) or
+                        (original_speaker and not video.dictated_speaker(
+                            self.reads, out, sess.video_plan_request or script))):
+                continue
             parts = video.split_script(out) if out else []
             if parts and len(parts) < len(sess.video_plan):
                 break

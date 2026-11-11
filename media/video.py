@@ -1543,8 +1543,9 @@ def remember_chain(path: str, chain: str, idx: int, ctx=None) -> None:
     reg_path = _chains(eng)
     try:
         reg = json.loads(reg_path.read_text(encoding="utf-8")) if reg_path.exists() else []
-        reg = [r for r in reg if r.get("chain") != chain][-199:]
-        reg.append(dict(_clip_print(path, eng), chain=chain, idx=int(idx)))
+        clip = _clip_print(path, eng)
+        reg = [r for r in reg if r.get("sha1") != clip["sha1"]][-199:]
+        reg.append(dict(clip, chain=chain, idx=int(idx)))
         reg_path.parent.mkdir(parents=True, exist_ok=True)
         reg_path.write_text(json.dumps(reg), encoding="utf-8")
     except Exception:
@@ -1552,8 +1553,7 @@ def remember_chain(path: str, chain: str, idx: int, ctx=None) -> None:
 
 
 def chain_of(path: str, ctx=None) -> tuple:
-    """(chain, last idx) for a clip this bot made as a chain, else (). Telegram hands a sent
-    file back byte for byte; a re-encoded copy matches on length and size instead."""
+    """Return a chain only when the supplied clip matches its recorded bytes."""
     eng = _eng(ctx)
     reg_path = _chains(eng)
     try:
@@ -1561,9 +1561,7 @@ def chain_of(path: str, ctx=None) -> tuple:
             return ()
         me = _clip_print(path, eng)
         for r in reversed(json.loads(reg_path.read_text(encoding="utf-8"))):
-            same = r["sha1"] == me["sha1"] or (
-                abs(r["seconds"] - me["seconds"]) < 0.08 and (r["w"], r["h"]) == (me["w"], me["h"]))
-            if same and os.path.isdir(Path(eng.OUTPUT_DIR_COMFY) / r["chain"]):
+            if r["sha1"] == me["sha1"] and os.path.isdir(Path(eng.OUTPUT_DIR_COMFY) / r["chain"]):
                 return r["chain"], int(r["idx"])
     except Exception:
         logger.warning("chain lookup failed for %s", path, exc_info=True)
@@ -2389,7 +2387,11 @@ def to_context_ir(ctx, description: str, *, mode: str, seconds: float,
             f"{n_videos}; reference audios: {n_audios}.\n"
             # The summary once said «[video continuation + audio reference]» with
             # no video at all: the task type names only what the references really do.
-            + ("" if n_videos else "There is NO reference video: the summary's task type is "
+            + ("The previous video is continued through its saved latent, not a reference video. "
+               "Keep its established scene; do not invent a new location, objects, or background "
+               "sounds that the request does not establish.\n"
+               if description.startswith(CONTINUE_CTX_PREFIX) else
+               "" if n_videos else "There is NO reference video: the summary's task type is "
                "never 'video continuation' or 'video editing' -- pictures are 'reference "
                "generation', voice samples are 'audio reference'.\n")
             + ("A person who speaks keeps a calm, natural face: small expressions, no wide or "
@@ -3313,9 +3315,10 @@ CONTINUE_CTX_PREFIX = (
     "changed stays changed, and voices and ambient sound go on unchanged. Every object keeps "
     "its shape and stays the same object; nothing appears or vanishes on its own. The camera "
     "keeps the angle and distance it ends on -- no close-up, zoom or reframing onto whoever the "
-    "next action is about; they are shown inside this same frame -- unless what happens next "
-    "itself opens with a camera cut: a cut in close (then show that close-up) or a cut back "
-    "out (then return to the framing from before it). The cut is a picture edit, never a "
+    "next action is about; they are shown inside this same frame unless explicitly requested. "
+    "A requested camera move starts continuously from this frame. If the next action explicitly "
+    "opens with a camera cut, use a cut in close (show that close-up) or a cut back "
+    "out (return to the framing from before it). The cut is a picture edit, never a "
     "sentence anyone says. What happens next: ")
 # 10-15: the cut cues were quoted here, and the prompt writer made them lines a man says
 # («He says: "The camera cuts in close"»); Whisper heard them in the clip.

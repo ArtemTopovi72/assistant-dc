@@ -3,6 +3,31 @@ from types import SimpleNamespace
 from tool_image_handlers import _check_actions, _check_static_background
 
 
+def test_empty_timeline_review_falls_back_to_source_and_last_frame():
+    calls = []
+    def vision(ctx, **kwargs):
+        calls.append(kwargs)
+        return '' if len(calls) == 1 else 'An astronaut helmet was added.'
+    look = SimpleNamespace(duration_seconds=lambda _: 3, sample_times=lambda *a, **k: [0, 2],
+                           extract_frames=lambda *a: [(0, 'start.jpg'), (2, 'end.jpg')])
+    ctx = SimpleNamespace(vision_model=vision, modules={'video_look': look})
+    result = _check_actions(ctx, 'video.mp4', ['Keep the people and do not add objects.'], references=['original.jpg'])
+    assert 'helmet' in result and 'not be fully checked' in result
+    assert [p for _, p in calls[1]['image_paths']] == ['original.jpg', 'end.jpg']
+
+
+def test_continuation_cross_checks_none_against_source_frame():
+    calls = []
+    def vision(ctx, **kwargs):
+        calls.append(kwargs)
+        return 'NONE' if len(calls) == 1 else 'The helmet grew and covers her face.'
+    look = SimpleNamespace(duration_seconds=lambda _: 3, sample_times=lambda *a, **k: [0, 2],
+                           extract_frames=lambda *a: [(1, 'start.jpg'), (2, 'end.jpg')])
+    ctx = SimpleNamespace(vision_model=vision, modules={'video_look': look}, video_review_start=1)
+    result = _check_actions(ctx, 'video.mp4', ['The camera pulls back; both people remain visible.'], references=['original.jpg'])
+    assert 'helmet' in result and len(calls) == 2
+
+
 def test_action_check_prioritizes_video_timeline_over_source_image():
     seen = []
     def vision(ctx, **kwargs):

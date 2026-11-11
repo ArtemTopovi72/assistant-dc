@@ -12,6 +12,21 @@ REQUEST = "Animate the red balloon with a slow camera push-in. Keep the blue box
 DRAFT = "The green balloon sways while the camera pushes in."
 
 
+def test_latent_continuation_is_not_described_as_new_video():
+    calls = []
+    def model(ctx, system, user, **kwargs):
+        calls.append(user)
+        return 'integrated_multimodal_description: the shot continues\noverall_soundscape: room\nnon_diegetic_music: N/A'
+    ctx = SimpleNamespace(text_model=model, yes_no=lambda *a, **kw: False)
+    video.to_context_ir(ctx, video.CONTINUE_CTX_PREFIX + 'The camera moves back.', mode='t2va', seconds=5)
+    assert calls and 'previous video' in calls[0].lower()
+    assert "never 'video continuation'" not in calls[0]
+
+
+def test_continuation_allows_the_camera_move_requested_by_the_user():
+    assert 'unless explicitly requested' in video.CONTINUE_CTX_PREFIX
+
+
 def test_reference_continuation_rewrites_prompt_when_source_layout_is_wrong():
     bad = ('subject_definitions: person outside\nretention_analysis: preserved\n'
            'detailed_description: person leaves the inset\noverall_soundscape: room\nnon_diegetic_music: N/A')

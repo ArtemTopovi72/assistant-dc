@@ -1935,7 +1935,10 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
         look = module(ctx, "video_look")
         duration = look.duration_seconds(path)
         frame_dir = Path(tempfile.mkdtemp(prefix="actcheck_"))
-        frames = look.extract_frames(path, look.sample_times(duration, every=1.5, max_frames=10), frame_dir)
+        start = getattr(ctx, 'video_review_start', 0.0) or 0.0
+        times = (_inset_sample_times(duration, start) if 0 < start < duration
+                 else look.sample_times(duration, every=1.5, max_frames=10))
+        frames = look.extract_frames(path, times, frame_dir)
         if len(frames) < 2:
             return "The video could not be checked against the request."
         ans = " ".join((vision_model(ctx)(
@@ -1961,8 +1964,22 @@ def _check_actions(ctx, path: str, parts: list, references=()) -> str:
         logger.warning("video actions: the check failed", exc_info=True)
         return "The video could not be checked against the request."
     logger.info("video actions: checked against the request -> %s", ans[:200] or "no answer")
-    if not ans:
-        return "The video could not be checked against the request."
+    if not ans or (_says_none(ans) and start > 0):
+        if references and frames:
+            try:
+                partial = ' '.join((vision_model(ctx)(
+                    ctx, temperature=0.0, max_tokens=250,
+                    image_paths=[('Before:', references[0]), ('After:', str(frames[-1][1]))],
+                    user_text=('Compare the two frames. Identify large objects or structures added '
+                               'around the people, or existing objects that grew to hide them, '
+                               'unless the user requested it. Ignore natural movement. If none, say NONE. '
+                               'User request: ' + script)) or '').split())
+                if partial and not _says_none(partial):
+                    return 'The video could not be fully checked. The last frame may contain an unrequested change: ' + partial[:400]
+            except Exception:
+                logger.warning('video actions: two-frame fallback failed', exc_info=True)
+        if not ans:
+            return "The video could not be checked against the request."
     inset_frames = frames
     start = getattr(ctx, 'video_review_start', 0.0) or 0.0
     if references and 0 < start < duration:
@@ -2186,6 +2203,15 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
         ctx.video_static_continuation = static_hold
         if prior:
             chain_id, chain_idx = prior[0], prior[1] + 1
+            # The tool may call the attached clip's final frame Picture 1; the chain
+            # carries that frame in its latent rather than a separate image input.
+            if (getattr(ctx, 'attached_video_path', '') and _seed_img and not people
+                    and not re.search(r'<Picture\s+\d+>', ctx.video_request, re.I)
+                    and set(re.findall(r'<Picture\s+(\d+)>', description, re.I)) == {'1'}):
+                replacement = 'the final frame of the preceding video'
+                description = re.sub(r'<Picture\s+1>', replacement, description, flags=re.I)
+                args = dict(args, description=re.sub(r'<Picture\s+1>', replacement,
+                                                     args.get('description') or '', flags=re.I))
             videos, images = [], []
             # bridged after the script is cut into parts: bridged here, the script was
             # no longer found in it and «на 30 секунд» went out as one 15 s part (2026-10-13)
@@ -3027,10 +3053,16 @@ def _handle_generate_video(ctx, state, args: dict) -> str:
     # «the camera zooms in», the note said an action was missing and the reply told the user to
     # «pick a voice variant» (live 2026-10-20)
     ctx.video_review_start = review_start
+    if continuing and chain_id and cont_src and not ctx.video_parts_incomplete:
+        try:
+            source_probe = video_mod.probe(cont_src)
+            ctx.video_review_start = max(0.0, (source_probe.get('video_seconds') or source_probe.get('seconds') or 0) - 0.25)
+        except Exception:
+            logger.debug('could not locate continuation start for review', exc_info=True)
     try:
         ctx.video_action_note = ("The video could not be checked against the request." if ctx.video_parts_incomplete
-                                 else "" if head or (continuing and not images)
-                                 else _check_actions(ctx, path, parts, references=images))
+                                 else "" if head
+                                 else _check_actions(ctx, path, parts, references=([_seed_img] if continuing and _seed_img else images)))
     finally:
         ctx.video_review_start = 0.0
     if images and not continuing and not head and not ctx.video_parts_incomplete:

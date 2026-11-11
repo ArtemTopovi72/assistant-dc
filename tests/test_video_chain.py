@@ -131,6 +131,34 @@ def test_a_clip_is_found_again_by_its_bytes(tmp_path):
     assert V.chain_of(str(other), ctx) == ()
 
 
+def test_chain_lookup_never_confuses_clips_with_same_dimensions_and_duration(tmp_path):
+    for name in ('chX', 'chY'):
+        (tmp_path / 'h3_continuous' / name).mkdir(parents=True)
+    ctx = types.SimpleNamespace(video_engine=Over(
+        V, OUTPUT_DIR_COMFY=tmp_path,
+        probe=lambda p: {'seconds': 17.21, 'width': 1152, 'height': 576}))
+    a, b, unknown = (tmp_path / name for name in ('a.mp4', 'b.mp4', 'unknown.mp4'))
+    a.write_bytes(b'first clip'); b.write_bytes(b'second clip'); unknown.write_bytes(b'other clip')
+    V.remember_chain(str(a), 'h3_continuous/chX', 2, ctx)
+    V.remember_chain(str(b), 'h3_continuous/chY', 3, ctx)
+    assert V.chain_of(str(a), ctx) == ('h3_continuous/chX', 2)
+    assert V.chain_of(str(b), ctx) == ('h3_continuous/chY', 3)
+    assert V.chain_of(str(unknown), ctx) == ()
+
+
+def test_registering_a_later_chain_part_keeps_earlier_delivered_clip(tmp_path):
+    (tmp_path / 'h3_continuous' / 'chX').mkdir(parents=True)
+    ctx = types.SimpleNamespace(video_engine=Over(
+        V, OUTPUT_DIR_COMFY=tmp_path,
+        probe=lambda p: {'seconds': 17.21, 'width': 1152, 'height': 576}))
+    first, second = tmp_path / 'first.mp4', tmp_path / 'second.mp4'
+    first.write_bytes(b'first'); second.write_bytes(b'second')
+    V.remember_chain(str(first), 'h3_continuous/chX', 2, ctx)
+    V.remember_chain(str(second), 'h3_continuous/chX', 3, ctx)
+    assert V.chain_of(str(first), ctx) == ('h3_continuous/chX', 2)
+    assert V.chain_of(str(second), ctx) == ('h3_continuous/chX', 3)
+
+
 class _Ctx:
     deps = types.SimpleNamespace(script_read=_fakes.script_model)
     reference_images = []
@@ -284,6 +312,44 @@ def test_continue_on_a_chain_clip_goes_on_from_its_latent(tmp_path):
     assert not kw.get("videos") and not kw.get("images") and not kw.get("context_video")
     assert d.startswith(V.CONTINUE_CTX_PREFIX + "BRIDGE. ")
     assert rig.stitched == [("h3_continuous/chY", 3)] and rig.kept[-1][1:] == ("h3_continuous/chY", 3)
+
+
+def test_attached_chain_continuation_resolves_tool_picture_to_video_frame(tmp_path):
+    rig, ctx, src = _continued(tmp_path)
+    seed = tmp_path / 'seed.jpg'
+    seed.write_bytes(b'image')
+    ctx.attached_video_path = str(src)
+    ctx.deps = types.SimpleNamespace(_current_image_paths=lambda c, s: [str(seed)], script_read=_fakes.script_model)
+    state = {'user_input_original': 'Continue the attached video, the woman waves.'}
+    H._handle_generate_video(ctx, state, {'description': 'Continue from <Picture 1>; the woman waves.'})
+    prompt, kw = rig.renders()[0]
+    assert '<Picture 1>' not in prompt
+    assert 'final frame of the preceding video' in prompt
+    assert kw['chain'] == ('h3_continuous/chY', 3) and kw['size_from'] == str(src)
+
+
+def test_continuation_does_not_rewrite_a_user_named_picture(tmp_path):
+    rig, ctx, src = _continued(tmp_path)
+    seed = tmp_path / 'seed.jpg'
+    seed.write_bytes(b'image')
+    ctx.attached_video_path = str(src)
+    ctx.deps = types.SimpleNamespace(_current_image_paths=lambda c, s: [str(seed)], script_read=_fakes.script_model)
+    state = {'user_input_original': 'Continue and include <Picture 1>.'}
+    H._handle_generate_video(ctx, state, {'description': 'Include <Picture 1>.'})
+    assert '<Picture 1>' in rig.renders()[0][0]
+
+
+def test_continuation_checks_generated_scene_against_source_frame(tmp_path, monkeypatch):
+    rig, ctx, _ = _continued(tmp_path)
+    seed = tmp_path / 'seed.jpg'
+    seed.write_bytes(b'image')
+    ctx.deps = types.SimpleNamespace(_current_image_paths=lambda c, s: [str(seed)], script_read=_fakes.script_model)
+    checks = []
+    monkeypatch.setattr(H, '_check_actions', lambda ctx, path, parts, references=(): checks.append((references, ctx.video_review_start)) or 'An unrequested helmet appeared.')
+    H._handle_generate_video(ctx, {'user_input_original': 'Continue without adding objects.'}, {'description': 'The camera moves back.'})
+    assert checks and checks[0][0] == [str(seed)]
+    assert checks[0][1] > 0
+    assert 'helmet' in ctx.video_action_note
 
 
 def test_continuation_does_not_replace_speech_with_a_sign(tmp_path):

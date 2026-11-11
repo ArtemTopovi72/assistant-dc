@@ -44,7 +44,8 @@ SCRIPT = ("Мужчина берёт чайник, ставит его на пл
 # ── the tool stops on a plan instead of rendering ─────────────────────────────
 from fakes import Over  # noqa: E402
 rendered = []
-_VID = Over(video, engine_available=lambda ctx: (True, ""), generate_video=lambda *a, **k: rendered.append(a) or {})
+_VID = Over(video, engine_available=lambda ctx: (True, ""), explicit_silence=lambda *a, **k: False,
+            generate_video=lambda *a, **k: rendered.append(a) or {})
 _DEPS = SimpleNamespace(asks_for_video=lambda ctx, state: True, _render_budget_exhausted=lambda *a, **k: None)
 ctx = SimpleNamespace(deps=_DEPS, video_engine=_VID, video_plan_ask=True, video_plan_parts=[], set_stage=lambda s: None,
                       text_model=lambda *a, **k: "",   # the script judge offline: it splits and drops on a live model
@@ -84,6 +85,8 @@ check("...with render, condense, drop-a-part and cancel buttons",
 
 # 🗜: a rewrite that splits into as many parts as before is no condensing
 asked = []
+_old_dictated_speaker = video.dictated_speaker
+video.dictated_speaker = lambda ctx, script, request: 'man' if all(x in script for x in video.quoted_lines(SCRIPT)) else ''
 bot.reads = SimpleNamespace(text_model=lambda c, sysp, user, **k: (asked.append(user), SCRIPT)[1])
 before = len(bot._get_session(CID).video_plan)
 bot._squeeze_plan(CID, bot._get_session(CID), "ru")
@@ -91,11 +94,17 @@ check("🗜 that does not shorten says so and keeps the plan",
       len(bot._get_session(CID).video_plan) == before and "Не получилось уплотнить" in sent[-1][0],
       sent[-1][0])
 check("...after a stricter second try, asked for fewer sentences",
-      len(asked) == 2 and f"at most {before - 1} short sentences" in asked[0], asked[:1])
+      len([x for x in asked if 'The script runs about' in x]) == 2
+      and any(f"at most {before - 1} short sentences" in x for x in asked), asked[:1])
 bot.reads = SimpleNamespace(text_model=lambda c, sysp, user, **k: "Кот прыгает на стол.")
 bot._squeeze_plan(CID, bot._get_session(CID), "ru")
-check("🗜 that shortens leaves fewer parts", len(bot._get_session(CID).video_plan) < before,
+check("🗜 that drops spoken lines leaves the plan intact", len(bot._get_session(CID).video_plan) == before,
       len(bot._get_session(CID).video_plan))
+bot.reads = SimpleNamespace(text_model=lambda c, sysp, user, **k: 'Мужчина говорит «Ну наконец-то, сколько можно ждать» и «Горячо, как в аду, но вкусно, честное слово».')
+bot._squeeze_plan(CID, bot._get_session(CID), "ru")
+check("🗜 that keeps spoken lines leaves fewer parts", len(bot._get_session(CID).video_plan) < before,
+      len(bot._get_session(CID).video_plan))
+video.dictated_speaker = _old_dictated_speaker
 bot.reads = None
 sess = bot._get_session(CID); sess.video_plan = list(plan); bot._store.put(sess)
 
