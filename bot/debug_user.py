@@ -193,8 +193,11 @@ def _photo(path: str) -> list:
     return [{"file_id": fid, "file_unique_id": fid, "width": w, "height": h}]
 
 
-def say(text: str, user: int = 0) -> None:
-    _put({"update_id": 0, "message": _msg(user, text=text)})
+def say(text: str, user: int = 0, fwd: str = "") -> None:
+    message = _msg(user, text=text)
+    if fwd:
+        message["forward_origin"] = {"type": "hidden_user", "sender_user_name": fwd, "date": int(time.time()) - 600}
+    _put({"update_id": 0, "message": message})
 
 
 def photo(path: str, caption: str = "", group: str = "", user: int = 0) -> None:
@@ -364,7 +367,7 @@ def _api_handler():
                 body = json.loads(self.rfile.read(n) or b"{}")
                 user = int(body.get("user") or 0)
                 if path == "/say":
-                    say(str(body["text"]), user)
+                    say(str(body["text"]), user, str(body.get("fwd") or ""))
                 elif path == "/photo":
                     photo(str(body["path"]), str(body.get("caption") or ""), "", user)
                 elif path == "/video":

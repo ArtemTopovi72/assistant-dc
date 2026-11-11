@@ -123,6 +123,22 @@ def _typed_part(text: str) -> str:
     return t
 
 
+def _ignore_unrelated_quoted_image(task, ctx) -> bool:
+    from prompt_guard import quoted_gist, user_words
+    text = getattr(task, 'user_text', '') or ''
+    gist = quoted_gist(text)
+    if (not gist or getattr(task, 'image_selection', '') != 'context'
+            or getattr(task, 'image_path', '') or getattr(task, 'image_is_photo', False)
+            or getattr(task, 'source_video_path', '')):
+        return False
+    read = intent_read(ctx)(ctx, user_words(text), '',
+                            'a photo from earlier in the chat, not attached to this message; '
+                            f'forwarded material the message may be about: «{gist}»')
+    image_tools = {'inspect_image', 'redraw_image', 'inpaint_image', 'transfer_image', 'fix_hands', 'fix_artifact'}
+    return bool(read.get('ok') and not read.get('about_picture') and not read.get('names_picture')
+                and not image_tools.intersection(read.get('wants') or []))
+
+
 def _target_id_of(task, sess) -> str:
     """Explicit targets are frozen; implicit follow-ups use the latest delivery."""
     image_id = (getattr(task, 'image_id', '') or
@@ -445,7 +461,8 @@ class TaskRunnerMixin:
         import tg_links as _tg_links
         _video = any(it.get("media") == "video" or (it.get("type") == "text"
                      and _tg_links.video_url(it.get("text") or "")) for it in items)
-        self._send_text(chat_id, tg_bot._t("fwd_video_work" if _video else "fwd_voice_work", lang))
+        if _video or any(it.get('type') == 'fwd_voice' or it.get('media') == 'voice' for it in items):
+            self._send_text(chat_id, tg_bot._t("fwd_video_work" if _video else "fwd_voice_work", lang))
         self._api_post("sendChatAction", {"chat_id": chat_id, "action": "typing"})
         lines, boards, names, sheets = [], [], [], []
         n = {"voice": 0, "video": 0, "photo": 0}
@@ -727,7 +744,10 @@ class TaskRunnerMixin:
                  else sess.begin_context_turn(task.context_generation))
         if token is None or token[0] != sess.context_generation:
             return
-        if task.image_selection == 'context' and not task.image_path and not task.image_id:
+        _ignore_quoted_image = _ignore_unrelated_quoted_image(task, _shared)
+        if _ignore_quoted_image:
+            task.image_id = ''
+        if not _ignore_quoted_image and task.image_selection == 'context' and not task.image_path and not task.image_id:
             task.image_id = _target_id_of(task, sess)
         entry = tg_bot._image_by_id(sess, task.image_id) if task.image_id else None
         if not task.translation and ((task.image_path and not os.path.exists(task.image_path))
@@ -758,6 +778,7 @@ class TaskRunnerMixin:
         # see each other's picture or cancel each other's request.
         _cancel = threading.Event()
         ctx = tg_bot._scoped_ctx(_shared, cancel_event=_cancel)
+        ctx._ignore_quoted_image = _ignore_quoted_image
         ctx.video_silence_prechecked = None
         import intent
         intent.current_turn().cancel_context = ctx
@@ -1759,7 +1780,7 @@ class TaskRunnerMixin:
         # presses on two different pictures, queued one behind the other, both
         # would resolve to whichever picture the SECOND press had already
         # overwritten that slot with by the time either task actually ran.
-        _target_id = _target_id_of(task, sess)
+        _target_id = '' if getattr(ctx, '_ignore_quoted_image', False) else _target_id_of(task, sess)
         _target = tg_bot._image_by_id(sess, _target_id)
         if (task.user_text or "").startswith(tg_bot._TEXT_ONLY_MARK):
             # An internal instruction over a transcript (the 📋 button on a

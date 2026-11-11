@@ -18,6 +18,56 @@ def test_intent_context_distinguishes_old_picture_from_new_attachment():
     assert new == 'a photo attached to this message'
 
 
+def test_forwarded_text_question_does_not_inherit_unrelated_old_photo():
+    from tg_tasks import _ignore_unrelated_quoted_image
+    from prompt_guard import wrap_quoted
+    seen = []
+    def read(ctx, text, previous, attached):
+        seen.append((text, attached))
+        return {'ok': True, 'about_picture': False, 'names_picture': 0, 'wants': []}
+    task = SimpleNamespace(image_selection='context', image_path='', image_is_photo=False,
+                           source_video_path='', user_text=wrap_quoted('forwarded', 'Stepan: best advisor') + '\nWhat do you think?')
+    ctx = SimpleNamespace(intent_read=read)
+    assert _ignore_unrelated_quoted_image(task, ctx)
+    assert seen[0][0] == 'What do you think?' and 'Stepan' in seen[0][1]
+    ctx.intent_read = lambda *a: {'ok': True, 'about_picture': True, 'names_picture': 0, 'wants': []}
+    assert not _ignore_unrelated_quoted_image(task, ctx)
+    task.image_selection = 'explicit'
+    assert not _ignore_unrelated_quoted_image(task, ctx)
+
+
+def test_forwarded_text_batch_does_not_say_it_is_listening(tmp_path):
+    bot = make_bot(tmp_path)
+    bot._get_ctx = lambda: SimpleNamespace()
+    bot._api_post = lambda *a, **k: None
+    messages = []
+    bot._send_text = lambda chat, text, **kw: messages.append(text)
+    bot._commit_media_turn = lambda *a, **kw: None
+    bot._fwd_batch(101, [{'type': 'text', 'text': 'First', 'author': 'Stepan'},
+                         {'type': 'text', 'text': 'Second', 'author': 'Stepan'}])
+    assert messages and all('Слушаю' not in text and 'Listening' not in text for text in messages)
+
+
+def test_binding_forwarded_context_replaces_earlier_bare_classification():
+    import intent
+    from prompt_guard import wrap_quoted
+    ctx = SimpleNamespace(last_image_path='old-photo.jpg')
+    with intent.turn_scope():
+        intent.bind_turn(['What do you think?'], attached='old photo')
+        full = wrap_quoted('forwarded', 'Stepan: the best advisor') + '\nWhat do you think?'
+        P.bind_turn_reads(ctx, {'messages': [], 'image_data': None}, full)
+        assert 'Stepan' in intent.current_turn()['attached']
+
+
+def test_debug_chat_can_send_forwarded_text(monkeypatch):
+    import debug_user
+    updates = []
+    monkeypatch.setattr(debug_user, '_put', updates.append)
+    debug_user.say('hello', 1, fwd='Stepan')
+    assert updates[0]['message']['text'] == 'hello'
+    assert updates[0]['message']['forward_origin']['sender_user_name'] == 'Stepan'
+
+
 def test_a_photo_question_is_never_intake_even_when_the_classifier_also_says_presentation():
     ctx = SimpleNamespace(**reads(read=lambda t: {
         'presents_photo': True, 'is_question': True, 'about_picture': True, 'needs_tool': False}))

@@ -387,8 +387,9 @@ def bind_turn_reads(ctx, state, text: str) -> None:
     """Bind this turn's words and context in intent, so every read of them -- as written or
     translated, with or without a context of its own -- is the one read (intent.bind_turn)."""
     import intent
+    from prompt_guard import has_quote
     t, previous, attached = _turn_inputs(ctx, state, text)
-    intent.bind_turn([t, (text or "").strip()], previous, attached)
+    intent.bind_turn([t, (text or "").strip()], previous, attached, entry=has_quote(text))
 
 
 def _turn_inputs(ctx, state, text: str) -> tuple:
