@@ -29,10 +29,17 @@ def test_forwarded_text_question_does_not_inherit_unrelated_old_photo():
                            source_video_path='', user_text=wrap_quoted('forwarded', 'Stepan: best advisor') + '\nWhat do you think?')
     ctx = SimpleNamespace(intent_read=read)
     assert _ignore_unrelated_quoted_image(task, ctx)
-    assert seen[0][0] == 'What do you think?' and 'Stepan' in seen[0][1]
+    assert seen[-1][0] == 'What do you think?' and 'Stepan' in seen[-1][1]
     ctx.intent_read = lambda *a: {'ok': True, 'about_picture': True, 'names_picture': 0, 'wants': []}
     assert not _ignore_unrelated_quoted_image(task, ctx)
     task.image_selection = 'explicit'
+    assert not _ignore_unrelated_quoted_image(task, ctx)
+    task.image_selection = 'context'
+    task.intent_snapshot = {'reads': [('question', {'names_picture': -2})]}
+    ctx.intent_read = lambda *a: {'ok': True, 'about_picture': False, 'names_picture': 0, 'wants': []}
+    assert not _ignore_unrelated_quoted_image(task, ctx)
+    task.intent_snapshot = {}
+    ctx.intent_read = lambda *a: {'ok': True, 'names_picture': -1}
     assert not _ignore_unrelated_quoted_image(task, ctx)
 
 

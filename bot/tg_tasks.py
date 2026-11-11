@@ -131,6 +131,13 @@ def _ignore_unrelated_quoted_image(task, ctx) -> bool:
             or getattr(task, 'image_path', '') or getattr(task, 'image_is_photo', False)
             or getattr(task, 'source_video_path', '')):
         return False
+    reads = (getattr(task, 'intent_snapshot', None) or {}).get('reads', [])
+    if any(isinstance(item, dict) and item.get('names_picture') for _, item in reads):
+        return False
+    direct = intent_read(ctx)(ctx, user_words(text), '',
+                              'a photo from earlier in the chat, not attached to this message')
+    if direct.get('ok') and direct.get('names_picture'):
+        return False
     read = intent_read(ctx)(ctx, user_words(text), '',
                             'a photo from earlier in the chat, not attached to this message; '
                             f'forwarded material the message may be about: «{gist}»')
