@@ -12,6 +12,7 @@ untranslated, or the picture comes out in the wrong language.
 from seams import choice, dep, intent_read, yes_no, text_model
 import logging
 import re
+from copy import copy
 
 import llm as _llm
 
@@ -259,6 +260,25 @@ def _match_reply_language(ctx, answer: str, original_input: str) -> str:
     _r = _read(original_input, ctx=ctx)
     if (_r["reply_language"] == "en" and names_english(original_input, ctx=ctx)) or _r["translate"]:
         return answer
+    if getattr(ctx, 'reply_lang', '') == 'ru' and re.search(r'[А-Яа-яЁё]', original_input):
+        from ui_lang_guard import untranslated
+        phrases = [p for p in untranslated(answer)
+                   if p.lower() not in original_input.lower()
+                   and not all(w[0].isupper() for w in p.split() if w)]
+        if phrases and _foreign_ratio(prose) > 0.1:
+            try:
+                fast = copy(ctx)
+                fast.no_think = True
+                out = (text_model(ctx)(fast,
+                    'Correct accidental English prose in this Russian reply. Preserve meaning, '
+                    'names, links, code and any English explicitly present in the user input. '
+                    'Return only the corrected reply.',
+                    f'User input: {original_input}\n\nReply: {answer}',
+                    max_tokens=max(400, len(answer)), temperature=0.0) or '').strip()
+                if complete(out) and not any(p.lower() in out.lower() for p in phrases):
+                    return out
+            except Exception:
+                logger.warning('Mixed-language reply correction failed', exc_info=True)
     # «answer in English from now on», then a Russian line: the model follows
     # the question's script, not the directive.
     if (getattr(ctx, "reply_lang", "") == "en" and _foreign_ratio(answer) < 0.1
@@ -335,6 +355,9 @@ def _translate_to_english(ctx, text: str, context: str = "") -> str:
     """Best-effort translation of a user message to English. Returns the original
     text unchanged on any failure (the pipeline must never lose the user's turn)."""
     t = (text or "").strip()
+    from prompt_guard import has_quote
+    if has_quote(t):
+        return t
     # A document-backed turn arrives as the RAG wrapper (English passages +
     # rules) with the user's question at the tail. Only the tail is the user's
     # message; the rest is ours already. Translating the whole thing lost the
@@ -379,7 +402,10 @@ def _translate_to_english(ctx, text: str, context: str = "") -> str:
         if context and len(t) < 200:
             system += ("\n\nFor sense only (do NOT translate or include it): the assistant's "
                        "previous reply was: " + context.replace("\n", " "))
-        resp = text_model(ctx)(ctx, system, protected,
+        fast = copy(ctx)
+        if fast is not None:
+            fast.no_think = True
+        resp = text_model(ctx)(fast, system, protected,
                                max_tokens=max(200, len(t)), temperature=0.0,
                                prefill="<think></think>")
         out = (resp or "").strip()

@@ -14,6 +14,7 @@ from __future__ import annotations
 from seams import vision_model, text_model
 import io
 import logging
+from copy import copy
 from typing import List, Optional, Tuple
 
 logger = logging.getLogger("assistant.vision")
@@ -134,7 +135,10 @@ def look_closely(ctx, image_bytes: bytes, question: str, overview: str) -> Optio
     try:
         if ctx is not None:
             ctx.set_stage("Looking at the image")
-        merged = text_model(ctx)(ctx, MERGE_PROMPT, user, temperature=0.2,
+        fast = copy(ctx)
+        if fast is not None:
+            fast.no_think = True
+        merged = text_model(ctx)(fast, MERGE_PROMPT, user, temperature=0.2,
                                       max_tokens=700, prefill="<think></think>") or ""
     except Exception:
         logger.warning("close look: merge failed", exc_info=True)

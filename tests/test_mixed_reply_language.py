@@ -3,6 +3,54 @@ from types import SimpleNamespace
 import graph_language as language
 
 
+def test_short_unrequested_english_phrase_is_corrected_without_touching_original_literals(monkeypatch):
+    monkeypatch.setattr(language, '_read', lambda *a, **k: {'reply_language': '', 'translate': False, 'language_mode': ''})
+    calls = []
+    def model(ctx, system, message, **kwargs):
+        calls.append(ctx.no_think)
+        return 'Совет про «глупых людей» не связан с фото.'
+    ctx = SimpleNamespace(is_cancelled=lambda: False, reply_lang='ru', no_think=False, text_model=model)
+    answer = 'Совет про «stupid people» не связан с фото.'
+    assert language._match_reply_language(ctx, answer, 'Что думаешь про глупых людей?') == 'Совет про «глупых людей» не связан с фото.'
+    assert calls == [True] and ctx.no_think is False
+    assert language._match_reply_language(ctx, answer, 'Что значит «stupid people»?') == answer
+    from prompt_guard import wrap_quoted
+    forwarded = wrap_quoted('the user forwarded this message', 'Степан: тупой человек') + '\nЧто думаешь?'
+    assert language._match_reply_language(ctx, answer, forwarded) == 'Совет про «глупых людей» не связан с фото.'
+
+
+def test_quoted_forward_is_preserved_instead_of_translated(monkeypatch):
+    from prompt_guard import wrap_quoted
+    import graph_compose
+    monkeypatch.setattr(language, '_read', lambda *a, **k: {'translate': False, 'wants': []})
+    monkeypatch.setattr(graph_compose, '_word_count_note', lambda *a, **k: '')
+    text = wrap_quoted('forwarded', 'Степан: тупой советник') + '\nЧто думаешь?'
+    calls = []
+    ctx = SimpleNamespace(text_model=lambda *a, **kw: calls.append(a) or 'translated')
+    assert language._translate_to_english(ctx, text) == text
+    assert not calls
+
+
+def test_vision_merge_does_not_inherit_main_reasoning(monkeypatch):
+    import vision_close
+    monkeypatch.setattr(vision_close, 'tile_notes', lambda *a, **k: '- visible text')
+    seen = []
+    ctx = SimpleNamespace(no_think=False, set_stage=lambda *a: None,
+                          text_model=lambda c, *a, **k: seen.append(c.no_think) or 'ответ')
+    assert vision_close.look_closely(ctx, b'picture', 'вопрос', 'обзор') == 'ответ'
+    assert seen == [True] and ctx.no_think is False
+
+
+def test_entry_translation_is_a_fast_helper(monkeypatch):
+    import graph_compose
+    monkeypatch.setattr(language, '_read', lambda *a, **k: {'translate': False, 'wants': []})
+    monkeypatch.setattr(graph_compose, '_word_count_note', lambda *a, **k: '')
+    seen = []
+    ctx = SimpleNamespace(no_think=False, text_model=lambda c, *a, **k: seen.append(c.no_think) or 'What is this picture?')
+    assert language._translate_to_english(ctx, 'Что нарисовано на этой фотографии?') == 'What is this picture?'
+    assert seen == [True] and ctx.no_think is False
+
+
 def test_back_translation_must_not_invent_gender():
     assert 'Do not infer gender' in language._TRANSLATE_OUT_PROMPT
     assert 'performer' in language._TRANSLATE_OUT_PROMPT
