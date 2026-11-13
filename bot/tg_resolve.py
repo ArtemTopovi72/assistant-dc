@@ -1536,6 +1536,14 @@ class ResolveMixin:
                     # The user's words came WITH the note: they are the task.
                     # The note goes in as quoted material, the words as the
                     # request, and the turn runs -- no "what do I do with it?".
+                    if _media == 'video':
+                        import video_look
+                        sheet = _seen.get('sheet') or ''
+                        source_video_path = os.path.join(os.path.dirname(sheet), video_look.CONTINUE_CLIP) if sheet else ''
+                        if not source_video_path or not os.path.isfile(source_video_path):
+                            self._send_text(chat_id, 'Не удалось сохранить пересланное видео. Пришли его ещё раз.'
+                                            if lang == 'ru' else 'Could not save the forwarded video. Please resend it.')
+                            return
                     if _seen.get("sheet") and os.path.exists(_seen["sheet"]):
                         tg_bot._put_in_play(sess, _seen["sheet"], tg_bot._t("lbl_video_frames", lang))
                         self._store.put(sess)

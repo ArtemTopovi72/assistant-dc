@@ -7,6 +7,34 @@ from prompt_guard import user_words, wrap_quoted
 from tg_tasks import _typed_part
 
 
+@pytest.mark.parametrize('clip_exists', [True, False])
+def test_forwarded_video_with_companion_request_keeps_its_own_clip(tmp_path, clip_exists):
+    T.redirect_data_dir(str(tmp_path / 'data'))
+    bot = T.TelegramBot('123:TEST', lambda: SimpleNamespace(), lambda: None, lambda: {}, silent_mode=True)
+    chat = 999994
+    bot._user_store.put(T._User(chat_id=chat, name='test', status='approved'))
+    bot._send_text = lambda *a, **k: 1
+    bot._api_post = lambda *a, **k: {}
+    bot._activity.log = lambda *a, **k: None
+    bot._dl_bytes = lambda fid: b'video bytes'
+    bot._transcribe = lambda *a, **k: ''
+    sheet = tmp_path / 'sheet.jpg'; sheet.write_bytes(b'photo')
+    clip = tmp_path / 'clip.mp4'
+    if clip_exists:
+        clip.write_bytes(b'video bytes')
+    bot._look_video = lambda *a, **k: {'sheet': str(sheet), 'description': 'A wolf.'}
+    bot.fwdv_intent = lambda text: ''
+    pushed = []
+    bot._backend.push = pushed.append
+    bot._resolve_and_push(chat, [{'type': 'fwd_voice', 'media': 'video', 'file_id': 'x',
+                                  'caption': 'Финальная версия', 'companion': 'Продолжи видео: BIG WIN'}])
+    if clip_exists:
+        assert len(pushed) == 1
+        assert pushed[0].source_video_path == str(clip)
+    else:
+        assert not pushed
+
+
 @pytest.mark.parametrize('description', ['A speaker and a sign saying "wrong words".', ''])
 def test_captioned_video_keeps_source_and_soundtrack_separate(tmp_path, monkeypatch, description):
     T.redirect_data_dir(str(tmp_path / 'data'))
